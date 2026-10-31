@@ -1,8 +1,20 @@
 @import "tailwindcss";
 
+@font-face {
+  font-family: "EYEN Ammon";
+  src: url("/fonts/eyen-ammon-bold.ttf") format("truetype");
+  font-weight: 500 900;
+  font-style: normal;
+  font-display: swap;
+  size-adjust: 112%;
+  /* Arabic letters only — digits and Latin fall back to Tajawal so prices stay 1,350 and "4K" stays intact */
+  unicode-range: U+0600-0660, U+066A-06EF, U+06FA-06FF, U+0750-077F, U+08A0-08FF, U+FB50-FDFF, U+FE70-FEFF;
+}
+
 /* HOMEX — big-retailer look: deep navy + logo gold, red for deals, light grey page so white cards pop */
 @theme {
   --font-sans: "Tajawal", system-ui, sans-serif;
+  --font-display: "EYEN Ammon", "Tajawal", system-ui, sans-serif;
 
   --color-ink: #0f1e36;        /* navy: header, headings */
   --color-ink-soft: #1b3157;
@@ -40,6 +52,14 @@ body {
 :focus-visible { outline: 2px solid var(--color-gold); outline-offset: 2px; }
 
 .price { font-variant-numeric: tabular-nums lining-nums; }
+
+/* Brand font on everything bold: headings, prices, buttons, menus, labels */
+h1, h2, h3, h4, button, .price, nav,
+.font-bold, .font-extrabold, .font-black, .font-semibold {
+  font-family: var(--font-display);
+}
+/* Form controls keep the readable body face */
+input, select, textarea { font-family: var(--font-sans); }
 
 .btn-gold {
   background: linear-gradient(180deg, var(--color-gold-hi), var(--color-gold));
