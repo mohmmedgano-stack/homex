@@ -1,75 +1,54 @@
 @import "tailwindcss";
 
-/* HOMEX design tokens
-   ink    — enamel navy, header bar, primary buttons, headings
-   gold   — from the logo; accents only (active states, focus, small marks)
-   shelf  — the light grey "shelf" products sit on
-   line   — hairlines and borders
-   steel  — secondary text */
+/* HOMEX — big-retailer look: deep navy + logo gold, red for deals, light grey page so white cards pop */
 @theme {
-  --font-sans: "IBM Plex Sans Arabic", system-ui, sans-serif;
+  --font-sans: "Tajawal", system-ui, sans-serif;
 
-  --color-ink: #17212c;
-  --color-ink-soft: #243241;
-  --color-shelf: #f1f2f4;
-  --color-line: #e2e5e9;
-  --color-steel: #5d6774;
-  --color-sale: #c2372c;
-  --color-gold: #b8862b;
-  --color-gold-deep: #8a6418;
+  --color-ink: #0f1e36;        /* navy: header, headings */
+  --color-ink-soft: #1b3157;
+  --color-page: #f2f4f7;       /* page background */
+  --color-shelf: #f6f7f9;
+  --color-line: #e3e7ed;
+  --color-steel: #5f6b7a;
+  --color-sale: #e02424;       /* deals / discounts */
+  --color-save: #0e9f6e;       /* "وفّر" savings */
+  --color-gold: #d9a21b;       /* buttons, accents */
+  --color-gold-hi: #f2c14e;
+  --color-gold-deep: #9a6d06;
 
-  /* Remap Tailwind's amber to the logo gold so every screen
-     (checkout, admin, drawers) follows the brand automatically. */
-  --color-amber-50: #fbf6ea;
-  --color-amber-100: #f4e8ca;
-  --color-amber-200: #e9d29a;
-  --color-amber-300: #dcba67;
-  --color-amber-400: #cfa547;
-  --color-amber-500: #c0902e;
-  --color-amber-600: #a47723;
-  --color-amber-700: #835e1c;
-  --color-amber-800: #674a19;
-  --color-amber-900: #543d17;
-  --color-amber-950: #31230b;
-
-  /* Tighter, hierarchical radii instead of one big pill radius everywhere */
-  --radius-lg: 0.5rem;
-  --radius-xl: 0.625rem;
-  --radius-2xl: 0.75rem;
-  --radius-3xl: 1rem;
-}
-
-html {
-  -webkit-text-size-adjust: 100%;
+  --color-amber-50: #fdf8e8;
+  --color-amber-100: #faedc4;
+  --color-amber-200: #f5db8a;
+  --color-amber-300: #f0c757;
+  --color-amber-400: #e8b532;
+  --color-amber-500: #d9a21b;
+  --color-amber-600: #b98410;
+  --color-amber-700: #94670d;
+  --color-amber-800: #744f10;
+  --color-amber-900: #5f4112;
+  --color-amber-950: #362306;
 }
 
 body {
   overflow-x: hidden;
-  font-feature-settings: "tnum" 1;
+  background: var(--color-page);
 }
 
-.no-scrollbar::-webkit-scrollbar {
-  display: none;
-}
-.no-scrollbar {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-}
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-:focus-visible {
-  outline: 2px solid var(--color-gold);
-  outline-offset: 2px;
-}
+:focus-visible { outline: 2px solid var(--color-gold); outline-offset: 2px; }
 
-.price {
-  font-variant-numeric: tabular-nums lining-nums;
-  letter-spacing: -0.01em;
+.price { font-variant-numeric: tabular-nums lining-nums; }
+
+.btn-gold {
+  background: linear-gradient(180deg, var(--color-gold-hi), var(--color-gold));
+  color: var(--color-ink);
 }
+.btn-gold:hover { background: var(--color-gold); }
 
 @media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
+  *, *::before, *::after {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;

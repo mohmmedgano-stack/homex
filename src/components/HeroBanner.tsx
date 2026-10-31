@@ -1,97 +1,194 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useStore } from '../context/StoreContext';
+import { ChevronLeft, ChevronRight, Truck, ShieldCheck, Banknote, RotateCcw } from 'lucide-react';
 
-// The hero is the store's aisle: every category as a shelf tile,
-// photographed with a real product from that category.
+const SLIDE_THEMES = [
+  { bg: 'from-[#0f1e36] to-[#1d3a6b]', tag: 'bg-gold text-ink', accent: 'text-gold-hi' },
+  { bg: 'from-[#9b1c1c] to-[#e02424]', tag: 'bg-white text-sale', accent: 'text-white' },
+  { bg: 'from-[#065f46] to-[#0e9f6e]', tag: 'bg-gold-hi text-ink', accent: 'text-gold-hi' },
+];
+
 export const HeroBanner: React.FC = () => {
-  const { setSelectedCategory, products, categories } = useStore();
+  const { products, categories, setSelectedCategory, setSelectedProduct } = useStore();
 
-  const aisle = categories
-    .map((cat) => {
-      const items = products.filter((p) => p.category === cat.id);
-      const cover = items.find((p) => p.isFeatured) || items[0];
-      return { cat, count: items.length, cover };
-    })
-    .filter((t) => t.count > 0);
+  // Slides = the biggest discounts in the store, so the banners always match real products/prices
+  const slides = [...products]
+    .filter((p) => p.originalPrice && p.originalPrice > p.price && p.stock > 0)
+    .sort((a, b) => (b.originalPrice! - b.price) / b.originalPrice! - (a.originalPrice! - a.price) / a.originalPrice!)
+    .slice(0, 3);
 
-  const goToCatalog = (catId?: string) => {
+  const [index, setIndex] = useState(0);
+  useEffect(() => {
+    if (slides.length < 2) return;
+    const t = setInterval(() => setIndex((i) => (i + 1) % slides.length), 5500);
+    return () => clearInterval(t);
+  }, [slides.length]);
+
+  const go = (d: number) => setIndex((i) => (i + d + slides.length) % slides.length);
+
+  const scrollToCatalog = (catId?: string) => {
     setSelectedCategory((catId as any) || 'all');
     document.getElementById('appliances-catalog-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
+  const tiles = categories.filter((c) => products.some((p) => p.category === c.id));
+  const colsFor: Record<number, string> = { 2: 'sm:grid-cols-2', 3: 'sm:grid-cols-3', 4: 'sm:grid-cols-4', 5: 'sm:grid-cols-5', 6: 'sm:grid-cols-6' };
+
+  const sideDeals = slides.length ? products.filter((p) => !slides.includes(p) && p.isFeatured).slice(0, 2) : [];
+
   return (
-    <section className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center pt-2 lg:pt-6">
-      {/* Copy */}
-      <div className="lg:col-span-5 space-y-6">
-        <h1 className="text-[clamp(1.65rem,7.2vw,3rem)] leading-[1.3] sm:leading-[1.2] font-bold text-ink tracking-tight text-balance">
-          كل أجهزة بيتك من مكان واحد، بسعر واضح وتوصيل لحد الباب
-        </h1>
-        <p className="text-[15px] sm:text-base text-steel leading-loose max-w-md">
-          غلايات ومكاوي وخلاطات وكبة ومحضرات طعام. افحص الجهاز وانت بتستلمه، وادفع بعدها.
-        </p>
-
-        <div className="flex flex-wrap items-center gap-3">
-          <button
-            onClick={() => goToCatalog()}
-            className="h-12 px-7 rounded-lg bg-ink text-white text-sm font-semibold hover:bg-ink-soft transition-colors"
-          >
-            تصفح كل المنتجات
-          </button>
-          <span className="text-sm text-steel">{products.length} منتج متاح الآن</span>
-        </div>
-
-        <dl className="grid grid-cols-1 min-[420px]:grid-cols-3 border-t border-line text-sm divide-y min-[420px]:divide-y-0 divide-line">
-          <div className="py-3 min-[420px]:pt-5 min-[420px]:pb-0 min-[420px]:pl-3 flex min-[420px]:block items-baseline justify-between gap-3">
-            <dt className="font-semibold text-ink">الدفع عند الاستلام</dt>
-            <dd className="text-steel text-xs min-[420px]:mt-1">كاش أو تحويل</dd>
-          </div>
-          <div className="py-3 min-[420px]:pt-5 min-[420px]:pb-0 min-[420px]:px-3 min-[420px]:border-r border-line flex min-[420px]:block items-baseline justify-between gap-3">
-            <dt className="font-semibold text-ink">معاينة قبل الدفع</dt>
-            <dd className="text-steel text-xs min-[420px]:mt-1">افتح الكرتونة وجرّب</dd>
-          </div>
-          <div className="py-3 min-[420px]:pt-5 min-[420px]:pb-0 min-[420px]:pr-3 min-[420px]:border-r border-line flex min-[420px]:block items-baseline justify-between gap-3">
-            <dt className="font-semibold text-ink">ضمان على كل جهاز</dt>
-            <dd className="text-steel text-xs min-[420px]:mt-1">مكتوب على صفحة المنتج</dd>
-          </div>
-        </dl>
-      </div>
-
-      {/* The aisle */}
-      <div className="lg:col-span-7 -mx-4 sm:mx-0">
-        <div className="flex lg:grid lg:grid-cols-3 gap-3 overflow-x-auto no-scrollbar px-4 sm:px-0 snap-x">
-          {aisle.map(({ cat, count, cover }, i) => {
-            const rest = (aisle.length - 3) % 3; // tiles left over in the last row
-            const isLast = i === aisle.length - 1 && aisle.length > 3;
-            const fill = isLast && rest === 1 ? 'lg:col-span-3' : isLast && rest === 2 ? 'lg:col-span-2' : '';
+    <div className="space-y-5 sm:space-y-6">
+      {/* Offers carousel + side banners */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="relative lg:col-span-2 rounded-2xl overflow-hidden h-[230px] min-[400px]:h-[260px] sm:h-[340px]">
+          {slides.map((p, i) => {
+            const th = SLIDE_THEMES[i % SLIDE_THEMES.length];
+            const pct = Math.round(((p.originalPrice! - p.price) / p.originalPrice!) * 100);
             return (
-            <button
-              key={cat.id}
-              onClick={() => goToCatalog(cat.id)}
-              className={`group snap-start shrink-0 w-[44vw] sm:w-56 lg:w-auto text-right bg-shelf rounded-2xl overflow-hidden ${
-                i === 0 ? 'lg:col-span-2 lg:row-span-2' : fill
-              }`}
-            >
-              <div className={`relative ${i === 0 ? 'aspect-square lg:aspect-auto lg:h-full lg:min-h-[22rem]' : fill ? 'aspect-square lg:aspect-auto lg:h-full lg:min-h-[13rem]' : 'aspect-square'}`}>
-                {cover && (
-                  <img
-                    src={cover.image}
-                    alt={cat.name}
-                    loading={i < 3 ? 'eager' : 'lazy'}
-                    className="absolute inset-0 w-full h-full object-cover mix-blend-multiply transition-transform duration-700 group-hover:scale-[1.03]"
-                  />
-                )}
-                <div className="absolute inset-x-0 bottom-0 p-3 sm:p-4 bg-gradient-to-t from-ink/80 via-ink/30 to-transparent">
-                  <span className={`block text-white font-semibold ${i === 0 ? 'text-sm lg:text-xl' : 'text-sm'}`}>
-                    {cat.name}
-                  </span>
-                  <span className="block text-white/75 text-xs mt-0.5">{count} منتج</span>
+              <div
+                key={p.id}
+                className={`absolute inset-0 bg-gradient-to-l ${th.bg} transition-opacity duration-700 ${
+                  i === index ? 'opacity-100 z-10' : 'opacity-0 z-0'
+                }`}
+                aria-hidden={i !== index}
+              >
+                <div className="h-full grid grid-cols-[1.15fr_1fr] items-center">
+                  <div className="p-5 sm:p-10 sm:pr-16 text-white space-y-2 sm:space-y-4">
+                    <span className={`inline-block text-xs sm:text-sm font-extrabold px-3 py-1 rounded-full ${th.tag}`}>
+                      خصم {pct}%
+                    </span>
+                    <h2 className="text-lg min-[400px]:text-xl sm:text-3xl font-extrabold leading-snug line-clamp-3">{p.name}</h2>
+                    <div className="flex items-baseline gap-2 flex-wrap">
+                      <span className={`price text-2xl sm:text-4xl font-black ${th.accent}`}>
+                        {p.price.toLocaleString('en-US')} <span className="text-base sm:text-lg">ج.م</span>
+                      </span>
+                      <span className="price text-sm sm:text-base text-white/70 line-through">
+                        {p.originalPrice!.toLocaleString('en-US')}
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => setSelectedProduct(p)}
+                      className="btn-gold h-10 sm:h-12 px-5 sm:px-8 rounded-xl text-sm sm:text-base font-extrabold shadow-lg"
+                      tabIndex={i === index ? 0 : -1}
+                    >
+                      اطلب دلوقتي
+                    </button>
+                  </div>
+                  <div className="h-full p-3 sm:p-6 flex items-center">
+                    <img
+                      src={p.image}
+                      alt=""
+                      className="w-full h-full max-h-[85%] object-cover rounded-2xl shadow-2xl ring-4 ring-white/15"
+                    />
+                  </div>
                 </div>
               </div>
+            );
+          })}
+
+          {slides.length > 1 && (
+            <>
+              <button
+                onClick={() => go(-1)}
+                className="hidden sm:flex absolute right-3 top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-full bg-white/90 text-ink items-center justify-center shadow"
+                aria-label="العرض السابق"
+              >
+                <ChevronRight className="w-5 h-5" />
+              </button>
+              <button
+                onClick={() => go(1)}
+                className="hidden sm:flex absolute left-3 top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-full bg-white/90 text-ink items-center justify-center shadow"
+                aria-label="العرض التالي"
+              >
+                <ChevronLeft className="w-5 h-5" />
+              </button>
+              <div className="absolute bottom-3 inset-x-0 z-20 flex justify-center gap-1.5">
+                {slides.map((_, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setIndex(i)}
+                    className={`h-2 rounded-full transition-all ${i === index ? 'w-6 bg-gold-hi' : 'w-2 bg-white/60'}`}
+                    aria-label={`العرض ${i + 1}`}
+                  />
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Side banners (desktop) */}
+        <div className="hidden lg:grid grid-rows-2 gap-4">
+          {sideDeals.map((p, i) => (
+            <button
+              key={p.id}
+              onClick={() => setSelectedProduct(p)}
+              className={`relative rounded-2xl overflow-hidden text-right ${i === 0 ? 'bg-gold-hi' : 'bg-ink'}`}
+            >
+              <img src={p.image} alt="" className="absolute left-0 top-0 h-full w-1/2 object-cover" />
+              <div className={`relative w-1/2 mr-0 p-5 h-full flex flex-col justify-center ${i === 0 ? 'text-ink' : 'text-white'}`}>
+                <span className="text-xs font-bold opacity-80">{i === 0 ? 'الأكثر مبيعاً' : 'وصل جديد'}</span>
+                <span className="font-extrabold leading-snug line-clamp-2 mt-1">{p.name}</span>
+                <span className="price font-black text-xl mt-2">{p.price.toLocaleString('en-US')} ج.م</span>
+              </div>
             </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Service strip */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 bg-white rounded-2xl border border-line divide-line [&>*]:border-line">
+        {[
+          { Icon: Banknote, t: 'الدفع عند الاستلام', s: 'ادفع بعد ما تستلم', c: 'text-save bg-save/10' },
+          { Icon: Truck, t: 'توصيل لحد البيت', s: 'لكل المحافظات', c: 'text-ink bg-ink/5' },
+          { Icon: ShieldCheck, t: 'ضمان على كل جهاز', s: 'ضمان الوكيل', c: 'text-gold-deep bg-gold/15' },
+          { Icon: RotateCcw, t: 'استبدال سهل', s: 'لو فيه عيب صناعة', c: 'text-sale bg-sale/10' },
+        ].map(({ Icon, t, s, c }, i) => (
+          <div
+            key={t}
+            className={`flex items-center gap-3 p-3 sm:p-4 ${i % 2 === 1 ? 'border-r' : ''} ${i > 1 ? 'border-t lg:border-t-0' : ''} ${
+              i === 2 ? 'lg:border-r' : ''
+            }`}
+          >
+            <span className={`w-10 h-10 sm:w-11 sm:h-11 rounded-full flex items-center justify-center shrink-0 ${c}`}>
+              <Icon className="w-5 h-5" />
+            </span>
+            <span className="min-w-0">
+              <span className="block text-[13px] sm:text-sm font-extrabold text-ink leading-tight">{t}</span>
+              <span className="block text-[11px] sm:text-xs text-steel mt-0.5">{s}</span>
+            </span>
+          </div>
+        ))}
+      </div>
+
+      {/* Category tiles — "كل أساسيات بيتك" */}
+      <section>
+        <div className="flex items-end justify-between mb-3 sm:mb-4">
+          <h2 className="text-xl sm:text-2xl font-extrabold text-ink">كل أساسيات بيتك عندنا أسهل</h2>
+          <button onClick={() => scrollToCatalog()} className="text-sm font-bold text-gold-deep hover:underline shrink-0">
+            عرض الكل
+          </button>
+        </div>
+        <div className={`grid grid-cols-3 ${colsFor[tiles.length] || 'sm:grid-cols-6'} gap-2.5 sm:gap-4`}>
+          {tiles.map((cat) => {
+            const items = products.filter((p) => p.category === cat.id);
+            const cover = items[0];
+            return (
+              <button
+                key={cat.id}
+                onClick={() => scrollToCatalog(cat.id)}
+                className="group bg-white rounded-xl border border-line overflow-hidden hover:border-gold hover:shadow-md transition text-center"
+              >
+                <span className="block aspect-square bg-shelf overflow-hidden">
+                  {cover && (
+                    <img src={cover.image} alt="" loading="lazy" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                  )}
+                </span>
+                <span className="block px-1.5 py-2 sm:py-2.5 text-[12px] sm:text-sm font-bold text-ink leading-tight">{cat.name}</span>
+              </button>
             );
           })}
         </div>
-      </div>
-    </section>
+      </section>
+    </div>
   );
 };

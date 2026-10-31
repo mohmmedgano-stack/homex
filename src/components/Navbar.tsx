@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useStore } from '../context/StoreContext';
 import { STORE_INFO } from '../config/store';
-import { ShoppingBag, Heart, Scale, Search, ShieldCheck, X, Menu, Phone } from 'lucide-react';
+import { ShoppingCart, Heart, Scale, Search, ShieldCheck, X, Menu, Phone, Truck, ChevronDown, LayoutGrid } from 'lucide-react';
 
 export const Navbar: React.FC = () => {
   const {
@@ -19,40 +19,86 @@ export const Navbar: React.FC = () => {
     categories,
     selectedCategory,
     setSelectedCategory,
-    currentAdmin,
     isAdminLoggedIn,
+    setSortBy,
   } = useStore();
 
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false); // mobile drawer
+  const [shopOpen, setShopOpen] = useState(false); // "تسوق الآن" dropdown
+  const shopRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const close = (e: MouseEvent) => {
+      if (shopRef.current && !shopRef.current.contains(e.target as Node)) setShopOpen(false);
+    };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, []);
+
+  const toCatalog = (cat: string = 'all', sort?: any) => {
+    setCurrentView('store');
+    setSelectedCategory(cat as any);
+    if (sort) setSortBy(sort);
+    setShopOpen(false);
+    setMenuOpen(false);
+    setTimeout(() => document.getElementById('appliances-catalog-section')?.scrollIntoView({ behavior: 'smooth' }), 50);
+  };
 
   const onSearch = (value: string) => {
     setSearchQuery(value);
     if (currentView !== 'store') setCurrentView('store');
   };
 
-  const iconBtn =
-    'relative w-10 h-10 rounded-lg flex items-center justify-center text-ink hover:bg-shelf transition-colors';
-  const badge =
-    'absolute top-1 left-1 min-w-[18px] h-[18px] px-1 rounded-full bg-gold text-white text-[11px] font-semibold flex items-center justify-center';
+  const searchBox = (className = '') => (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        document.getElementById('appliances-catalog-section')?.scrollIntoView({ behavior: 'smooth' });
+      }}
+      className={`flex h-11 sm:h-12 rounded-xl overflow-hidden border-2 border-gold bg-white ${className}`}
+      role="search"
+    >
+      <input
+        type="search"
+        placeholder="بتدور على إيه؟ كاتيل، مكواة، خلاط..."
+        value={searchQuery}
+        onChange={(e) => onSearch(e.target.value)}
+        className="flex-1 min-w-0 px-4 text-[15px] text-ink placeholder-steel/80 focus:outline-hidden bg-transparent"
+        aria-label="ابحث في المنتجات"
+      />
+      <button type="submit" className="btn-gold w-12 sm:w-14 flex items-center justify-center shrink-0" aria-label="بحث">
+        <Search className="w-5 h-5" />
+      </button>
+    </form>
+  );
+
+  const counter = 'absolute -top-1.5 -left-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-sale text-white text-[11px] font-bold flex items-center justify-center';
 
   return (
-    <header className="sticky top-0 z-40 bg-white border-b border-line">
-      {/* Service line */}
-      <div className="bg-ink text-white/80 text-xs">
+    <header className="sticky top-0 z-40 bg-white shadow-sm">
+      {/* Top bar */}
+      <div className="bg-ink text-white text-xs sm:text-[13px]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-9 flex items-center justify-between gap-4">
-          <span className="truncate">الدفع عند الاستلام مع معاينة الجهاز قبل الدفع</span>
+          <span className="flex items-center gap-2 truncate">
+            <Truck className="w-4 h-4 text-gold-hi shrink-0" />
+            <span className="truncate">توصيل لكل المحافظات والدفع عند الاستلام</span>
+          </span>
           {STORE_INFO.phone && (
-            <a href={`tel:${STORE_INFO.phone}`} className="hidden sm:flex items-center gap-1.5 hover:text-white shrink-0">
-              <Phone className="w-3.5 h-3.5" />
+            <a href={`tel:${STORE_INFO.phone}`} className="flex items-center gap-1.5 font-bold text-gold-hi shrink-0">
+              <Phone className="w-4 h-4" />
               <span dir="ltr">{STORE_INFO.phone}</span>
             </a>
           )}
         </div>
       </div>
 
+      {/* Main bar */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16 sm:h-[72px] gap-4 lg:gap-8">
+        <div className="flex items-center gap-3 sm:gap-6 h-16 sm:h-20">
+          <button onClick={() => setMenuOpen(true)} className="lg:hidden -mr-1 p-1.5 text-ink" aria-label="القائمة">
+            <Menu className="w-6 h-6" />
+          </button>
+
           <button
             onClick={() => {
               setCurrentView('store');
@@ -61,164 +107,146 @@ export const Navbar: React.FC = () => {
               window.scrollTo({ top: 0, behavior: 'smooth' });
             }}
             className="shrink-0"
-            aria-label="HOMEX، الصفحة الرئيسية"
+            aria-label="HOMEX الرئيسية"
           >
-            <img src="/logo.png" alt="HOMEX" className="h-8 sm:h-10 w-auto" />
+            <img src="/logo.png" alt="HOMEX" className="h-8 sm:h-11 w-auto" />
           </button>
 
-          {/* Search (desktop) */}
-          <div className="hidden lg:block flex-1 max-w-xl">
-            <label className="relative block">
-              <span className="sr-only">ابحث في المنتجات</span>
-              <Search className="w-[18px] h-[18px] text-steel absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-              <input
-                type="search"
-                placeholder="ابحث عن كاتيل، مكواة، خلاط..."
-                value={searchQuery}
-                onChange={(e) => onSearch(e.target.value)}
-                className="w-full h-11 bg-shelf text-ink placeholder-steel/80 text-sm rounded-lg pr-11 pl-10 border border-transparent focus:outline-hidden focus:bg-white focus:border-ink transition-colors"
-              />
-              {searchQuery && (
-                <button
-                  onClick={() => setSearchQuery('')}
-                  className="absolute left-2.5 top-1/2 -translate-y-1/2 text-steel hover:text-ink p-1"
-                  aria-label="مسح البحث"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              )}
-            </label>
-          </div>
+          {searchBox('hidden md:flex flex-1 max-w-2xl mx-auto')}
 
-          {/* Actions */}
-          <div className="flex items-center gap-1 sm:gap-1.5">
-            <button onClick={() => setMobileSearchOpen(!mobileSearchOpen)} className={`${iconBtn} lg:hidden`} aria-label="البحث">
-              <Search className="w-5 h-5" />
-            </button>
-
-            <button onClick={() => setCompareOpen(true)} className={`${iconBtn} hidden sm:flex`} aria-label="المقارنة">
-              <Scale className="w-5 h-5" />
-              {compareList.length > 0 && <span className={badge}>{compareList.length}</span>}
-            </button>
-
-            <button onClick={() => setWishlistOpen(true)} className={`${iconBtn} hidden sm:flex`} aria-label="المفضلة">
-              <Heart className="w-5 h-5" />
-              {wishlist.length > 0 && <span className={badge}>{wishlist.length}</span>}
-            </button>
-
-            <button
-              onClick={() => setCartOpen(true)}
-              className="h-10 pr-3 pl-3.5 rounded-lg bg-ink text-white flex items-center gap-2 hover:bg-ink-soft transition-colors"
-              aria-label="سلة التسوق"
-            >
+          <div className="flex items-center gap-1 sm:gap-4 mr-auto md:mr-0">
+            <button onClick={() => setCompareOpen(true)} className="hidden lg:flex flex-col items-center text-ink hover:text-gold-deep" aria-label="المقارنة">
               <span className="relative">
-                <ShoppingBag className="w-5 h-5" />
-                {cartCount > 0 && (
-                  <span className="absolute -top-1.5 -left-2 min-w-[18px] h-[18px] px-1 rounded-full bg-gold text-white text-[11px] font-semibold flex items-center justify-center">
-                    {cartCount}
-                  </span>
-                )}
+                <Scale className="w-6 h-6" />
+                {compareList.length > 0 && <span className={counter}>{compareList.length}</span>}
               </span>
-              <span className="price text-sm font-semibold hidden sm:inline">
+              <span className="text-[11px] font-bold mt-0.5">المقارنة</span>
+            </button>
+            <button onClick={() => setWishlistOpen(true)} className="flex flex-col items-center text-ink hover:text-gold-deep p-1.5 sm:p-0" aria-label="المفضلة">
+              <span className="relative">
+                <Heart className="w-6 h-6" />
+                {wishlist.length > 0 && <span className={counter}>{wishlist.length}</span>}
+              </span>
+              <span className="hidden sm:block text-[11px] font-bold mt-0.5">المفضلة</span>
+            </button>
+            <button onClick={() => setCartOpen(true)} className="flex flex-col items-center text-ink hover:text-gold-deep p-1.5 sm:p-0" aria-label="السلة">
+              <span className="relative">
+                <ShoppingCart className="w-6 h-6" />
+                {cartCount > 0 && <span className={counter}>{cartCount}</span>}
+              </span>
+              <span className="hidden sm:block price text-[11px] font-bold mt-0.5">
                 {cartTotal > 0 ? `${cartTotal.toLocaleString('en-US')} ج.م` : 'السلة'}
               </span>
             </button>
-
             {isAdminLoggedIn && (
               <button
                 onClick={() => setCurrentView(currentView === 'admin' ? 'store' : 'admin')}
-                className="hidden sm:flex h-10 px-3 rounded-lg border border-line text-ink text-sm font-medium items-center gap-2 hover:bg-shelf"
-                title={currentAdmin?.name}
+                className="hidden sm:flex flex-col items-center text-ink hover:text-gold-deep"
               >
-                <ShieldCheck className="w-4 h-4" />
-                {currentView === 'admin' ? 'المتجر' : 'لوحة التحكم'}
+                <ShieldCheck className="w-6 h-6" />
+                <span className="text-[11px] font-bold mt-0.5">{currentView === 'admin' ? 'المتجر' : 'الإدارة'}</span>
               </button>
             )}
-
-            <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className={`${iconBtn} sm:hidden`} aria-label="القائمة">
-              {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-            </button>
           </div>
         </div>
 
-        {mobileSearchOpen && (
-          <div className="lg:hidden pb-3">
-            <label className="relative block">
-              <span className="sr-only">ابحث في المنتجات</span>
-              <Search className="w-[18px] h-[18px] text-steel absolute right-3.5 top-1/2 -translate-y-1/2" />
-              <input
-                type="search"
-                placeholder="ابحث عن كاتيل، مكواة، خلاط..."
-                value={searchQuery}
-                onChange={(e) => onSearch(e.target.value)}
-                autoFocus
-                className="w-full h-11 bg-shelf text-ink placeholder-steel/80 text-base rounded-lg pr-11 pl-4 border border-transparent focus:outline-hidden focus:bg-white focus:border-ink"
-              />
-            </label>
-          </div>
-        )}
-
-        {/* Departments */}
-        {currentView === 'store' && (
-          <nav className="-mx-4 sm:mx-0 px-4 sm:px-0 flex items-center gap-6 overflow-x-auto no-scrollbar text-sm" aria-label="الأقسام">
-            {[{ id: 'all', name: 'كل المنتجات' }, ...categories].map((cat) => {
-              const active = selectedCategory === cat.id;
-              return (
-                <button
-                  key={cat.id}
-                  onClick={() => setSelectedCategory(cat.id as any)}
-                  className={`relative shrink-0 py-3 whitespace-nowrap transition-colors ${
-                    active ? 'text-ink font-semibold' : 'text-steel hover:text-ink'
-                  }`}
-                  aria-current={active ? 'true' : undefined}
-                >
-                  {cat.name}
-                  {active && <span className="absolute inset-x-0 bottom-0 h-[2px] bg-gold rounded-full" />}
-                </button>
-              );
-            })}
-          </nav>
-        )}
+        {searchBox('md:hidden mb-3')}
       </div>
 
-      {mobileMenuOpen && (
-        <div className="sm:hidden border-t border-line bg-white px-4 py-3 space-y-1">
-          <button
-            onClick={() => {
-              setWishlistOpen(true);
-              setMobileMenuOpen(false);
-            }}
-            className="w-full h-12 flex items-center justify-between text-ink text-sm"
-          >
-            <span className="flex items-center gap-3">
-              <Heart className="w-5 h-5" /> المفضلة
-            </span>
-            <span className="text-steel">{wishlist.length}</span>
-          </button>
-          <button
-            onClick={() => {
-              setCompareOpen(true);
-              setMobileMenuOpen(false);
-            }}
-            className="w-full h-12 flex items-center justify-between text-ink text-sm border-t border-line"
-          >
-            <span className="flex items-center gap-3">
-              <Scale className="w-5 h-5" /> مقارنة الأجهزة
-            </span>
-            <span className="text-steel">{compareList.length}</span>
-          </button>
-          {isAdminLoggedIn && (
-            <button
-              onClick={() => {
-                setCurrentView(currentView === 'admin' ? 'store' : 'admin');
-                setMobileMenuOpen(false);
-              }}
-              className="w-full h-12 flex items-center gap-3 text-ink text-sm border-t border-line"
-            >
-              <ShieldCheck className="w-5 h-5" />
-              {currentView === 'admin' ? 'الرجوع للمتجر' : 'لوحة التحكم'}
-            </button>
-          )}
+      {/* Navigation bar */}
+      {currentView === 'store' && (
+        <nav className="hidden lg:block bg-ink" aria-label="القائمة الرئيسية">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center gap-1 h-12 text-sm font-bold text-white">
+            <div className="relative" ref={shopRef}>
+              <button
+                onClick={() => setShopOpen((o) => !o)}
+                className="btn-gold h-12 px-5 flex items-center gap-2"
+                aria-expanded={shopOpen}
+              >
+                <LayoutGrid className="w-4 h-4" />
+                تسوق الآن
+                <ChevronDown className={`w-4 h-4 transition-transform ${shopOpen ? 'rotate-180' : ''}`} />
+              </button>
+              {shopOpen && (
+                <div className="absolute top-full right-0 w-64 bg-white text-ink rounded-b-xl shadow-xl border border-line py-2">
+                  {categories.map((c) => (
+                    <button
+                      key={c.id}
+                      onClick={() => toCatalog(c.id)}
+                      className="w-full text-right px-4 py-2.5 hover:bg-shelf hover:text-gold-deep font-bold"
+                    >
+                      {c.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            {[
+              { label: 'الرئيسية', on: () => { setSelectedCategory('all'); window.scrollTo({ top: 0, behavior: 'smooth' }); } },
+              { label: 'كل المنتجات', on: () => toCatalog('all', 'featured') },
+              { label: 'العروض', on: () => toCatalog('all', 'price-asc'), hot: true },
+              { label: 'وصل حديثاً', on: () => toCatalog('all', 'newest') },
+              { label: 'الأعلى تقييماً', on: () => toCatalog('all', 'rating') },
+            ].map((l) => (
+              <button key={l.label} onClick={l.on} className="h-12 px-4 hover:text-gold-hi transition-colors flex items-center gap-1.5">
+                {l.label}
+                {l.hot && <span className="text-[10px] bg-sale text-white px-1.5 py-0.5 rounded">خصومات</span>}
+              </button>
+            ))}
+          </div>
+        </nav>
+      )}
+
+      {/* Mobile categories row */}
+      {currentView === 'store' && (
+        <div className="lg:hidden border-t border-line">
+          <div className="flex gap-2 overflow-x-auto no-scrollbar px-4 py-2.5">
+            {[{ id: 'all', name: 'الكل' }, ...categories].map((c) => (
+              <button
+                key={c.id}
+                onClick={() => toCatalog(c.id)}
+                className={`shrink-0 h-8 px-3.5 rounded-full text-[13px] font-bold border transition-colors ${
+                  selectedCategory === c.id ? 'bg-ink text-white border-ink' : 'bg-white text-ink border-line'
+                }`}
+              >
+                {c.name}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Mobile drawer */}
+      {menuOpen && (
+        <div className="lg:hidden fixed inset-0 z-50">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setMenuOpen(false)} />
+          <aside className="absolute top-0 right-0 bottom-0 w-[82%] max-w-xs bg-white shadow-2xl flex flex-col">
+            <div className="bg-ink px-4 h-16 flex items-center justify-between">
+              <img src="/logo.png" alt="HOMEX" className="h-8 w-auto" />
+              <button onClick={() => setMenuOpen(false)} className="text-white p-1" aria-label="إغلاق">
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto">
+              <p className="px-4 pt-4 pb-2 text-xs font-bold text-steel">الأقسام</p>
+              {categories.map((c) => (
+                <button key={c.id} onClick={() => toCatalog(c.id)} className="w-full text-right px-4 h-12 border-b border-line font-bold text-ink">
+                  {c.name}
+                </button>
+              ))}
+              <p className="px-4 pt-5 pb-2 text-xs font-bold text-steel">تسوق</p>
+              <button onClick={() => toCatalog('all', 'price-asc')} className="w-full text-right px-4 h-12 border-b border-line font-bold text-sale">العروض</button>
+              <button onClick={() => toCatalog('all', 'newest')} className="w-full text-right px-4 h-12 border-b border-line font-bold text-ink">وصل حديثاً</button>
+              <button onClick={() => { setCompareOpen(true); setMenuOpen(false); }} className="w-full text-right px-4 h-12 border-b border-line font-bold text-ink">
+                مقارنة الأجهزة ({compareList.length})
+              </button>
+              {isAdminLoggedIn && (
+                <button onClick={() => { setCurrentView('admin'); setMenuOpen(false); }} className="w-full text-right px-4 h-12 border-b border-line font-bold text-ink">
+                  لوحة التحكم
+                </button>
+              )}
+            </div>
+          </aside>
         </div>
       )}
     </header>

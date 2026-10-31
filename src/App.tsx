@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { StoreProvider, useStore } from './context/StoreContext';
 import { Navbar } from './components/Navbar';
 import { HeroBanner } from './components/HeroBanner';
@@ -28,8 +28,36 @@ import {
   Layers,
   ArrowUpDown,
   FilterX,
-  Lock
+  Lock,
+  MessageCircle
 } from 'lucide-react';
+
+// Counts down to midnight — today's deals refresh daily
+const DealCountdown: React.FC = () => {
+  const calc = () => {
+    const now = new Date();
+    const end = new Date(now);
+    end.setHours(24, 0, 0, 0);
+    return Math.max(0, Math.floor((end.getTime() - now.getTime()) / 1000));
+  };
+  const [left, setLeft] = useState(calc);
+  useEffect(() => {
+    const t = setInterval(() => setLeft(calc()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const h = Math.floor(left / 3600), m = Math.floor((left % 3600) / 60), sec = left % 60;
+  return (
+    <span className="flex items-center gap-1.5 text-xs sm:text-sm font-bold">
+      <span className="hidden min-[400px]:inline opacity-90">بتخلص بعد</span>
+      <span dir="ltr" className="price flex gap-1">
+        {[h, m, sec].map((v, i) => (
+          <span key={i} className="bg-white text-sale rounded px-1.5 py-0.5 font-black">{pad(v)}</span>
+        ))}
+      </span>
+    </span>
+  );
+};
 
 const StoreContent: React.FC = () => {
   const { 
@@ -113,10 +141,24 @@ const StoreContent: React.FC = () => {
     { id: 'above15k', label: 'أكتر من 15,000' },
   ] as const;
 
+  const discounted = [...products]
+    .filter((p) => p.originalPrice && p.originalPrice > p.price && p.stock > 0)
+    .sort((x, y) => (y.originalPrice! - y.price) / y.originalPrice! - (x.originalPrice! - x.price) / x.originalPrice!);
+  const rails = [
+    { title: 'عروض النهارده', head: 'bg-sale text-white', items: discounted.slice(0, 10), extra: <DealCountdown /> },
+    { title: 'وصل حديثاً', head: 'bg-ink text-white', items: products.filter((p) => p.isNewArrival).slice(0, 10), extra: null },
+    {
+      title: 'أساسيات المطبخ',
+      head: 'btn-gold',
+      items: products.filter((p) => ['kettles', 'blenders', 'cooking'].includes(p.category)).slice(0, 10),
+      extra: null,
+    },
+  ];
+
   const isFiltered = selectedCategory !== 'all' || selectedBrand !== 'all' || priceFilter !== 'all' || !!searchQuery;
 
   return (
-    <div className="min-h-screen flex flex-col bg-white text-ink pb-20 md:pb-0">
+    <div className="min-h-screen flex flex-col bg-page text-ink pb-20 md:pb-0">
       <Navbar />
 
       {currentView === 'checkout' ? (
@@ -124,107 +166,111 @@ const StoreContent: React.FC = () => {
           <CheckoutView />
         </main>
       ) : (
-        <main className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10 space-y-16 sm:space-y-24">
-          {!searchQuery && selectedCategory === 'all' && <HeroBanner />}
+        <main className="flex-1 w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 space-y-8 sm:space-y-12">
+          {!searchQuery && selectedCategory === 'all' && (
+            <>
+              <HeroBanner />
 
-          <section id="appliances-catalog-section" className="scroll-mt-40">
-            <div className="flex flex-wrap items-end justify-between gap-4 pb-5">
+              {rails.map((rail) =>
+                rail.items.length === 0 ? null : (
+                  <section key={rail.title}>
+                    <div className={`flex items-center justify-between rounded-t-xl px-4 h-12 ${rail.head}`}>
+                      <h2 className="text-base sm:text-xl font-extrabold">{rail.title}</h2>
+                      {rail.extra}
+                    </div>
+                    <div className="bg-white border border-t-0 border-line rounded-b-xl p-2.5 sm:p-4">
+                      <div className="flex gap-2.5 sm:gap-4 overflow-x-auto no-scrollbar snap-x">
+                        {rail.items.map((p) => (
+                          <div key={p.id} className="snap-start shrink-0 w-[44%] min-[480px]:w-[31%] md:w-[23%] lg:w-[18.5%]">
+                            <ProductCard product={p} compact />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </section>
+                )
+              )}
+
+              {/* Brands */}
+              <section className="bg-white rounded-xl border border-line p-4 sm:p-6">
+                <h2 className="text-lg sm:text-xl font-extrabold text-ink mb-4">أشهر الماركات</h2>
+                <div className="flex gap-2.5 sm:gap-3 overflow-x-auto no-scrollbar">
+                  {brands.map((b) => (
+                    <button
+                      key={b}
+                      onClick={() => {
+                        setSelectedBrand(b);
+                        document.getElementById('appliances-catalog-section')?.scrollIntoView({ behavior: 'smooth' });
+                      }}
+                      className={`shrink-0 h-14 sm:h-16 px-5 sm:px-7 rounded-xl border-2 font-extrabold text-sm sm:text-base transition-colors ${
+                        selectedBrand === b ? 'border-gold bg-amber-50 text-ink' : 'border-line text-ink hover:border-gold'
+                      }`}
+                    >
+                      {b.replace(/\s*\(.*?\)\s*/g, '')}
+                    </button>
+                  ))}
+                </div>
+              </section>
+            </>
+          )}
+
+          {/* Full catalog */}
+          <section id="appliances-catalog-section" className="scroll-mt-44">
+            <div className="bg-white rounded-xl border border-line p-3 sm:p-4 mb-3 sm:mb-4 flex flex-wrap items-center justify-between gap-3">
               <div>
-                <h2 className="text-2xl sm:text-3xl font-bold text-ink">
-                  {searchQuery
-                    ? `نتايج البحث عن "${searchQuery}"`
-                    : selectedCategory === 'all'
-                    ? 'كل المنتجات'
-                    : activeCategoryInfo?.name}
+                <h2 className="text-lg sm:text-2xl font-extrabold text-ink">
+                  {searchQuery ? `نتايج البحث: ${searchQuery}` : selectedCategory === 'all' ? 'كل المنتجات' : activeCategoryInfo?.name}
                 </h2>
-                <p className="text-sm text-steel mt-1.5">
-                  {sortedProducts.length} منتج
-                  {activeCategoryInfo && !searchQuery ? `، ${activeCategoryInfo.description}` : ''}
-                </p>
+                <p className="text-xs sm:text-sm text-steel mt-0.5">{sortedProducts.length} منتج</p>
               </div>
-
-              <label className="flex items-center gap-2 text-sm">
-                <span className="text-steel">ترتيب حسب</span>
+              <div className="flex items-center gap-2 text-sm">
+                {selectedBrand !== 'all' && (
+                  <button onClick={() => setSelectedBrand('all')} className="h-10 px-3 rounded-lg bg-amber-50 border border-gold font-bold text-ink">
+                    {selectedBrand.replace(/\s*\(.*?\)\s*/g, '')} ✕
+                  </button>
+                )}
+                <select
+                  value={priceFilter}
+                  onChange={(e) => setPriceFilter(e.target.value as any)}
+                  className="h-10 bg-white text-ink rounded-lg px-2 border border-line font-bold focus:outline-hidden focus:border-gold"
+                  aria-label="السعر"
+                >
+                  <option value="all">كل الأسعار</option>
+                  <option value="under2k">أقل من 2,000</option>
+                  <option value="2k-6k">2,000 - 6,000</option>
+                  <option value="6k-15k">6,000 - 15,000</option>
+                  <option value="above15k">أكتر من 15,000</option>
+                </select>
                 <select
                   value={sortBy}
                   onChange={(e) => setSortBy(e.target.value as any)}
-                  className="h-10 bg-white text-ink rounded-lg px-3 border border-line focus:outline-hidden focus:border-ink cursor-pointer"
+                  className="h-10 bg-white text-ink rounded-lg px-2 border border-line font-bold focus:outline-hidden focus:border-gold"
+                  aria-label="ترتيب"
                 >
                   <option value="featured">المميز</option>
-                  <option value="price-asc">السعر من الأقل</option>
-                  <option value="price-desc">السعر من الأعلى</option>
+                  <option value="price-asc">الأقل سعراً</option>
+                  <option value="price-desc">الأعلى سعراً</option>
                   <option value="rating">الأعلى تقييماً</option>
                   <option value="newest">الأحدث</option>
                 </select>
-              </label>
-            </div>
-
-            <div className="flex items-center gap-2 overflow-x-auto no-scrollbar -mx-4 px-4 sm:mx-0 sm:px-0 pb-6 border-b border-line text-sm">
-              {priceTiers.map((tier) => (
-                <button
-                  key={tier.id}
-                  onClick={() => setPriceFilter(tier.id)}
-                  className={`h-9 px-3.5 rounded-lg whitespace-nowrap transition-colors border ${
-                    priceFilter === tier.id
-                      ? 'bg-ink text-white border-ink'
-                      : 'bg-white text-ink border-line hover:border-ink'
-                  }`}
-                >
-                  {tier.label}
-                </button>
-              ))}
-              {isFiltered && (
-                <button
-                  onClick={resetAllFilters}
-                  className="mr-auto h-9 px-2 whitespace-nowrap text-steel hover:text-ink underline underline-offset-4"
-                >
-                  مسح الفلاتر
-                </button>
-              )}
+              </div>
             </div>
 
             {sortedProducts.length === 0 ? (
-              <div className="py-20 text-center max-w-sm mx-auto">
-                <h3 className="text-lg font-semibold text-ink">مفيش منتجات مطابقة</h3>
-                <p className="text-sm text-steel mt-2 leading-relaxed">
-                  جرّب كلمة بحث تانية أو امسح الفلاتر عشان تشوف كل المنتجات.
-                </p>
-                <button
-                  onClick={resetAllFilters}
-                  className="mt-6 h-11 px-6 rounded-lg bg-ink text-white text-sm font-semibold hover:bg-ink-soft"
-                >
+              <div className="bg-white rounded-xl border border-line py-16 text-center px-6">
+                <h3 className="text-lg font-extrabold text-ink">مفيش منتجات مطابقة</h3>
+                <p className="text-sm text-steel mt-2">جرّب كلمة بحث تانية أو امسح الفلاتر.</p>
+                <button onClick={resetAllFilters} className="btn-gold mt-5 h-11 px-6 rounded-lg font-extrabold">
                   اعرض كل المنتجات
                 </button>
               </div>
             ) : (
-              <div className="pt-8 grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-4 gap-y-10 sm:gap-x-6 sm:gap-y-12">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2.5 sm:gap-4">
                 {sortedProducts.map((product) => (
                   <ProductCard key={product.id} product={product} />
                 ))}
               </div>
             )}
-          </section>
-
-          {/* How ordering works — a real sequence, so it is numbered */}
-          <section className="border-t border-line pt-12">
-            <h2 className="text-2xl font-bold text-ink">إزاي تطلب</h2>
-            <ol className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-8 md:gap-12">
-              {[
-                ['اختار الجهاز', 'ضيفه للسلة، وتقدر تقارن بين أكتر من جهاز قبل ما تقرر.'],
-                ['اكتب بياناتك', 'الاسم والعنوان ورقم الموبايل. هنكلمك نأكد الطلب.'],
-                ['استلم وافحص وادفع', 'المندوب بيوصلك، تفتح الكرتونة وتجرب الجهاز، وبعدها تدفع.'],
-              ].map(([title, body], i) => (
-                <li key={title} className="flex gap-4">
-                  <span className="shrink-0 w-9 h-9 rounded-full border border-ink text-ink flex items-center justify-center text-sm font-semibold">
-                    {i + 1}
-                  </span>
-                  <div>
-                    <h3 className="font-semibold text-ink">{title}</h3>
-                    <p className="text-sm text-steel leading-relaxed mt-1.5">{body}</p>
-                  </div>
-                </li>
-              ))}
-            </ol>
           </section>
         </main>
       )}
@@ -237,16 +283,27 @@ const StoreContent: React.FC = () => {
       <ToastContainer />
       <MobileBottomNav />
 
-      <footer className="bg-ink text-white/70 text-sm mt-24">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-14">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-10">
-            <div className="col-span-2 md:col-span-1 space-y-4">
-              <img src="/logo.png" alt="HOMEX" className="h-9 w-auto" />
-              <p className="leading-relaxed max-w-xs">أجهزة منزلية للمطبخ والبيت، بالدفع عند الاستلام.</p>
-            </div>
+      {STORE_INFO.whatsapp && (
+        <a
+          href={`https://wa.me/${STORE_INFO.whatsapp.replace(/\D/g, '')}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="fixed bottom-20 md:bottom-6 left-4 z-40 w-14 h-14 rounded-full bg-[#25D366] text-white shadow-xl flex items-center justify-center"
+          aria-label="كلمنا واتساب"
+        >
+          <MessageCircle className="w-7 h-7" />
+        </a>
+      )}
 
+      <footer className="bg-ink text-white/75 text-sm mt-12">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-14">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
+            <div className="col-span-2 md:col-span-1 space-y-4">
+              <img src="/logo.png" alt="HOMEX" className="h-10 w-auto" />
+              <p className="leading-relaxed max-w-xs">كل أساسيات بيتك من أجهزة منزلية بأفضل سعر، مع التوصيل والدفع عند الاستلام.</p>
+            </div>
             <div>
-              <h4 className="text-white font-semibold mb-4">الأقسام</h4>
+              <h4 className="text-gold-hi font-extrabold mb-4">الأقسام</h4>
               <ul className="space-y-2.5">
                 {categories.map((c) => (
                   <li key={c.id}>
@@ -255,7 +312,7 @@ const StoreContent: React.FC = () => {
                         setSelectedCategory(c.id);
                         document.getElementById('appliances-catalog-section')?.scrollIntoView({ behavior: 'smooth' });
                       }}
-                      className="hover:text-white transition-colors"
+                      className="hover:text-white"
                     >
                       {c.name}
                     </button>
@@ -263,44 +320,46 @@ const StoreContent: React.FC = () => {
                 ))}
               </ul>
             </div>
-
             <div>
-              <h4 className="text-white font-semibold mb-4">تواصل معانا</h4>
+              <h4 className="text-gold-hi font-extrabold mb-4">خدمة العملاء</h4>
+              <ul className="space-y-2.5">
+                <li>الشحن والتوصيل</li>
+                <li>الضمان والاستبدال</li>
+                <li>طرق الدفع</li>
+                <li>
+                  <button onClick={() => setCurrentView('checkout')} className="hover:text-white">إتمام الطلب</button>
+                </li>
+              </ul>
+            </div>
+            <div>
+              <h4 className="text-gold-hi font-extrabold mb-4">تواصل معانا</h4>
               <ul className="space-y-2.5">
                 {STORE_INFO.phone && (
                   <li className="flex items-center gap-2">
-                    <Phone className="w-4 h-4 shrink-0" />
+                    <Phone className="w-4 h-4 shrink-0 text-gold-hi" />
                     <a href={`tel:${STORE_INFO.phone}`} dir="ltr" className="hover:text-white">{STORE_INFO.phone}</a>
                   </li>
                 )}
                 {STORE_INFO.email && (
                   <li className="flex items-center gap-2">
-                    <Mail className="w-4 h-4 shrink-0" />
+                    <Mail className="w-4 h-4 shrink-0 text-gold-hi" />
                     <a href={`mailto:${STORE_INFO.email}`} className="hover:text-white">{STORE_INFO.email}</a>
                   </li>
                 )}
                 {STORE_INFO.address && (
                   <li className="flex items-start gap-2">
-                    <MapPin className="w-4 h-4 shrink-0 mt-0.5" />
+                    <MapPin className="w-4 h-4 shrink-0 mt-0.5 text-gold-hi" />
                     <span>{STORE_INFO.address}</span>
                   </li>
                 )}
-                {STORE_INFO.hours && <li>{STORE_INFO.hours}</li>}
-              </ul>
-            </div>
-
-            <div>
-              <h4 className="text-white font-semibold mb-4">الطلب والضمان</h4>
-              <ul className="space-y-2.5">
-                <li>الدفع عند الاستلام</li>
-                <li>معاينة الجهاز قبل الدفع</li>
-                <li>الضمان مكتوب على كل منتج</li>
+                <li className="flex items-center gap-2">
+                  <Truck className="w-4 h-4 shrink-0 text-gold-hi" /> توصيل لكل المحافظات
+                </li>
               </ul>
             </div>
           </div>
-
-          <div className="border-t border-white/10 mt-12 pt-6 flex flex-wrap items-center justify-between gap-3 text-xs text-white/50">
-            <p>© {new Date().getFullYear()} HOMEX</p>
+          <div className="border-t border-white/10 mt-10 pt-5 flex flex-wrap items-center justify-between gap-3 text-xs text-white/50">
+            <p>© {new Date().getFullYear()} HOMEX. كل الحقوق محفوظة.</p>
             {isAdminLoggedIn ? (
               <button onClick={() => setCurrentView('admin')} className="hover:text-white">لوحة التحكم</button>
             ) : (
