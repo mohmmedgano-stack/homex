@@ -290,7 +290,7 @@ export const ProductModal: React.FC = () => {
               </div>
 
               {/* Product Title */}
-              <h1 className="text-xl sm:text-2xl font-black text-slate-900 leading-snug font-['Cairo']">
+              <h1 className="text-xl sm:text-2xl font-black text-slate-900 leading-snug">
                 {product.name}
               </h1>
 
@@ -500,7 +500,7 @@ export const ProductModal: React.FC = () => {
 
             {/* Add New Review Form */}
             <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200 shadow-xs space-y-4">
-              <h3 className="font-bold text-sm text-slate-900 flex items-center gap-2 font-['Cairo']">
+              <h3 className="font-bold text-sm text-slate-900 flex items-center gap-2">
                 <Star className="w-4 h-4 text-amber-500" />
                 <span>أضف تقييمك ورأيك حول هذا الجهاز:</span>
               </h3>

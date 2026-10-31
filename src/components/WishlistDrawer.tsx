@@ -31,7 +31,7 @@ export const WishlistDrawer: React.FC = () => {
           <div className="p-4 sm:p-5 border-b border-slate-200 flex items-center justify-between bg-slate-50">
             <div className="flex items-center gap-2">
               <Heart className="w-5 h-5 text-rose-500 fill-rose-500" />
-              <h2 className="text-base sm:text-lg font-bold text-slate-900 font-['Cairo']">
+              <h2 className="text-base sm:text-lg font-bold text-slate-900">
                 المنتجات المفضلة ({wishedProducts.length})
               </h2>
             </div>

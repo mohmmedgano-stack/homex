@@ -50,7 +50,7 @@ export const AdminOrders: React.FC = () => {
       {/* Top Header */}
       <div className="bg-white p-5 rounded-3xl border border-slate-200/90 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl font-bold text-slate-900 font-['Cairo'] flex items-center gap-2">
+          <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
             <Package className="w-5 h-5 text-amber-600" />
             <span>إدارة وتتبع طلبات العملاء</span>
           </h2>
@@ -221,7 +221,7 @@ export const AdminOrders: React.FC = () => {
           >
             <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
               <div>
-                <h3 className="text-lg font-bold text-slate-900 font-['Cairo']">
+                <h3 className="text-lg font-bold text-slate-900">
                   فاتورة الطلب #{selectedOrder.id}
                 </h3>
                 <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border inline-block mt-1 ${statusBadge(selectedOrder.status).bg}`}>

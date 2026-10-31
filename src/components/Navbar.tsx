@@ -1,28 +1,16 @@
 import React, { useState } from 'react';
 import { useStore } from '../context/StoreContext';
-import { 
-  ShoppingBag, 
-  Heart, 
-  Scale, 
-  Search, 
-  ShieldCheck, 
-  SlidersHorizontal, 
-  Home, 
-  PhoneCall, 
-  X,
-  Menu,
-  Sparkles,
-  ChevronDown
-} from 'lucide-react';
+import { STORE_INFO } from '../config/store';
+import { ShoppingBag, Heart, Scale, Search, ShieldCheck, X, Menu, Phone } from 'lucide-react';
 
 export const Navbar: React.FC = () => {
-  const { 
-    currentView, 
-    setCurrentView, 
-    cartCount, 
+  const {
+    currentView,
+    setCurrentView,
+    cartCount,
     cartTotal,
-    setCartOpen, 
-    wishlist, 
+    setCartOpen,
+    wishlist,
     setWishlistOpen,
     compareList,
     setCompareOpen,
@@ -32,307 +20,205 @@ export const Navbar: React.FC = () => {
     selectedCategory,
     setSelectedCategory,
     currentAdmin,
-    isAdminLoggedIn
+    isAdminLoggedIn,
   } = useStore();
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
 
+  const onSearch = (value: string) => {
+    setSearchQuery(value);
+    if (currentView !== 'store') setCurrentView('store');
+  };
+
+  const iconBtn =
+    'relative w-10 h-10 rounded-lg flex items-center justify-center text-ink hover:bg-shelf transition-colors';
+  const badge =
+    'absolute top-1 left-1 min-w-[18px] h-[18px] px-1 rounded-full bg-gold text-white text-[11px] font-semibold flex items-center justify-center';
+
   return (
-    <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200/80 shadow-xs">
-      {/* Top micro-bar for guarantees & quick contact */}
-      <div className="bg-slate-900 text-slate-300 text-xs py-1.5 px-4 hidden md:block">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-6">
-            <span className="flex items-center gap-1.5 text-amber-400 font-medium">
-              <Sparkles className="w-3.5 h-3.5" />
-              ضمان معتمد حتى 3 سنوات على جميع الأجهزة المنزلية
-            </span>
-            <span className="text-slate-400">|</span>
-            <span className="text-slate-300">شحن سريع مجاني للطلبات فوق 5000 ج.م</span>
-          </div>
-          <div className="flex items-center gap-4 text-slate-400">
-            <a href="tel:19999" className="hover:text-amber-400 transition-colors flex items-center gap-1">
-              <PhoneCall className="w-3.5 h-3.5" />
-              خدمة العملاء: 19999
+    <header className="sticky top-0 z-40 bg-white border-b border-line">
+      {/* Service line */}
+      <div className="bg-ink text-white/80 text-xs">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-9 flex items-center justify-between gap-4">
+          <span className="truncate">الدفع عند الاستلام مع معاينة الجهاز قبل الدفع</span>
+          {STORE_INFO.phone && (
+            <a href={`tel:${STORE_INFO.phone}`} className="hidden sm:flex items-center gap-1.5 hover:text-white shrink-0">
+              <Phone className="w-3.5 h-3.5" />
+              <span dir="ltr">{STORE_INFO.phone}</span>
             </a>
-            <span>|</span>
-            <span>الدفع عند الاستلام متاح</span>
-          </div>
+          )}
         </div>
       </div>
 
-      {/* Main navigation bar */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-18 sm:h-20 gap-3 sm:gap-6">
-          
-          {/* Logo & Brand */}
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => {
-                setCurrentView('store');
-                setSelectedCategory('all');
-                setSearchQuery('');
-              }}
-              className="flex items-center gap-2.5 text-right group focus:outline-hidden"
-            >
-              <img src="/logo.png" alt="HOMEX" className="h-9 sm:h-11 w-auto group-hover:scale-105 transition-transform" />
-              <p className="text-[11px] text-slate-500 hidden md:block border-r border-slate-200 pr-2.5">
-                كاتيل • مكواة • خلاط • كبة • قلايات ومكانس
-              </p>
-            </button>
-          </div>
+        <div className="flex items-center justify-between h-16 sm:h-[72px] gap-4 lg:gap-8">
+          <button
+            onClick={() => {
+              setCurrentView('store');
+              setSelectedCategory('all');
+              setSearchQuery('');
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
+            className="shrink-0"
+            aria-label="HOMEX، الصفحة الرئيسية"
+          >
+            <img src="/logo.png" alt="HOMEX" className="h-8 sm:h-10 w-auto" />
+          </button>
 
-          {/* Search bar (Desktop) */}
-          <div className="hidden lg:flex flex-1 max-w-lg mx-2 relative">
-            <div className="relative w-full">
+          {/* Search (desktop) */}
+          <div className="hidden lg:block flex-1 max-w-xl">
+            <label className="relative block">
+              <span className="sr-only">ابحث في المنتجات</span>
+              <Search className="w-[18px] h-[18px] text-steel absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
               <input
-                type="text"
-                placeholder="ابحث عن كاتيل، شاشة 55 بوصة، خلاط، قلاية هوائية..."
+                type="search"
+                placeholder="ابحث عن كاتيل، مكواة، خلاط..."
                 value={searchQuery}
-                onChange={(e) => {
-                  setSearchQuery(e.target.value);
-                  if (currentView !== 'store') setCurrentView('store');
-                }}
-                className="w-full bg-slate-100/90 hover:bg-slate-100 text-slate-800 placeholder-slate-400 text-sm rounded-full pl-10 pr-12 py-2.5 border border-slate-200 focus:outline-hidden focus:border-amber-500 focus:bg-white focus:ring-3 focus:ring-amber-500/15 transition-all"
+                onChange={(e) => onSearch(e.target.value)}
+                className="w-full h-11 bg-shelf text-ink placeholder-steel/80 text-sm rounded-lg pr-11 pl-10 border border-transparent focus:outline-hidden focus:bg-white focus:border-ink transition-colors"
               />
-              <Search className="w-4 h-4 text-slate-400 absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none" />
               {searchQuery && (
                 <button
                   onClick={() => setSearchQuery('')}
-                  className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1"
+                  className="absolute left-2.5 top-1/2 -translate-y-1/2 text-steel hover:text-ink p-1"
+                  aria-label="مسح البحث"
                 >
                   <X className="w-4 h-4" />
                 </button>
               )}
-            </div>
+            </label>
           </div>
 
-          {/* Header Action Buttons */}
-          <div className="flex items-center gap-1.5 sm:gap-3">
-            {/* Mobile Search Button */}
-            <button
-              onClick={() => setMobileSearchOpen(!mobileSearchOpen)}
-              className="lg:hidden p-2 rounded-xl text-slate-600 hover:bg-slate-100 focus:outline-hidden"
-              aria-label="البحث"
-            >
+          {/* Actions */}
+          <div className="flex items-center gap-1 sm:gap-1.5">
+            <button onClick={() => setMobileSearchOpen(!mobileSearchOpen)} className={`${iconBtn} lg:hidden`} aria-label="البحث">
               <Search className="w-5 h-5" />
             </button>
 
-            {/* Compare items button */}
-            <button
-              onClick={() => setCompareOpen(true)}
-              className="relative p-2 sm:px-3 sm:py-2 rounded-xl text-slate-700 hover:bg-slate-100 transition-colors flex items-center gap-1.5 focus:outline-hidden"
-              title="مقارنة الأجهزة"
-            >
-              <Scale className="w-5 h-5 text-slate-600" />
-              <span className="hidden xl:inline text-xs font-semibold">المقارنة</span>
-              {compareList.length > 0 && (
-                <span className="absolute -top-1 -right-1 sm:top-1 sm:right-1 bg-amber-500 text-white text-[11px] font-bold w-5 h-5 rounded-full flex items-center justify-center shadow-xs">
-                  {compareList.length}
-                </span>
-              )}
+            <button onClick={() => setCompareOpen(true)} className={`${iconBtn} hidden sm:flex`} aria-label="المقارنة">
+              <Scale className="w-5 h-5" />
+              {compareList.length > 0 && <span className={badge}>{compareList.length}</span>}
             </button>
 
-            {/* Wishlist Button */}
-            <button
-              onClick={() => setWishlistOpen(true)}
-              className="relative p-2 sm:px-3 sm:py-2 rounded-xl text-slate-700 hover:bg-slate-100 transition-colors flex items-center gap-1.5 focus:outline-hidden"
-              title="المفضلة"
-            >
-              <Heart className={`w-5 h-5 ${wishlist.length > 0 ? 'text-rose-500 fill-rose-500' : 'text-slate-600'}`} />
-              <span className="hidden xl:inline text-xs font-semibold">المفضلة</span>
-              {wishlist.length > 0 && (
-                <span className="absolute -top-1 -right-1 sm:top-1 sm:right-1 bg-rose-500 text-white text-[11px] font-bold w-5 h-5 rounded-full flex items-center justify-center shadow-xs">
-                  {wishlist.length}
-                </span>
-              )}
+            <button onClick={() => setWishlistOpen(true)} className={`${iconBtn} hidden sm:flex`} aria-label="المفضلة">
+              <Heart className="w-5 h-5" />
+              {wishlist.length > 0 && <span className={badge}>{wishlist.length}</span>}
             </button>
 
-            {/* Shopping Cart Button */}
             <button
               onClick={() => setCartOpen(true)}
-              className="p-2 sm:px-3.5 sm:py-2 rounded-xl bg-amber-50 hover:bg-amber-100/80 text-amber-900 border border-amber-200 transition-all flex items-center gap-2 focus:outline-hidden group shadow-xs"
-              title="سلة التسوق"
+              className="h-10 pr-3 pl-3.5 rounded-lg bg-ink text-white flex items-center gap-2 hover:bg-ink-soft transition-colors"
+              aria-label="سلة التسوق"
             >
-              <div className="relative">
-                <ShoppingBag className="w-5 h-5 text-amber-600 group-hover:scale-110 transition-transform" />
+              <span className="relative">
+                <ShoppingBag className="w-5 h-5" />
                 {cartCount > 0 && (
-                  <span className="absolute -top-2 -right-2 bg-amber-600 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
+                  <span className="absolute -top-1.5 -left-2 min-w-[18px] h-[18px] px-1 rounded-full bg-gold text-white text-[11px] font-semibold flex items-center justify-center">
                     {cartCount}
                   </span>
                 )}
-              </div>
-              <div className="text-right hidden sm:block">
-                <span className="block text-[11px] text-amber-700/80 leading-none">السلة</span>
-                <span className="text-xs font-bold text-amber-950 font-mono">
-                  {cartTotal > 0 ? `${cartTotal.toLocaleString()} ج.م` : 'فارغة'}
-                </span>
-              </div>
+              </span>
+              <span className="price text-sm font-semibold hidden sm:inline">
+                {cartTotal > 0 ? `${cartTotal.toLocaleString('en-US')} ج.م` : 'السلة'}
+              </span>
             </button>
 
-            {/* Admin Dashboard Switcher Button (ONLY visible if admin is logged in) */}
-            {isAdminLoggedIn ? (
+            {isAdminLoggedIn && (
               <button
-                onClick={() => {
-                  if (currentView === 'admin') {
-                    setCurrentView('store');
-                  } else {
-                    setCurrentView('admin');
-                  }
-                }}
-                className={`p-1.5 sm:px-3 sm:py-2 rounded-xl border transition-all flex items-center gap-2 focus:outline-hidden ${
-                  currentView === 'admin'
-                    ? 'bg-slate-900 text-white border-slate-900 shadow-md'
-                    : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-300 shadow-xs'
-                }`}
-                title="لوحة تحكم الأدمن"
+                onClick={() => setCurrentView(currentView === 'admin' ? 'store' : 'admin')}
+                className="hidden sm:flex h-10 px-3 rounded-lg border border-line text-ink text-sm font-medium items-center gap-2 hover:bg-shelf"
+                title={currentAdmin?.name}
               >
-                <div className="w-7 h-7 rounded-lg overflow-hidden shrink-0 border border-slate-200 bg-slate-100 flex items-center justify-center">
-                  {currentAdmin?.avatar ? (
-                    <img 
-                      src={currentAdmin.avatar} 
-                      alt={currentAdmin.name} 
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <ShieldCheck className="w-4 h-4 text-slate-600" />
-                  )}
-                </div>
-                <div className="text-right hidden sm:block leading-tight">
-                  <div className="flex items-center gap-1">
-                    <span className="text-xs font-bold">
-                      {currentView === 'admin' ? 'الرجوع للمتجر' : 'لوحة الأدمن'}
-                    </span>
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                  </div>
-                  <span className="text-[10px] text-slate-500 block truncate max-w-[90px]">
-                    {currentAdmin?.name || 'الأدمن'}
-                  </span>
-                </div>
+                <ShieldCheck className="w-4 h-4" />
+                {currentView === 'admin' ? 'المتجر' : 'لوحة التحكم'}
               </button>
-            ) : null}
+            )}
 
-            {/* Mobile Menu trigger */}
-            <button
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="sm:hidden p-2 rounded-xl text-slate-600 hover:bg-slate-100"
-              aria-label="القائمة"
-            >
-              {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+            <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className={`${iconBtn} sm:hidden`} aria-label="القائمة">
+              {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </button>
           </div>
         </div>
 
-        {/* Mobile search expanded input */}
         {mobileSearchOpen && (
-          <div className="lg:hidden pb-3 pt-1">
-            <div className="relative">
+          <div className="lg:hidden pb-3">
+            <label className="relative block">
+              <span className="sr-only">ابحث في المنتجات</span>
+              <Search className="w-[18px] h-[18px] text-steel absolute right-3.5 top-1/2 -translate-y-1/2" />
               <input
-                type="text"
-                placeholder="ابحث عن أجهزة: كاتيل، شاشة، خلاط، قلاية..."
+                type="search"
+                placeholder="ابحث عن كاتيل، مكواة، خلاط..."
                 value={searchQuery}
-                onChange={(e) => {
-                  setSearchQuery(e.target.value);
-                  if (currentView !== 'store') setCurrentView('store');
-                }}
+                onChange={(e) => onSearch(e.target.value)}
                 autoFocus
-                className="w-full bg-slate-100 text-slate-800 placeholder-slate-400 text-sm rounded-xl pl-9 pr-11 py-2.5 border border-slate-300 focus:outline-hidden focus:border-amber-500 focus:bg-white"
+                className="w-full h-11 bg-shelf text-ink placeholder-steel/80 text-base rounded-lg pr-11 pl-4 border border-transparent focus:outline-hidden focus:bg-white focus:border-ink"
               />
-              <Search className="w-4 h-4 text-slate-400 absolute right-3.5 top-1/2 -translate-y-1/2" />
-              {searchQuery && (
-                <button
-                  onClick={() => setSearchQuery('')}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 p-1"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              )}
-            </div>
+            </label>
           </div>
         )}
 
-        {/* Categories Bar (Sub-navigation) */}
+        {/* Departments */}
         {currentView === 'store' && (
-          <div className="border-t border-slate-100 py-2.5 flex items-center justify-between overflow-x-auto no-scrollbar gap-2 text-xs">
-            <button
-              onClick={() => setSelectedCategory('all')}
-              className={`px-3.5 py-1.5 rounded-full font-bold whitespace-nowrap transition-colors flex items-center gap-1.5 ${
-                selectedCategory === 'all'
-                  ? 'bg-slate-900 text-white shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-              }`}
-            >
-              <Home className="w-3.5 h-3.5" />
-              جميع الأجهزة
-            </button>
-            {categories.map((cat) => (
-              <button
-                key={cat.id}
-                onClick={() => setSelectedCategory(cat.id)}
-                className={`px-3.5 py-1.5 rounded-full font-medium whitespace-nowrap transition-colors ${
-                  selectedCategory === cat.id
-                    ? 'bg-amber-500 text-white font-bold shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-                }`}
-              >
-                {cat.name}
-              </button>
-            ))}
-          </div>
+          <nav className="-mx-4 sm:mx-0 px-4 sm:px-0 flex items-center gap-6 overflow-x-auto no-scrollbar text-sm" aria-label="الأقسام">
+            {[{ id: 'all', name: 'كل المنتجات' }, ...categories].map((cat) => {
+              const active = selectedCategory === cat.id;
+              return (
+                <button
+                  key={cat.id}
+                  onClick={() => setSelectedCategory(cat.id as any)}
+                  className={`relative shrink-0 py-3 whitespace-nowrap transition-colors ${
+                    active ? 'text-ink font-semibold' : 'text-steel hover:text-ink'
+                  }`}
+                  aria-current={active ? 'true' : undefined}
+                >
+                  {cat.name}
+                  {active && <span className="absolute inset-x-0 bottom-0 h-[2px] bg-gold rounded-full" />}
+                </button>
+              );
+            })}
+          </nav>
         )}
       </div>
 
-      {/* Mobile Menu Dropdown */}
       {mobileMenuOpen && (
-        <div className="sm:hidden border-t border-slate-200 bg-white px-4 pt-3 pb-6 space-y-3 shadow-lg">
+        <div className="sm:hidden border-t border-line bg-white px-4 py-3 space-y-1">
+          <button
+            onClick={() => {
+              setWishlistOpen(true);
+              setMobileMenuOpen(false);
+            }}
+            className="w-full h-12 flex items-center justify-between text-ink text-sm"
+          >
+            <span className="flex items-center gap-3">
+              <Heart className="w-5 h-5" /> المفضلة
+            </span>
+            <span className="text-steel">{wishlist.length}</span>
+          </button>
+          <button
+            onClick={() => {
+              setCompareOpen(true);
+              setMobileMenuOpen(false);
+            }}
+            className="w-full h-12 flex items-center justify-between text-ink text-sm border-t border-line"
+          >
+            <span className="flex items-center gap-3">
+              <Scale className="w-5 h-5" /> مقارنة الأجهزة
+            </span>
+            <span className="text-steel">{compareList.length}</span>
+          </button>
           {isAdminLoggedIn && (
-            <div className="p-3 bg-slate-50 rounded-xl flex items-center justify-between border border-slate-200">
-              <div className="flex items-center gap-2">
-                <img 
-                  src={currentAdmin?.avatar} 
-                  alt="Admin" 
-                  className="w-9 h-9 rounded-full object-cover border border-slate-300" 
-                />
-                <div>
-                  <p className="text-xs font-bold text-slate-900">{currentAdmin?.name}</p>
-                  <p className="text-[10px] text-slate-500">{currentAdmin?.email}</p>
-                </div>
-              </div>
-              <button
-                onClick={() => {
-                  setCurrentView(currentView === 'admin' ? 'store' : 'admin');
-                  setMobileMenuOpen(false);
-                }}
-                className="text-xs font-bold px-3 py-1.5 bg-slate-900 text-white rounded-lg"
-              >
-                {currentView === 'admin' ? 'عرض المتجر' : 'لوحة الأدمن'}
-              </button>
-            </div>
+            <button
+              onClick={() => {
+                setCurrentView(currentView === 'admin' ? 'store' : 'admin');
+                setMobileMenuOpen(false);
+              }}
+              className="w-full h-12 flex items-center gap-3 text-ink text-sm border-t border-line"
+            >
+              <ShieldCheck className="w-5 h-5" />
+              {currentView === 'admin' ? 'الرجوع للمتجر' : 'لوحة التحكم'}
+            </button>
           )}
-
-          <div className="grid grid-cols-2 gap-2 text-center text-xs font-medium">
-            <button
-              onClick={() => {
-                setCompareOpen(true);
-                setMobileMenuOpen(false);
-              }}
-              className="p-3 rounded-xl border border-slate-200 flex items-center justify-center gap-2 hover:bg-slate-50"
-            >
-              <Scale className="w-4 h-4 text-slate-600" />
-              <span>المقارنة ({compareList.length})</span>
-            </button>
-            <button
-              onClick={() => {
-                setWishlistOpen(true);
-                setMobileMenuOpen(false);
-              }}
-              className="p-3 rounded-xl border border-slate-200 flex items-center justify-center gap-2 hover:bg-slate-50"
-            >
-              <Heart className="w-4 h-4 text-rose-500" />
-              <span>المفضلة ({wishlist.length})</span>
-            </button>
-          </div>
         </div>
       )}
     </header>

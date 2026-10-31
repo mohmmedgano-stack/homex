@@ -127,7 +127,7 @@ export const CheckoutView: React.FC = () => {
             <span className="bg-emerald-100 text-emerald-800 text-xs font-bold px-3 py-1 rounded-full">
               تم استلام طلبك بنجاح
             </span>
-            <h1 className="text-2xl sm:text-3xl font-black text-slate-900 font-['Cairo']">
+            <h1 className="text-2xl sm:text-3xl font-black text-slate-900">
               شكراً لتسوقك معنا، {completedOrder.customer.name}!
             </h1>
             <p className="text-sm text-slate-500">
@@ -245,7 +245,7 @@ export const CheckoutView: React.FC = () => {
         {/* Customer Form */}
         <div className="lg:col-span-7 space-y-6">
           <div className="bg-white rounded-3xl border border-slate-200/90 p-6 sm:p-8 shadow-xs">
-            <h1 className="text-xl font-bold text-slate-900 mb-1 font-['Cairo'] flex items-center gap-2">
+            <h1 className="text-xl font-bold text-slate-900 mb-1 flex items-center gap-2">
               <Truck className="w-5 h-5 text-amber-600" />
               <span>بيانات التوصيل والتسليم</span>
             </h1>

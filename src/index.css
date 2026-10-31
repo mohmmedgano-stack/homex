@@ -1,1 +1,77 @@
 @import "tailwindcss";
+
+/* HOMEX design tokens
+   ink    — enamel navy, header bar, primary buttons, headings
+   gold   — from the logo; accents only (active states, focus, small marks)
+   shelf  — the light grey "shelf" products sit on
+   line   — hairlines and borders
+   steel  — secondary text */
+@theme {
+  --font-sans: "IBM Plex Sans Arabic", system-ui, sans-serif;
+
+  --color-ink: #17212c;
+  --color-ink-soft: #243241;
+  --color-shelf: #f1f2f4;
+  --color-line: #e2e5e9;
+  --color-steel: #5d6774;
+  --color-sale: #c2372c;
+  --color-gold: #b8862b;
+  --color-gold-deep: #8a6418;
+
+  /* Remap Tailwind's amber to the logo gold so every screen
+     (checkout, admin, drawers) follows the brand automatically. */
+  --color-amber-50: #fbf6ea;
+  --color-amber-100: #f4e8ca;
+  --color-amber-200: #e9d29a;
+  --color-amber-300: #dcba67;
+  --color-amber-400: #cfa547;
+  --color-amber-500: #c0902e;
+  --color-amber-600: #a47723;
+  --color-amber-700: #835e1c;
+  --color-amber-800: #674a19;
+  --color-amber-900: #543d17;
+  --color-amber-950: #31230b;
+
+  /* Tighter, hierarchical radii instead of one big pill radius everywhere */
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.625rem;
+  --radius-2xl: 0.75rem;
+  --radius-3xl: 1rem;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  overflow-x: hidden;
+  font-feature-settings: "tnum" 1;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-gold);
+  outline-offset: 2px;
+}
+
+.price {
+  font-variant-numeric: tabular-nums lining-nums;
+  letter-spacing: -0.01em;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

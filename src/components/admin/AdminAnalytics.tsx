@@ -53,7 +53,7 @@ export const AdminAnalytics: React.FC = () => {
       {/* Top Banner with Quick Export */}
       <div className="bg-white p-5 rounded-3xl border border-slate-200/90 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl font-bold text-slate-900 font-['Cairo'] flex items-center gap-2">
+          <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
             <TrendingUp className="w-5 h-5 text-amber-600" />
             <span>لوحة الإحصائيات ونشاط المتجر</span>
           </h2>
@@ -154,7 +154,7 @@ export const AdminAnalytics: React.FC = () => {
         
         {/* Category distribution */}
         <div className="lg:col-span-6 bg-white p-6 rounded-3xl border border-slate-200/90 shadow-xs space-y-4">
-          <h3 className="font-bold text-base text-slate-900 font-['Cairo'] flex items-center gap-2">
+          <h3 className="font-bold text-base text-slate-900 flex items-center gap-2">
             <Package className="w-4 h-4 text-amber-600" />
             <span>توزيع الأجهزة حسب الفئات</span>
           </h3>
@@ -182,7 +182,7 @@ export const AdminAnalytics: React.FC = () => {
 
         {/* Low Stock Items List */}
         <div className="lg:col-span-6 bg-white p-6 rounded-3xl border border-slate-200/90 shadow-xs space-y-4">
-          <h3 className="font-bold text-base text-slate-900 font-['Cairo'] flex items-center gap-2">
+          <h3 className="font-bold text-base text-slate-900 flex items-center gap-2">
             <AlertTriangle className="w-4 h-4 text-rose-600" />
             <span>أجهزة أوشكت على النفاد (تحتاج تزويد مخزون)</span>
           </h3>

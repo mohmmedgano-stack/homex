@@ -139,7 +139,7 @@ export const AdminProducts: React.FC = () => {
       {/* Top action header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white p-5 rounded-3xl border border-slate-200/90 shadow-xs">
         <div>
-          <h2 className="text-xl font-bold text-slate-900 font-['Cairo'] flex items-center gap-2">
+          <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
             <SlidersHorizontal className="w-5 h-5 text-amber-600" />
             <span>إدارة وتعديل الأجهزة والمنتجات</span>
           </h2>
@@ -342,7 +342,7 @@ export const AdminProducts: React.FC = () => {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-6">
-              <h3 className="text-lg font-bold text-slate-900 font-['Cairo'] flex items-center gap-2">
+              <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
                 <Plus className="w-5 h-5 text-amber-600" />
                 <span>{editingProduct ? 'تعديل بيانات الجهاز' : 'إضافة جهاز منزلي جديد'}</span>
               </h3>

@@ -54,7 +54,7 @@ export const AdminLayout: React.FC = () => {
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <h1 className="text-base sm:text-lg font-black tracking-tight font-['Cairo']">
+                  <h1 className="text-base sm:text-lg font-black tracking-tight">
                     لوحة تحكم إدارة المتجر
                   </h1>
                   <span className="bg-amber-500/20 text-amber-300 text-[10px] font-bold px-2 py-0.5 rounded border border-amber-500/30">
@@ -245,7 +245,7 @@ export const AdminLayout: React.FC = () => {
           <div className="bg-white rounded-3xl border border-slate-200/90 p-6 shadow-xs space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 pb-4">
               <div>
-                <h2 className="text-lg font-bold text-slate-900 font-['Cairo'] flex items-center gap-2">
+                <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
                   <Bell className="w-5 h-5 text-amber-600" />
                   <span>اشتراكات العملاء في تنبيهات انخفاض الأسعار</span>
                 </h2>

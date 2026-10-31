@@ -28,7 +28,7 @@ export const CompareModal: React.FC = () => {
               <Scale className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-lg sm:text-xl font-bold text-slate-900 font-['Cairo']">
+              <h2 className="text-lg sm:text-xl font-bold text-slate-900">
                 مقارنة مواصفات الأجهزة المنزلية ({compareList.length}/4)
               </h2>
               <p className="text-xs text-slate-500">قارن بين الأسعار، القوة الكهربائية، السعة، والضمان جنباً إلى جنب</p>

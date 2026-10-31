@@ -52,7 +52,7 @@ export const AdminLoginModal: React.FC = () => {
           <div className="w-14 h-14 rounded-2xl bg-amber-500/10 text-amber-600 border border-amber-500/20 flex items-center justify-center mx-auto shadow-inner">
             <ShieldCheck className="w-7 h-7" />
           </div>
-          <h2 className="text-xl font-black text-slate-900 font-['Cairo']">
+          <h2 className="text-xl font-black text-slate-900">
             بوابة دخول المشرفين والإدارة
           </h2>
           <p className="text-xs text-slate-500 max-w-xs mx-auto">

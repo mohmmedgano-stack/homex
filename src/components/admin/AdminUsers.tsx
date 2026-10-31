@@ -114,7 +114,7 @@ export const AdminUsers: React.FC = () => {
       {/* Header bar */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white p-5 rounded-3xl border border-slate-200/90 shadow-xs">
         <div>
-          <h2 className="text-xl font-bold text-slate-900 font-['Cairo'] flex items-center gap-2">
+          <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
             <Users className="w-5 h-5 text-amber-600" />
             <span>إدارة حسابات الأدمن وصلاحيات الوصول</span>
           </h2>
@@ -271,7 +271,7 @@ export const AdminUsers: React.FC = () => {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-5">
-              <h3 className="text-lg font-bold text-slate-900 font-['Cairo'] flex items-center gap-2">
+              <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
                 <UserPlus className="w-5 h-5 text-amber-600" />
                 <span>{editingUser ? 'تعديل بيانات المستخدم' : 'إنشاء حساب أدمن جديد'}</span>
               </h3>
