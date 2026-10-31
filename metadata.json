@@ -1,0 +1,6 @@
+{
+  "name": "HOMEX | هوم إكس للأجهزة المنزلية",
+  "description": "متجر إلكتروني متكامل للأجهزة والأدوات المنزلية والكهربائية مع لوحة تحكم ذكية للأدمن وإدارة متعددة للمستخدمين وتجربة تسوق سلسة.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
