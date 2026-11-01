@@ -11,34 +11,35 @@
   unicode-range: U+0600-0660, U+066A-06EF, U+06FA-06FF, U+0750-077F, U+08A0-08FF, U+FB50-FDFF, U+FE70-FEFF;
 }
 
-/* HOMEX — big-retailer look: deep navy + logo gold, red for deals, light grey page so white cards pop */
+/* HOMEX brand identity — graphite + orange, white logo, red only for discounts */
 @theme {
   --font-sans: "Tajawal", system-ui, sans-serif;
   --font-display: "EYEN Ammon", "Tajawal", system-ui, sans-serif;
 
-  --color-ink: #0f1e36;        /* navy: header, headings */
-  --color-ink-soft: #1b3157;
+  --color-ink: #1c1f24;        /* graphite: header, headings, text */
+  --color-ink-soft: #2a2f37;
+  --color-ink-deep: #131518;
   --color-page: #f2f4f7;       /* page background */
   --color-shelf: #f6f7f9;
   --color-line: #e3e7ed;
   --color-steel: #5f6b7a;
   --color-sale: #e02424;       /* deals / discounts */
   --color-save: #0e9f6e;       /* "وفّر" savings */
-  --color-gold: #d9a21b;       /* buttons, accents */
-  --color-gold-hi: #f2c14e;
-  --color-gold-deep: #9a6d06;
+  --color-gold: #f47a20;       /* brand orange: buttons, accents */
+  --color-gold-hi: #ff9142;
+  --color-gold-deep: #c4580a;
 
-  --color-amber-50: #fdf8e8;
-  --color-amber-100: #faedc4;
-  --color-amber-200: #f5db8a;
-  --color-amber-300: #f0c757;
-  --color-amber-400: #e8b532;
-  --color-amber-500: #d9a21b;
-  --color-amber-600: #b98410;
-  --color-amber-700: #94670d;
-  --color-amber-800: #744f10;
-  --color-amber-900: #5f4112;
-  --color-amber-950: #362306;
+  --color-amber-50: #fff4ec;
+  --color-amber-100: #ffe4cf;
+  --color-amber-200: #ffc89f;
+  --color-amber-300: #ffa96a;
+  --color-amber-400: #ff9142;
+  --color-amber-500: #f47a20;
+  --color-amber-600: #d9650f;
+  --color-amber-700: #b4500b;
+  --color-amber-800: #8f400e;
+  --color-amber-900: #73360f;
+  --color-amber-950: #3e1a05;
 }
 
 body {
@@ -62,10 +63,10 @@ h1, h2, h3, h4, button, .price, nav,
 input, select, textarea { font-family: var(--font-sans); }
 
 .btn-gold {
-  background: linear-gradient(180deg, var(--color-gold-hi), var(--color-gold));
-  color: var(--color-ink);
+  background: var(--color-gold);
+  color: #fff;
 }
-.btn-gold:hover { background: var(--color-gold); }
+.btn-gold:hover { background: #e0680f; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {

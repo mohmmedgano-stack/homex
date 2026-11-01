@@ -55,7 +55,7 @@ export const Navbar: React.FC = () => {
         e.preventDefault();
         document.getElementById('appliances-catalog-section')?.scrollIntoView({ behavior: 'smooth' });
       }}
-      className={`flex h-11 sm:h-12 rounded-xl overflow-hidden border-2 border-gold bg-white ${className}`}
+      className={`flex h-11 sm:h-12 rounded-xl overflow-hidden border-2 border-transparent focus-within:border-gold bg-white ${className}`}
       role="search"
     >
       <input
@@ -75,9 +75,9 @@ export const Navbar: React.FC = () => {
   const counter = 'absolute -top-1.5 -left-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-sale text-white text-[11px] font-bold flex items-center justify-center';
 
   return (
-    <header className="sticky top-0 z-40 bg-white shadow-sm">
+    <header className="sticky top-0 z-40 bg-ink shadow-md">
       {/* Top bar */}
-      <div className="bg-ink text-white text-xs sm:text-[13px]">
+      <div className="bg-ink-deep text-white/85 text-xs sm:text-[13px]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-9 flex items-center justify-between gap-4">
           <span className="flex items-center gap-2 truncate">
             <Truck className="w-4 h-4 text-gold-hi shrink-0" />
@@ -95,8 +95,8 @@ export const Navbar: React.FC = () => {
       {/* Main bar */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center gap-3 sm:gap-6 h-16 sm:h-20">
-          <button onClick={() => setMenuOpen(true)} className="lg:hidden -mr-1 p-1.5 text-ink" aria-label="القائمة">
-            <Menu className="w-6 h-6" />
+          <button onClick={() => setMenuOpen(true)} className="lg:hidden -mr-1 p-1.5 text-white" aria-label="القائمة">
+            <Menu className="w-6 h-6 text-white" />
           </button>
 
           <button
@@ -115,21 +115,21 @@ export const Navbar: React.FC = () => {
           {searchBox('hidden md:flex flex-1 max-w-2xl mx-auto')}
 
           <div className="flex items-center gap-1 sm:gap-4 mr-auto md:mr-0">
-            <button onClick={() => setCompareOpen(true)} className="hidden lg:flex flex-col items-center text-ink hover:text-gold-deep" aria-label="المقارنة">
+            <button onClick={() => setCompareOpen(true)} className="hidden lg:flex flex-col items-center text-white hover:text-gold-hi" aria-label="المقارنة">
               <span className="relative">
                 <Scale className="w-6 h-6" />
                 {compareList.length > 0 && <span className={counter}>{compareList.length}</span>}
               </span>
               <span className="text-[11px] font-bold mt-0.5">المقارنة</span>
             </button>
-            <button onClick={() => setWishlistOpen(true)} className="flex flex-col items-center text-ink hover:text-gold-deep p-1.5 sm:p-0" aria-label="المفضلة">
+            <button onClick={() => setWishlistOpen(true)} className="flex flex-col items-center text-white hover:text-gold-hi p-1.5 sm:p-0" aria-label="المفضلة">
               <span className="relative">
                 <Heart className="w-6 h-6" />
                 {wishlist.length > 0 && <span className={counter}>{wishlist.length}</span>}
               </span>
               <span className="hidden sm:block text-[11px] font-bold mt-0.5">المفضلة</span>
             </button>
-            <button onClick={() => setCartOpen(true)} className="flex flex-col items-center text-ink hover:text-gold-deep p-1.5 sm:p-0" aria-label="السلة">
+            <button onClick={() => setCartOpen(true)} className="flex flex-col items-center text-white hover:text-gold-hi p-1.5 sm:p-0" aria-label="السلة">
               <span className="relative">
                 <ShoppingCart className="w-6 h-6" />
                 {cartCount > 0 && <span className={counter}>{cartCount}</span>}
@@ -141,7 +141,7 @@ export const Navbar: React.FC = () => {
             {isAdminLoggedIn && (
               <button
                 onClick={() => setCurrentView(currentView === 'admin' ? 'store' : 'admin')}
-                className="hidden sm:flex flex-col items-center text-ink hover:text-gold-deep"
+                className="hidden sm:flex flex-col items-center text-white hover:text-gold-hi"
               >
                 <ShieldCheck className="w-6 h-6" />
                 <span className="text-[11px] font-bold mt-0.5">{currentView === 'admin' ? 'المتجر' : 'الإدارة'}</span>
@@ -155,7 +155,7 @@ export const Navbar: React.FC = () => {
 
       {/* Navigation bar */}
       {currentView === 'store' && (
-        <nav className="hidden lg:block bg-ink" aria-label="القائمة الرئيسية">
+        <nav className="hidden lg:block bg-ink-soft border-t border-white/5" aria-label="القائمة الرئيسية">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center gap-1 h-12 text-sm font-bold text-white">
             <div className="relative" ref={shopRef}>
               <button
@@ -199,14 +199,14 @@ export const Navbar: React.FC = () => {
 
       {/* Mobile categories row */}
       {currentView === 'store' && (
-        <div className="lg:hidden border-t border-line">
+        <div className="lg:hidden bg-ink border-t border-white/10">
           <div className="flex gap-2 overflow-x-auto no-scrollbar px-4 py-2.5">
             {[{ id: 'all', name: 'الكل' }, ...categories].map((c) => (
               <button
                 key={c.id}
                 onClick={() => toCatalog(c.id)}
                 className={`shrink-0 h-8 px-3.5 rounded-full text-[13px] font-bold border transition-colors ${
-                  selectedCategory === c.id ? 'bg-ink text-white border-ink' : 'bg-white text-ink border-line'
+                  selectedCategory === c.id ? 'bg-gold text-white border-gold' : 'bg-transparent text-white/85 border-white/20'
                 }`}
               >
                 {c.name}

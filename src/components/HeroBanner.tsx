@@ -3,9 +3,9 @@ import { useStore } from '../context/StoreContext';
 import { ChevronLeft, ChevronRight, Truck, ShieldCheck, Banknote, RotateCcw } from 'lucide-react';
 
 const SLIDE_THEMES = [
-  { bg: 'from-[#0f1e36] to-[#1d3a6b]', tag: 'bg-gold text-ink', accent: 'text-gold-hi' },
-  { bg: 'from-[#9b1c1c] to-[#e02424]', tag: 'bg-white text-sale', accent: 'text-white' },
-  { bg: 'from-[#065f46] to-[#0e9f6e]', tag: 'bg-gold-hi text-ink', accent: 'text-gold-hi' },
+  { bg: 'from-[#1c1f24] to-[#3a414c]', tag: 'bg-gold text-white', accent: 'text-gold-hi', cta: 'btn-gold' },
+  { bg: 'from-[#9b1c1c] to-[#e02424]', tag: 'bg-white text-sale', accent: 'text-white', cta: 'bg-white text-sale hover:bg-white/90' },
+  { bg: 'from-[#c4580a] to-[#ff9142]', tag: 'bg-white text-gold-deep', accent: 'text-white', cta: 'bg-ink text-white hover:bg-ink-soft' },
 ];
 
 export const HeroBanner: React.FC = () => {
@@ -68,7 +68,7 @@ export const HeroBanner: React.FC = () => {
                     </div>
                     <button
                       onClick={() => setSelectedProduct(p)}
-                      className="btn-gold h-10 sm:h-12 px-5 sm:px-8 rounded-xl text-sm sm:text-base font-extrabold shadow-lg"
+                      className={`${th.cta} h-10 sm:h-12 px-5 sm:px-8 rounded-xl text-sm sm:text-base font-extrabold shadow-lg`}
                       tabIndex={i === index ? 0 : -1}
                     >
                       اطلب دلوقتي
@@ -107,7 +107,7 @@ export const HeroBanner: React.FC = () => {
                   <button
                     key={i}
                     onClick={() => setIndex(i)}
-                    className={`h-2 rounded-full transition-all ${i === index ? 'w-6 bg-gold-hi' : 'w-2 bg-white/60'}`}
+                    className={`h-2 rounded-full transition-all ${i === index ? 'w-6 bg-white' : 'w-2 bg-white/60'}`}
                     aria-label={`العرض ${i + 1}`}
                   />
                 ))}
@@ -122,10 +122,10 @@ export const HeroBanner: React.FC = () => {
             <button
               key={p.id}
               onClick={() => setSelectedProduct(p)}
-              className={`relative rounded-2xl overflow-hidden text-right ${i === 0 ? 'bg-gold-hi' : 'bg-ink'}`}
+              className={`relative rounded-2xl overflow-hidden text-right ${i === 0 ? 'bg-gold' : 'bg-ink'}`}
             >
               <img src={p.image} alt="" className="absolute left-0 top-0 h-full w-1/2 object-cover" />
-              <div className={`relative w-1/2 mr-0 p-5 h-full flex flex-col justify-center ${i === 0 ? 'text-ink' : 'text-white'}`}>
+              <div className={`relative w-1/2 mr-0 p-5 h-full flex flex-col justify-center text-white`}>
                 <span className="text-xs font-bold opacity-80">{i === 0 ? 'الأكثر مبيعاً' : 'وصل جديد'}</span>
                 <span className="font-extrabold leading-snug line-clamp-2 mt-1">{p.name}</span>
                 <span className="price font-black text-xl mt-2">{p.price.toLocaleString('en-US')} ج.م</span>
