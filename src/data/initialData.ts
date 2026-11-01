@@ -500,7 +500,7 @@ export const INITIAL_ORDERS: Order[] = [
       city: 'القاهرة - المعادي',
       address: 'شارع 9، برج النخيل، الدور الرابع شقة 8',
       notes: 'يرجى الاتصال قبل الوصول بنصف ساعة',
-      paymentMethod: 'cash_on_delivery'
+      paymentMethod: 'cod'
     },
     items: [
       {
@@ -534,7 +534,7 @@ export const INITIAL_ORDERS: Order[] = [
       city: 'الجيزة - الشيخ زايد',
       address: 'كمبوند الياسمين، فيلا 24',
       notes: 'التسليم في الفترة المسائية',
-      paymentMethod: 'card_online'
+      paymentMethod: 'vodafone'
     },
     items: [
       {
@@ -560,7 +560,7 @@ export const INITIAL_ORDERS: Order[] = [
       phone: '01155443322',
       city: 'الإسكندرية - سموحة',
       address: 'شارع فوزي معاذ، عمارة الأطباء',
-      paymentMethod: 'cash_on_delivery'
+      paymentMethod: 'cod'
     },
     items: [
       {

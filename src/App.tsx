@@ -10,10 +10,7 @@ import { CompareModal } from './components/CompareModal';
 import { CheckoutView } from './components/CheckoutView';
 import { MobileBottomNav } from './components/MobileBottomNav';
 import { ToastContainer } from './components/Toast';
-import { AdminLayout } from './components/admin/AdminLayout';
-import { AdminLoginModal } from './components/AdminLoginModal';
 import { ProductCategory } from './types';
-import { STORE_INFO } from './config/store';
 import { 
   SlidersHorizontal, 
   Sparkles, 
@@ -71,9 +68,9 @@ const StoreContent: React.FC = () => {
     sortBy,
     setSortBy,
     setCurrentView,
-    isAdminLoggedIn,
-    setAdminLoginModalOpen
+    settings,
   } = useStore();
+  const STORE_INFO = settings;
 
   const [selectedBrand, setSelectedBrand] = useState<string>('all');
   const [priceFilter, setPriceFilter] = useState<'all' | 'under2k' | '2k-6k' | '6k-15k' | 'above15k'>('all');
@@ -128,10 +125,6 @@ const StoreContent: React.FC = () => {
     setSortBy('featured');
   };
 
-  // If in admin view, render AdminLayout
-  if (currentView === 'admin') {
-    return <AdminLayout />;
-  }
 
   const priceTiers = [
     { id: 'all', label: 'كل الأسعار' },
@@ -279,7 +272,6 @@ const StoreContent: React.FC = () => {
       <CartDrawer />
       <WishlistDrawer />
       <CompareModal />
-      <AdminLoginModal />
       <ToastContainer />
       <MobileBottomNav />
 
@@ -299,7 +291,7 @@ const StoreContent: React.FC = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-14">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
             <div className="col-span-2 md:col-span-1 space-y-4">
-              <img src="/logo.png" alt="HOMEX" className="h-10 w-auto" />
+              <img src={settings.logo || '/logo.png'} alt="HOMEX" className="h-10 w-auto" />
               <p className="leading-relaxed max-w-xs">كل أساسيات بيتك من أجهزة منزلية بأفضل سعر، مع التوصيل والدفع عند الاستلام.</p>
             </div>
             <div>
@@ -355,18 +347,21 @@ const StoreContent: React.FC = () => {
                 <li className="flex items-center gap-2">
                   <Truck className="w-4 h-4 shrink-0 text-gold-hi" /> توصيل لكل المحافظات
                 </li>
+                {(settings.facebook || settings.instagram || settings.tiktok) && (
+                  <li className="flex gap-3 pt-2">
+                    {settings.facebook && <a href={settings.facebook} target="_blank" rel="noopener noreferrer" className="hover:text-white underline underline-offset-4">فيسبوك</a>}
+                    {settings.instagram && <a href={settings.instagram} target="_blank" rel="noopener noreferrer" className="hover:text-white underline underline-offset-4">إنستجرام</a>}
+                    {settings.tiktok && <a href={settings.tiktok} target="_blank" rel="noopener noreferrer" className="hover:text-white underline underline-offset-4">تيك توك</a>}
+                  </li>
+                )}
               </ul>
             </div>
           </div>
           <div className="border-t border-white/10 mt-10 pt-5 flex flex-wrap items-center justify-between gap-3 text-xs text-white/50">
-            <p>© {new Date().getFullYear()} HOMEX. كل الحقوق محفوظة.</p>
-            {isAdminLoggedIn ? (
-              <button onClick={() => setCurrentView('admin')} className="hover:text-white">لوحة التحكم</button>
-            ) : (
-              <button onClick={() => setAdminLoginModalOpen(true)} className="hover:text-white flex items-center gap-1.5">
-                <Lock className="w-3 h-3" /> دخول الإدارة
-              </button>
-            )}
+            <p>© {new Date().getFullYear()} {settings.store_name}. كل الحقوق محفوظة.</p>
+            <a href="/admin/" className="hover:text-white flex items-center gap-1.5">
+              <Lock className="w-3 h-3" /> دخول الإدارة
+            </a>
           </div>
         </div>
       </footer>

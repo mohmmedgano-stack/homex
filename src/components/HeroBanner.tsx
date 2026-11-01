@@ -9,7 +9,7 @@ const SLIDE_THEMES = [
 ];
 
 export const HeroBanner: React.FC = () => {
-  const { products, categories, setSelectedCategory, setSelectedProduct } = useStore();
+  const { products, categories, setSelectedCategory, setSelectedProduct, settings } = useStore();
 
   // Slides = the biggest discounts in the store, so the banners always match real products/prices
   const slides = [...products]
@@ -163,7 +163,10 @@ export const HeroBanner: React.FC = () => {
       {/* Category tiles — "كل أساسيات بيتك" */}
       <section>
         <div className="flex items-end justify-between mb-3 sm:mb-4">
-          <h2 className="text-xl sm:text-2xl font-extrabold text-ink">كل أساسيات بيتك عندنا أسهل</h2>
+          <div>
+            <h2 className="text-xl sm:text-2xl font-extrabold text-ink">{settings.hero_title || 'كل أساسيات بيتك عندنا أسهل'}</h2>
+            {settings.hero_subtitle && <p className="text-sm text-steel mt-1">{settings.hero_subtitle}</p>}
+          </div>
           <button onClick={() => scrollToCatalog()} className="text-sm font-bold text-gold-deep hover:underline shrink-0">
             عرض الكل
           </button>

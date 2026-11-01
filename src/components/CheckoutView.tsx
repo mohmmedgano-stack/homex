@@ -47,7 +47,8 @@ export const CheckoutView: React.FC = () => {
   const { 
     cart, 
     cartTotal, 
-    placeOrder, 
+    submitOrder,
+    settings,
     setCurrentView, 
     showToast 
   } = useStore();
@@ -56,23 +57,29 @@ export const CheckoutView: React.FC = () => {
     name: '',
     phone: '',
     altPhone: '',
-    city: 'القاهرة',
+    city: '',
     address: '',
     notes: '',
-    paymentMethod: 'cash_on_delivery'
+    paymentMethod: 'cod'
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [completedOrder, setCompletedOrder] = useState<Order | null>(null);
 
-  const shippingFee = cartTotal >= 5000 ? 0 : 50;
+  const freeOver = Number(settings.free_shipping_over) || 0;
+  const shippingFee = freeOver > 0 && cartTotal >= freeOver ? 0 : Number(settings.shipping_fee) || 0;
+  const payOptions = [
+    settings.pay_cod !== '0' && { id: 'cod' as const, title: 'الدفع عند الاستلام', sub: 'كاش بعد ما تستلم وتفحص الجهاز' },
+    settings.pay_vodafone && { id: 'vodafone' as const, title: 'فودافون كاش', sub: `حوّل على ${settings.pay_vodafone}` },
+    settings.pay_instapay && { id: 'instapay' as const, title: 'إنستاباي', sub: `حوّل على ${settings.pay_instapay}` },
+  ].filter(Boolean) as { id: 'cod' | 'vodafone' | 'instapay'; title: string; sub: string }[];
   const finalTotal = cartTotal + shippingFee;
 
   const handleSubmitOrder = (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!form.name.trim() || !form.phone.trim() || !form.address.trim()) {
-      showToast('يرجى ملء جميع الحقول المطلوبة (الاسم، الهاتف، والعنوان)', 'error');
+    if (!form.name.trim() || !form.phone.trim() || !form.address.trim() || !form.city) {
+      showToast('اكتب الاسم والموبايل والمحافظة والعنوان', 'error');
       return;
     }
 
@@ -83,8 +90,7 @@ export const CheckoutView: React.FC = () => {
 
     setIsSubmitting(true);
 
-    setTimeout(() => {
-      const order = placeOrder(form);
+    submitOrder(form).then((order) => {
       setCompletedOrder(order);
       setIsSubmitting(false);
 
@@ -100,7 +106,10 @@ export const CheckoutView: React.FC = () => {
       }
 
       showToast(`تم تأكيد طلبك بنجاح! رقم الطلب: ${order.id}`, 'success');
-    }, 600);
+    }).catch((err) => {
+      setIsSubmitting(false);
+      showToast(err.message || 'الطلب متسجلش، جرّب تاني', 'error');
+    });
   };
 
   const handlePrint = () => {
@@ -109,7 +118,8 @@ export const CheckoutView: React.FC = () => {
 
   const handleWhatsAppShare = (order: Order) => {
     const text = `مرحباً، أود تأكيد طلبي من HOMEX:\nرقم الطلب: ${order.id}\nالاسم: ${order.customer.name}\nالهاتف: ${order.customer.phone}\nالعنوان: ${order.customer.city} - ${order.customer.address}\nإجمالي الطلب: ${order.total.toLocaleString()} ج.م`;
-    const url = `https://wa.me/201012345678?text=${encodeURIComponent(text)}`;
+    const num = (settings.whatsapp || settings.phone || '').replace(/\D/g, '').replace(/^0/, '20');
+    const url = `https://wa.me/${num}?text=${encodeURIComponent(text)}`;
     window.open(url, '_blank');
   };
 
@@ -307,6 +317,7 @@ export const CheckoutView: React.FC = () => {
                   onChange={(e) => setForm({ ...form, city: e.target.value })}
                   className="w-full bg-slate-50 text-slate-900 text-sm rounded-xl px-4 py-3 border border-slate-200 focus:outline-hidden focus:border-amber-500 focus:bg-white"
                 >
+                  <option value="" disabled>اختار المحافظة</option>
                   {EGYPT_GOVERNORATES.map(gov => (
                     <option key={gov} value={gov}>{gov}</option>
                   ))}
@@ -346,47 +357,29 @@ export const CheckoutView: React.FC = () => {
               <div className="pt-2">
                 <label className="block text-xs font-bold text-slate-700 mb-2">طريقة الدفع:</label>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <label className={`p-4 rounded-2xl border-2 flex items-center gap-3 cursor-pointer transition-all ${
-                    form.paymentMethod === 'cash_on_delivery' 
-                      ? 'border-amber-500 bg-amber-50/50 text-amber-950 font-bold' 
-                      : 'border-slate-200 hover:border-slate-300'
-                  }`}>
-                    <input
-                      type="radio"
-                      name="paymentMethod"
-                      checked={form.paymentMethod === 'cash_on_delivery'}
-                      onChange={() => setForm({ ...form, paymentMethod: 'cash_on_delivery' })}
-                      className="text-amber-600 focus:ring-amber-500"
-                    />
-                    <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
-                      <Banknote className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <span className="text-xs font-bold block">الدفع عند الاستلام</span>
-                      <span className="text-[10px] text-slate-500">كاش بعد فحص الجهاز</span>
-                    </div>
-                  </label>
-
-                  <label className={`p-4 rounded-2xl border-2 flex items-center gap-3 cursor-pointer transition-all ${
-                    form.paymentMethod === 'card_online' 
-                      ? 'border-amber-500 bg-amber-50/50 text-amber-950 font-bold' 
-                      : 'border-slate-200 hover:border-slate-300'
-                  }`}>
-                    <input
-                      type="radio"
-                      name="paymentMethod"
-                      checked={form.paymentMethod === 'card_online'}
-                      onChange={() => setForm({ ...form, paymentMethod: 'card_online' })}
-                      className="text-amber-600 focus:ring-amber-500"
-                    />
-                    <div className="w-9 h-9 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center shrink-0">
-                      <CreditCard className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <span className="text-xs font-bold block">بطاقة بنكية / فيزا</span>
-                      <span className="text-[10px] text-slate-500">دفع إلكتروني آمن 100%</span>
-                    </div>
-                  </label>
+                  {payOptions.map((opt) => (
+                    <label
+                      key={opt.id}
+                      className={`p-4 rounded-2xl border-2 flex items-center gap-3 cursor-pointer transition-all ${
+                        form.paymentMethod === opt.id ? 'border-amber-500 bg-amber-50/50 text-amber-950 font-bold' : 'border-slate-200 hover:border-slate-300'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="paymentMethod"
+                        checked={form.paymentMethod === opt.id}
+                        onChange={() => setForm({ ...form, paymentMethod: opt.id })}
+                        className="text-amber-600 focus:ring-amber-500"
+                      />
+                      <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                        {opt.id === 'cod' ? <Banknote className="w-5 h-5" /> : <CreditCard className="w-5 h-5" />}
+                      </div>
+                      <div>
+                        <span className="text-xs font-bold block">{opt.title}</span>
+                        <span className="text-[10px] text-slate-500" dir="auto">{opt.sub}</span>
+                      </div>
+                    </label>
+                  ))}
                 </div>
               </div>
 

@@ -16,6 +16,7 @@ import {
   INITIAL_ORDERS, 
   CATEGORIES 
 } from '../data/initialData';
+import { api, StoreSettings } from '../lib/api';
 
 interface ToastState {
   id: string;
@@ -37,7 +38,10 @@ interface StoreContextType {
   subscribePriceAlert: (productId: string, email: string, targetPrice?: number) => boolean;
 
   // Categories
-  categories: typeof CATEGORIES;
+  categories: { id: string; name: string; description?: string }[];
+  settings: StoreSettings;
+  catalogLoaded: boolean;
+  submitOrder: (customer: CustomerDetails) => Promise<Order>;
   selectedCategory: ProductCategory | 'all';
   setSelectedCategory: (cat: ProductCategory | 'all') => void;
 
@@ -120,14 +124,34 @@ const STORAGE_KEYS = {
 
 export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // Load initial products from localStorage or defaults
-  const [products, setProducts] = useState<Product[]>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEYS.PRODUCTS);
-      return saved ? JSON.parse(saved) : INITIAL_PRODUCTS;
-    } catch {
-      return INITIAL_PRODUCTS;
-    }
+  const [products, setProducts] = useState<Product[]>([]);
+  const [categoryList, setCategoryList] = useState<{ id: string; name: string; description?: string }[]>([]);
+  const [catalogLoaded, setCatalogLoaded] = useState(false);
+  const [settings, setSettings] = useState<StoreSettings>({
+    store_name: 'HOMEX', logo: '', top_bar_text: 'توصيل لكل المحافظات والدفع عند الاستلام',
+    phone: '', whatsapp: '', email: '', address: '', facebook: '', instagram: '', tiktok: '',
+    shipping_fee: '60', free_shipping_over: '0', pay_cod: '1', pay_vodafone: '', pay_instapay: '',
+    hero_title: '', hero_subtitle: '',
   });
+
+  // Load the live catalog + settings from the server.
+  // If the API isn't reachable (local preview without PHP), show the demo catalog.
+  useEffect(() => {
+    api.get('catalog')
+      .then((d) => {
+        setProducts(d.products);
+        setCategoryList(d.categories);
+      })
+      .catch(() => {
+        // Demo catalog only in local development — never show fake products on the live site
+        if (import.meta.env.DEV) {
+          setProducts(INITIAL_PRODUCTS);
+          setCategoryList(CATEGORIES);
+        }
+      })
+      .finally(() => setCatalogLoaded(true));
+    api.get('settings').then(setSettings).catch(() => {});
+  }, []);
 
   // Price Drop Alerts Subscriptions
   const [priceAlerts, setPriceAlerts] = useState<PriceAlertSubscription[]>(() => {
@@ -160,14 +184,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   });
 
   // Is Admin Authenticated? Default is FALSE for standard store customers!
-  const [isAdminLoggedIn, setIsAdminLoggedIn] = useState<boolean>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEYS.IS_ADMIN_AUTH);
-      return saved === 'true';
-    } catch {
-      return false;
-    }
-  });
+  const [isAdminLoggedIn, setIsAdminLoggedIn] = useState<boolean>(false); // admin moved to /admin/
 
   const [adminLoginModalOpen, setAdminLoginModalOpen] = useState(false);
 
@@ -221,9 +238,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [toasts, setToasts] = useState<ToastState[]>([]);
 
   // Sync to localStorage
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(products));
-  }, [products]);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.PRICE_ALERTS, JSON.stringify(priceAlerts));
@@ -468,6 +482,32 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const clearCompare = () => setCompareList([]);
 
   // Orders
+  const submitOrder = async (customer: CustomerDetails): Promise<Order> => {
+    const res = await api.post('order', {
+      customer,
+      paymentMethod: customer.paymentMethod,
+      items: cart.map((i) => ({ productId: Number(i.product.id), quantity: i.quantity })),
+    });
+    const order: Order = {
+      id: res.code,
+      customer,
+      items: cart.map((i) => ({ productId: i.product.id, productName: i.product.name, productImage: i.product.image, price: i.product.price, quantity: i.quantity })),
+      subtotal: res.subtotal,
+      shippingFee: res.shippingFee,
+      discount: 0,
+      total: res.total,
+      status: 'pending',
+      createdAt: new Date().toISOString(),
+    };
+    // reflect the new stock locally so the page stays accurate
+    setProducts((prev) => prev.map((p) => {
+      const line = cart.find((c) => c.product.id === p.id);
+      return line ? { ...p, stock: Math.max(0, p.stock - line.quantity) } : p;
+    }));
+    setCart([]);
+    return order;
+  };
+
   const placeOrder = (customer: CustomerDetails, discount = 0): Order => {
     const orderItems = cart.map(item => ({
       productId: item.product.id,
@@ -591,7 +631,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         priceAlerts,
         subscribePriceAlert,
 
-        categories: CATEGORIES,
+        categories: categoryList,
+        settings,
+        catalogLoaded,
+        submitOrder,
         selectedCategory,
         setSelectedCategory,
 

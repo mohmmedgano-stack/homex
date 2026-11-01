@@ -1,4 +1,5 @@
-export type ProductCategory = 
+export type ProductCategory = string; // managed from the dashboard
+export type LegacyCategory = 
   | 'kettles' // غلايات وماكينات المشروبات
   | 'screens' // شاشات وتلفزيونات
   | 'blenders' // خلاطات ومحضرات طعام
@@ -94,7 +95,7 @@ export interface CustomerDetails {
   city: string;
   address: string;
   notes?: string;
-  paymentMethod: 'cash_on_delivery' | 'card_online';
+  paymentMethod: 'cod' | 'vodafone' | 'instapay';
 }
 
 export interface Order {

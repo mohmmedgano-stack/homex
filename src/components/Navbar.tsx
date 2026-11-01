@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useStore } from '../context/StoreContext';
-import { STORE_INFO } from '../config/store';
 import { ShoppingCart, Heart, Scale, Search, ShieldCheck, X, Menu, Phone, Truck, ChevronDown, LayoutGrid } from 'lucide-react';
 
 export const Navbar: React.FC = () => {
@@ -21,7 +20,9 @@ export const Navbar: React.FC = () => {
     setSelectedCategory,
     isAdminLoggedIn,
     setSortBy,
+    settings,
   } = useStore();
+  const logo = settings.logo || '/logo.png';
 
   const [menuOpen, setMenuOpen] = useState(false); // mobile drawer
   const [shopOpen, setShopOpen] = useState(false); // "تسوق الآن" dropdown
@@ -81,12 +82,12 @@ export const Navbar: React.FC = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-9 flex items-center justify-between gap-4">
           <span className="flex items-center gap-2 truncate">
             <Truck className="w-4 h-4 text-gold-hi shrink-0" />
-            <span className="truncate">توصيل لكل المحافظات والدفع عند الاستلام</span>
+            <span className="truncate">{settings.top_bar_text}</span>
           </span>
-          {STORE_INFO.phone && (
-            <a href={`tel:${STORE_INFO.phone}`} className="flex items-center gap-1.5 font-bold text-gold-hi shrink-0">
+          {settings.phone && (
+            <a href={`tel:${settings.phone}`} className="flex items-center gap-1.5 font-bold text-gold-hi shrink-0">
               <Phone className="w-4 h-4" />
-              <span dir="ltr">{STORE_INFO.phone}</span>
+              <span dir="ltr">{settings.phone}</span>
             </a>
           )}
         </div>
@@ -109,7 +110,7 @@ export const Navbar: React.FC = () => {
             className="shrink-0"
             aria-label="HOMEX الرئيسية"
           >
-            <img src="/logo.png" alt="HOMEX" className="h-8 sm:h-11 w-auto" />
+            <img src={logo} alt={settings.store_name} className="h-8 sm:h-11 w-auto" />
           </button>
 
           {searchBox('hidden md:flex flex-1 max-w-2xl mx-auto')}
@@ -222,7 +223,7 @@ export const Navbar: React.FC = () => {
           <div className="absolute inset-0 bg-black/50" onClick={() => setMenuOpen(false)} />
           <aside className="absolute top-0 right-0 bottom-0 w-[82%] max-w-xs bg-white shadow-2xl flex flex-col">
             <div className="bg-ink px-4 h-16 flex items-center justify-between">
-              <img src="/logo.png" alt="HOMEX" className="h-8 w-auto" />
+              <img src={logo} alt={settings.store_name} className="h-8 w-auto" />
               <button onClick={() => setMenuOpen(false)} className="text-white p-1" aria-label="إغلاق">
                 <X className="w-6 h-6" />
               </button>
