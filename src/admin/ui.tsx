@@ -185,6 +185,7 @@ export const Spinner = () => (
 );
 
 export const STATUS: Record<string, { label: string; cls: string }> = {
+  awaiting_payment: { label: 'مستني الدفع', cls: 'bg-purple-100 text-purple-800' },
   pending: { label: 'جديد', cls: 'bg-amber-100 text-amber-800' },
   confirmed: { label: 'متأكد', cls: 'bg-blue-100 text-blue-800' },
   shipped: { label: 'مع الشحن', cls: 'bg-indigo-100 text-indigo-800' },

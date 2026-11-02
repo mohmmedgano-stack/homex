@@ -3,6 +3,7 @@ import { StoreProvider, useStore } from './context/StoreContext';
 import { Navbar } from './components/Navbar';
 import { HeroBanner } from './components/HeroBanner';
 import { DealersSection } from './components/DealersSection';
+import { PaymentReturn } from './components/PaymentReturn';
 import { ProductCard } from './components/ProductCard';
 import { ProductModal } from './components/ProductModal';
 import { CartDrawer } from './components/CartDrawer';
@@ -278,6 +279,7 @@ const StoreContent: React.FC = () => {
       <WishlistDrawer />
       <CompareModal />
       <ToastContainer />
+      <PaymentReturn />
       <MobileBottomNav />
 
       {STORE_INFO.whatsapp && (

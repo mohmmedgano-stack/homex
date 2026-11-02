@@ -1,12 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { api, StoreSettings } from '../../lib/api';
-import { Card, Spinner, Input, Field, Button, Toggle, Textarea, useToast } from '../ui';
+import { Card, Spinner, Input, Field, Button, Toggle, Textarea, Select, useToast } from '../ui';
 import { ImagePlus, RotateCcw } from 'lucide-react';
 import type { Admin } from '../AdminApp';
 
 export const StoreSettingsPage: React.FC<{ admin: Admin }> = ({ admin }) => {
   const toast = useToast();
-  const [s, setS] = useState<StoreSettings | null>(null);
+  const [s, setS] = useState<(StoreSettings & Record<string, string>) | null>(null);
   const [busy, setBusy] = useState(false);
   const [up, setUp] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -17,7 +17,7 @@ export const StoreSettingsPage: React.FC<{ admin: Admin }> = ({ admin }) => {
   }, []);
   if (!s) return <Spinner />;
 
-  const set = (k: keyof StoreSettings, v: string) => setS({ ...s, [k]: v });
+  const set = (k: string, v: string) => setS({ ...s, [k]: v });
 
   const save = async () => {
     setBusy(true);
@@ -124,6 +124,45 @@ export const StoreSettingsPage: React.FC<{ admin: Admin }> = ({ admin }) => {
           </div>
         </Card>
 
+        <Card title="الدفع بالفيزا">
+          <p className="text-sm text-steel -mt-1 mb-4">
+            اختار شركة الدفع اللي هتشتغل بيها وحط مفاتيحها. خيار «فيزا / ماستركارد» بيظهر للعميل بس لما الشركة المختارة تبقى مفاتيحها كاملة.
+          </p>
+          <div className="grid sm:grid-cols-[1fr_auto] gap-4 items-end">
+            <Field label="الشركة الشغالة دلوقتي">
+              <Select value={s.pay_card_provider || ''} onChange={(e) => set('pay_card_provider', e.target.value)}>
+                <option value="">مقفول (من غير دفع بالفيزا)</option>
+                <option value="paymob">Paymob{s.paymob_ready === '1' ? ' ✓' : ''}</option>
+                <option value="kashier">Kashier{s.kashier_ready === '1' ? ' ✓' : ''}</option>
+                <option value="fawry">Fawry{s.fawry_ready === '1' ? ' ✓' : ''}</option>
+              </Select>
+            </Field>
+            <div className="pb-2.5">
+              <Toggle checked={s.pay_card_test === '1'} onChange={(v) => set('pay_card_test', v ? '1' : '0')} label="وضع تجريبي (Kashier وFawry)" />
+            </div>
+          </div>
+          {s.pay_card_provider && s[`${s.pay_card_provider}_ready`] !== '1' && (
+            <p className="text-sm font-bold text-sale mt-3">مفاتيح الشركة دي لسه ناقصة، فالدفع بالفيزا مش هيظهر للعميل لحد ما تكملها وتحفظ.</p>
+          )}
+
+          <div className="mt-6 space-y-4">
+            <Gateway name="Paymob" ready={s.paymob_ready === '1'} active={s.pay_card_provider === 'paymob'} where="من لوحة Paymob: Settings ← Account Info للمفاتيح، و Developers ← Payment Integrations لرقم الـ Integration الخاص بالكروت." hook={s.paymob_callback_url}>
+              <Field label="Public Key"><Input dir="ltr" value={s.paymob_public_key || ''} onChange={(e) => set('paymob_public_key', e.target.value)} placeholder="egy_pk_..." /></Field>
+              <Field label="Secret Key"><Input dir="ltr" type="password" autoComplete="off" value={s.paymob_secret_key || ''} onChange={(e) => set('paymob_secret_key', e.target.value)} placeholder="egy_sk_..." /></Field>
+              <Field label="Integration ID (Card)"><Input dir="ltr" inputMode="numeric" value={s.paymob_integration_id || ''} onChange={(e) => set('paymob_integration_id', e.target.value)} placeholder="1234567" /></Field>
+              <Field label="HMAC"><Input dir="ltr" type="password" autoComplete="off" value={s.paymob_hmac || ''} onChange={(e) => set('paymob_hmac', e.target.value)} /></Field>
+            </Gateway>
+            <Gateway name="Kashier" ready={s.kashier_ready === '1'} active={s.pay_card_provider === 'kashier'} where="من لوحة Kashier: Integrate Now ← Payment API Keys. الـ Merchant ID بيبدأ بـ MID." hook={s.kashier_webhook_url}>
+              <Field label="Merchant ID"><Input dir="ltr" value={s.kashier_mid || ''} onChange={(e) => set('kashier_mid', e.target.value)} placeholder="MID-1234-567" /></Field>
+              <Field label="Payment API Key"><Input dir="ltr" type="password" autoComplete="off" value={s.kashier_api_key || ''} onChange={(e) => set('kashier_api_key', e.target.value)} /></Field>
+            </Gateway>
+            <Gateway name="Fawry" ready={s.fawry_ready === '1'} active={s.pay_card_provider === 'fawry'} where="Fawry بتبعتلك الـ Merchant Code والـ Secure Key بالإيميل بعد ما الحساب يتفعّل." hook={s.fawry_callback_url}>
+              <Field label="Merchant Code"><Input dir="ltr" value={s.fawry_merchant_code || ''} onChange={(e) => set('fawry_merchant_code', e.target.value)} /></Field>
+              <Field label="Secure Key"><Input dir="ltr" type="password" autoComplete="off" value={s.fawry_secure_key || ''} onChange={(e) => set('fawry_secure_key', e.target.value)} /></Field>
+            </Gateway>
+          </div>
+        </Card>
+
         <Card title="كلام الصفحة الرئيسية">
           <div className="space-y-4">
             <Field label="عنوان رئيسي" hint="اختياري، بيظهر فوق الأقسام">
@@ -144,3 +183,24 @@ export const StoreSettingsPage: React.FC<{ admin: Admin }> = ({ admin }) => {
     </div>
   );
 };
+
+const Gateway: React.FC<{ name: string; ready: boolean; active: boolean; where: string; hook?: string; children: React.ReactNode }> = ({ name, ready, active, where, hook, children }) => (
+  <details className={`rounded-xl border ${active ? 'border-gold' : 'border-line'}`} open={active}>
+    <summary className="cursor-pointer list-none px-4 h-12 flex items-center justify-between gap-3">
+      <span className="font-extrabold text-ink" dir="ltr">{name}</span>
+      <span className="flex items-center gap-2">
+        {active && <span className="text-xs font-bold px-2 py-0.5 rounded bg-amber-100 text-amber-800">الشغالة</span>}
+        <span className={`text-xs font-bold px-2 py-0.5 rounded ${ready ? 'bg-emerald-100 text-emerald-800' : 'bg-shelf text-steel'}`}>{ready ? 'مفاتيحها كاملة' : 'مفاتيح ناقصة'}</span>
+      </span>
+    </summary>
+    <div className="px-4 pb-4 space-y-4">
+      <div className="grid sm:grid-cols-2 gap-4">{children}</div>
+      <p className="text-xs text-steel leading-relaxed">{where} المفاتيح السرية بتظهر مخفية بعد الحفظ، ولو سبتها زي ما هي مش هتتغير.</p>
+      {hook && (
+        <p className="text-xs text-steel">
+          لينك الإشعارات (لو الشركة طلبته): <span dir="ltr" className="font-mono select-all text-ink">{hook}</span>
+        </p>
+      )}
+    </div>
+  </details>
+);

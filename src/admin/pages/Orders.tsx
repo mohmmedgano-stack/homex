@@ -3,7 +3,7 @@ import { api, money } from '../../lib/api';
 import { Card, Spinner, StatusBadge, STATUS, Empty, Input, Modal, Button, useToast } from '../ui';
 import { Phone, MessageCircle, Search } from 'lucide-react';
 
-const PAY: Record<string, string> = { cod: 'الدفع عند الاستلام', vodafone: 'فودافون كاش', instapay: 'إنستاباي' };
+const PAY: Record<string, string> = { cod: 'الدفع عند الاستلام', vodafone: 'فودافون كاش', instapay: 'إنستاباي', card: 'فيزا / ماستركارد' };
 const FLOW = ['pending', 'confirmed', 'shipped', 'delivered'];
 
 export const Orders: React.FC = () => {
@@ -72,6 +72,7 @@ export const Orders: React.FC = () => {
                     <span className="flex items-center gap-2">
                       <span className="font-bold text-ink truncate">{o.customer_name}</span>
                       <StatusBadge s={o.status} />
+                      {o.payment_method === 'card' && o.payment_status === 'paid' && <span className="text-xs font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800">مدفوع</span>}
                     </span>
                     <span className="block text-xs text-steel mt-0.5 price">
                       {o.code} · {o.city || 'بدون مدينة'} · {o.items.reduce((a: number, i: any) => a + Number(i.qty), 0)} قطعة
@@ -102,7 +103,14 @@ export const Orders: React.FC = () => {
                 <p className="price" dir="ltr" style={{ textAlign: 'right' }}>{open.phone}{open.alt_phone ? ` / ${open.alt_phone}` : ''}</p>
                 <p>{[open.city, open.address].filter(Boolean).join('، ')}</p>
                 {open.notes && <p className="text-steel">ملاحظات: {open.notes}</p>}
-                <p className="text-steel">الدفع: {PAY[open.payment_method] || open.payment_method}</p>
+                <p className="text-steel">
+                  الدفع: {PAY[open.payment_method] || open.payment_method}
+                  {open.payment_method === 'card' && (
+                    <span className={`mr-2 text-xs font-bold px-1.5 py-0.5 rounded ${open.payment_status === 'paid' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'}`}>
+                      {open.payment_status === 'paid' ? 'مدفوع' : open.payment_status === 'failed' ? 'فشل الدفع' : 'لسه مدفعش'}
+                    </span>
+                  )}
+                </p>
                 <div className="flex gap-2 pt-2">
                   <a href={`tel:${open.phone}`} className="h-9 px-3 rounded-lg bg-ink text-white text-sm font-bold flex items-center gap-1.5">
                     <Phone className="w-4 h-4" /> اتصال

@@ -143,6 +143,10 @@ function migrate(PDO $db): void {
     CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(date);
     SQL);
 
+    $cols = array_column($db->query('PRAGMA table_info(orders)')->fetchAll(), 'name');
+    if (!in_array('payment_status', $cols, true)) $db->exec("ALTER TABLE orders ADD COLUMN payment_status TEXT NOT NULL DEFAULT 'unpaid'");
+    if (!in_array('payment_ref', $cols, true)) $db->exec("ALTER TABLE orders ADD COLUMN payment_ref TEXT NOT NULL DEFAULT ''");
+
     if (!(int)$db->query('SELECT COUNT(*) FROM categories')->fetchColumn()) {
         $seed = [
             ['kettles', 'كاتيل وغلايات'], ['irons', 'مكاوي'], ['choppers', 'كبة ومفارم'],
@@ -341,6 +345,40 @@ const PUBLIC_SETTINGS = [
     'hero_title' => '', 'hero_subtitle' => '',
 ];
 
+/** Card-payment keys for each gateway. Never sent to the storefront; secrets are masked in the dashboard. */
+const PAYMENT_SETTINGS = [
+    'pay_card_provider' => '',   // '' (off) | paymob | kashier | fawry
+    'pay_card_test' => '1',      // Kashier / Fawry test (sandbox) mode
+    'paymob_public_key' => '', 'paymob_secret_key' => '', 'paymob_integration_id' => '', 'paymob_hmac' => '',
+    'kashier_mid' => '', 'kashier_api_key' => '',
+    'fawry_merchant_code' => '', 'fawry_secure_key' => '',
+];
+const SECRET_SETTINGS = ['paymob_secret_key', 'paymob_hmac', 'kashier_api_key', 'fawry_secure_key'];
+
+function payment_settings(): array {
+    $out = PAYMENT_SETTINGS;
+    $st = db()->query("SELECT key, value FROM settings WHERE key IN ('" . implode("','", array_keys(PAYMENT_SETTINGS)) . "')");
+    foreach ($st as $row) $out[$row['key']] = $row['value'];
+    return $out;
+}
+
+/** Which gateways have every key filled in. */
+function gateway_ready(string $g, ?array $p = null): bool {
+    $p ??= payment_settings();
+    return match ($g) {
+        'paymob' => $p['paymob_public_key'] !== '' && $p['paymob_secret_key'] !== '' && ctype_digit($p['paymob_integration_id']) && $p['paymob_hmac'] !== '',
+        'kashier' => $p['kashier_mid'] !== '' && $p['kashier_api_key'] !== '',
+        'fawry' => $p['fawry_merchant_code'] !== '' && $p['fawry_secure_key'] !== '',
+        default => false,
+    };
+}
+
+/** Card payment shows at checkout only when a gateway is chosen AND its keys are filled in. */
+function card_ready(): bool {
+    $p = payment_settings();
+    return gateway_ready($p['pay_card_provider'], $p);
+}
+
 function public_settings(): array {
     $out = PUBLIC_SETTINGS;
     foreach (db()->query('SELECT key, value FROM settings') as $row) {
@@ -348,17 +386,38 @@ function public_settings(): array {
     }
     // The old default mentioned cash on delivery; the brand doesn't advertise it outside checkout
     if ($out['top_bar_text'] === 'توصيل لكل المحافظات والدفع عند الاستلام') $out['top_bar_text'] = PUBLIC_SETTINGS['top_bar_text'];
+    $out['pay_card'] = card_ready() ? '1' : '0';
     return $out;
 }
 
-function all_settings(): array { return public_settings(); }
+function all_settings(): array {
+    $out = public_settings();
+    foreach (payment_settings() as $k => $v) {
+        $out[$k] = in_array($k, SECRET_SETTINGS, true) && $v !== '' ? '••••••' . mb_substr($v, -4) : $v;
+    }
+    $base = site_base();
+    foreach (['paymob', 'kashier', 'fawry'] as $g) $out["{$g}_ready"] = gateway_ready($g) ? '1' : '0';
+    $out['paymob_callback_url'] = "$base/api/?r=paymob-callback";
+    $out['kashier_webhook_url'] = "$base/api/?r=kashier-webhook";
+    $out['fawry_callback_url'] = "$base/api/?r=fawry-callback";
+    return $out;
+}
 
 function save_settings(array $b): array {
     $st = db()->prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value');
     foreach (PUBLIC_SETTINGS as $k => $_) {
         if (array_key_exists($k, $b)) $st->execute([$k, str($b[$k], 500)]);
     }
-    return public_settings();
+    foreach (PAYMENT_SETTINGS as $k => $_) {
+        if (!array_key_exists($k, $b)) continue;
+        $v = trim((string)$b[$k]);
+        // A masked secret coming back unchanged means "keep the saved one"
+        if (in_array($k, SECRET_SETTINGS, true) && str_starts_with($v, '••••')) continue;
+        if ($k === 'paymob_integration_id' && $v !== '' && !ctype_digit($v)) throw new ApiError('رقم الـ Integration ID في Paymob لازم يكون أرقام بس');
+        if ($k === 'pay_card_provider' && !in_array($v, ['', 'paymob', 'kashier', 'fawry'], true)) $v = '';
+        $st->execute([$k, mb_substr($v, 0, 1000)]);
+    }
+    return all_settings();
 }
 
 /* ============================================================
@@ -548,7 +607,7 @@ function egypt_mobile(string $v): ?string {
     return preg_match('/^01[0125][0-9]{8}$/', $v) ? $v : null;
 }
 
-const ORDER_STATUSES = ['pending', 'confirmed', 'shipped', 'delivered', 'cancelled', 'returned'];
+const ORDER_STATUSES = ['awaiting_payment', 'pending', 'confirmed', 'shipped', 'delivered', 'cancelled', 'returned'];
 
 function create_order(array $b): array {
     $c = (array)($b['customer'] ?? []);
@@ -588,10 +647,12 @@ function create_order(array $b): array {
         $total = $sub + $fee;
 
         $pm = (string)($b['paymentMethod'] ?? 'cod');
-        if (!in_array($pm, ['cod', 'vodafone', 'instapay'], true)) $pm = 'cod';
+        if (!in_array($pm, ['cod', 'vodafone', 'instapay', 'card'], true)) $pm = 'cod';
+        if ($pm === 'card' && !card_ready()) throw new ApiError('الدفع بالفيزا مش متاح دلوقتي، اختار طريقة دفع تانية');
+        if ($pm === 'cod' && get_setting('pay_cod', '1') === '0') throw new ApiError('اختار طريقة دفع تانية');
         $code = 'HX' . date('ymd') . strtoupper(substr(bin2hex(random_bytes(3)), 0, 4));
-        $db->prepare('INSERT INTO orders (code, customer_name, phone, alt_phone, city, address, notes, payment_method, subtotal, shipping_fee, total, cost_total) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)')
-            ->execute([$code, $name, $phone, $alt, $city, $address, str($c['notes'] ?? '', 500), $pm, $sub, $fee, $total, $cost]);
+        $db->prepare('INSERT INTO orders (code, customer_name, phone, alt_phone, city, address, notes, payment_method, subtotal, shipping_fee, total, cost_total, status) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)')
+            ->execute([$code, $name, $phone, $alt, $city, $address, str($c['notes'] ?? '', 500), $pm, $sub, $fee, $total, $cost, $pm === 'card' ? 'awaiting_payment' : 'pending']);
         $oid = (int)$db->lastInsertId();
         $ins = $db->prepare('INSERT INTO order_items (order_id, product_id, name, image, price, cost, qty) VALUES (?,?,?,?,?,?,?)');
         $dec = $db->prepare('UPDATE products SET stock = stock - ? WHERE id = ?');
@@ -604,7 +665,22 @@ function create_order(array $b): array {
         $db->rollBack();
         throw $e;
     }
-    return ['code' => $code, 'subtotal' => $sub, 'shippingFee' => $fee, 'total' => $total];
+    $res = ['code' => $code, 'subtotal' => $sub, 'shippingFee' => $fee, 'total' => $total];
+    if ($pm === 'card') {
+        try {
+            $args = [$oid, $code, $name, $phone, $city, $address, $lines, $fee, $total];
+            $res['payUrl'] = match (payment_settings()['pay_card_provider']) {
+                'paymob' => paymob_start(...$args),
+                'kashier' => kashier_start(...$args),
+                'fawry' => fawry_start(...$args),
+            };
+        } catch (Throwable $e) {
+            error_log('[homex card] ' . $e->getMessage());
+            set_order_status(['id' => $oid, 'status' => 'cancelled']); // gives the stock back
+            throw new ApiError('حصلت مشكلة في بوابة الدفع. جرّب تاني أو اختار الدفع عند الاستلام');
+        }
+    }
+    return $res;
 }
 
 function admin_orders(array $q): array {
@@ -793,4 +869,284 @@ function dealer_click(array $b): bool {
     if (!$col) return false;
     db()->prepare("UPDATE dealers SET $col = $col + 1 WHERE id = ? AND active = 1")->execute([(int)($b['id'] ?? 0)]);
     return true;
+}
+
+
+/* ============================================================
+   Card payments — Paymob (Egypt) Intention API + Unified Checkout
+   ============================================================ */
+
+function site_base(): string {
+    $https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https';
+    $host = preg_replace('/[^a-z0-9.\-:]/i', '', (string)($_SERVER['HTTP_HOST'] ?? 'home-x.online'));
+    return ($https ? 'https' : 'http') . "://$host";
+}
+
+function http_json(string $method, string $url, array $headers, ?array $body = null): array {
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 30, CURLOPT_CUSTOMREQUEST => $method,
+        CURLOPT_HTTPHEADER => array_merge(['Content-Type: application/json', 'Accept: application/json'], $headers),
+    ]);
+    if ($body !== null) curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($body, JSON_UNESCAPED_UNICODE));
+    $raw = curl_exec($ch);
+    $code = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+    $err = curl_error($ch);
+    curl_close($ch);
+    $data = json_decode((string)$raw, true);
+    if ($raw === false || $code >= 400 || !is_array($data)) throw new RuntimeException("HTTP $code $err " . mb_substr((string)$raw, 0, 300));
+    return $data;
+}
+
+/** Creates a Paymob payment intention for the order and returns the hosted checkout URL. */
+function paymob_start(int $oid, string $code, string $name, string $phone, string $city, string $address, array $lines, float $fee, float $total): string {
+    $p = payment_settings();
+    $cents = fn(float $v) => (int)round($v * 100);
+    $items = [];
+    foreach ($lines as [$prod, $qty]) {
+        $items[] = ['name' => mb_substr($prod['name'], 0, 50), 'amount' => $cents((float)$prod['price']), 'description' => mb_substr($prod['name'], 0, 255), 'quantity' => $qty];
+    }
+    if ($fee > 0) $items[] = ['name' => 'الشحن', 'amount' => $cents($fee), 'description' => 'مصاريف الشحن', 'quantity' => 1];
+    $parts = explode(' ', $name);
+    $first = array_shift($parts);
+    $base = site_base();
+    $email = filter_var(get_setting('email', ''), FILTER_VALIDATE_EMAIL) ?: 'orders@' . preg_replace('/:\d+$/', '', parse_url($base, PHP_URL_HOST) ?: 'home-x.online');
+
+    $res = http_json('POST', 'https://accept.paymob.com/v1/intention/', ['Authorization: Token ' . $p['paymob_secret_key']], [
+        'amount' => $cents($total),
+        'currency' => 'EGP',
+        'payment_methods' => [(int)$p['paymob_integration_id']],
+        'items' => $items,
+        'billing_data' => [
+            'first_name' => $first, 'last_name' => implode(' ', $parts) ?: $first, 'phone_number' => '+2' . $phone, 'email' => $email,
+            'street' => mb_substr($address, 0, 200), 'building' => 'NA', 'floor' => 'NA', 'apartment' => 'NA',
+            'city' => $city, 'state' => $city, 'country' => 'EG',
+        ],
+        'special_reference' => $code,
+        'notification_url' => "$base/api/?r=paymob-callback",
+        'redirection_url' => "$base/api/?r=paymob-return",
+    ]);
+    $secret = (string)($res['client_secret'] ?? '');
+    if ($secret === '') throw new RuntimeException('no client_secret in Paymob response');
+    $ref = (string)($res['intention_order_id'] ?? $res['id'] ?? '');
+    db()->prepare('UPDATE orders SET payment_ref = ? WHERE id = ?')->execute([$ref, $oid]);
+    return 'https://accept.paymob.com/unifiedcheckout/?publicKey=' . rawurlencode($p['paymob_public_key']) . '&clientSecret=' . rawurlencode($secret);
+}
+
+/** Paymob's documented HMAC-SHA512 over the transaction fields, in this exact order. */
+function paymob_hmac_valid(array $f, string $given): bool {
+    $keys = ['amount_cents', 'created_at', 'currency', 'error_occured', 'has_parent_transaction', 'id', 'integration_id',
+        'is_3d_secure', 'is_auth', 'is_capture', 'is_refunded', 'is_standalone_payment', 'is_voided', 'order', 'owner',
+        'pending', 'source_data.pan', 'source_data.sub_type', 'source_data.type', 'success'];
+    $str = '';
+    foreach ($keys as $k) {
+        $v = $f[$k] ?? '';
+        $str .= is_bool($v) ? ($v ? 'true' : 'false') : (string)$v;
+    }
+    $secret = payment_settings()['paymob_hmac'];
+    return $secret !== '' && $given !== '' && hash_equals(hash_hmac('sha512', $str, $secret), strtolower($given));
+}
+
+/** Marks a card order paid (→ new order to confirm) or failed (→ cancelled, stock back). Safe to call twice. */
+function card_settle(string $code, string $gatewayOrder, bool $success, int $amountCents, string $txn): ?string {
+    $st = db()->prepare("SELECT * FROM orders WHERE payment_method = 'card' AND (code = ? OR (payment_ref <> '' AND payment_ref = ?))");
+    $st->execute([$code, $gatewayOrder]);
+    $o = $st->fetch();
+    if (!$o) return null;
+    if ($o['payment_status'] === 'paid') return $o['code'];
+    if ($success && $amountCents === (int)round($o['total'] * 100)) {
+        db()->prepare("UPDATE orders SET payment_status = 'paid', payment_ref = ?, status = 'pending', updated_at = datetime('now') WHERE id = ?")->execute(["txn:$txn", $o['id']]);
+    } elseif ($o['status'] === 'awaiting_payment') {
+        db()->prepare("UPDATE orders SET payment_status = 'failed' WHERE id = ?")->execute([$o['id']]);
+        set_order_status(['id' => (int)$o['id'], 'status' => 'cancelled']);
+    }
+    return $o['code'];
+}
+
+/** Server-to-server notification (POST JSON, hmac in the query string). */
+function paymob_callback(): array {
+    $body = json_decode(file_get_contents('php://input') ?: '', true);
+    $obj = $body['obj'] ?? null;
+    if (($body['type'] ?? '') !== 'TRANSACTION' || !is_array($obj)) return ['ignored' => true];
+    $f = [];
+    foreach ($obj as $k => $v) if (!is_array($v)) $f[$k] = $v;
+    $f['order'] = $obj['order']['id'] ?? '';
+    foreach (['pan', 'sub_type', 'type'] as $k) $f["source_data.$k"] = $obj['source_data'][$k] ?? '';
+    if (!paymob_hmac_valid($f, (string)($_GET['hmac'] ?? ''))) throw new ApiError('invalid signature', 403);
+    $code = card_settle((string)($obj['order']['merchant_order_id'] ?? ''), (string)$f['order'], $obj['success'] === true && $obj['pending'] !== true, (int)$obj['amount_cents'], (string)$obj['id']);
+    return ['received' => true, 'order' => $code];
+}
+
+/** The customer's browser coming back from the payment page (GET, same fields + hmac). */
+function paymob_return(): void {
+    // Read the raw query: PHP would turn "source_data.pan" into "source_data_pan"
+    $f = [];
+    foreach (explode('&', (string)($_SERVER['QUERY_STRING'] ?? '')) as $pair) {
+        if ($pair === '') continue;
+        [$k, $v] = array_pad(explode('=', $pair, 2), 2, '');
+        $f[urldecode($k)] = urldecode($v);
+    }
+    $ok = paymob_hmac_valid($f, (string)($f['hmac'] ?? ''));
+    $code = $ok ? card_settle((string)($f['merchant_order_id'] ?? ''), (string)($f['order'] ?? ''), ($f['success'] ?? '') === 'true' && ($f['pending'] ?? '') !== 'true', (int)($f['amount_cents'] ?? 0), (string)($f['id'] ?? '')) : null;
+    back_to_store($ok && ($f['success'] ?? '') === 'true', $code);
+}
+
+
+/** GET request returning decoded JSON (or the raw string when not JSON). */
+function http_get_json(string $url) {
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 30, CURLOPT_HTTPHEADER => ['Accept: application/json']]);
+    $raw = curl_exec($ch);
+    $code = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+    curl_close($ch);
+    if ($raw === false || $code >= 400) throw new RuntimeException("HTTP $code");
+    $d = json_decode((string)$raw, true);
+    return $d ?? $raw;
+}
+
+/** Raw query string as an ordered map (keeps dots in names, unlike $_GET). */
+function raw_query(): array {
+    $f = [];
+    foreach (explode('&', (string)($_SERVER['QUERY_STRING'] ?? '')) as $pair) {
+        if ($pair === '') continue;
+        [$k, $v] = array_pad(explode('=', $pair, 2), 2, '');
+        $f[urldecode($k)] = urldecode($v);
+    }
+    return $f;
+}
+
+/** Sends the customer back to the store; "success" only if OUR database says the order is paid. */
+function back_to_store(bool $paid, ?string $code): void {
+    $really = false;
+    if ($code) {
+        $st = db()->prepare("SELECT payment_status FROM orders WHERE code = ?");
+        $st->execute([$code]);
+        $really = $st->fetchColumn() === 'paid';
+    }
+    header('Location: /?pay=' . ($really ? 'success' : 'failed') . ($code ? '&order=' . rawurlencode($code) : ''), true, 302);
+    exit;
+}
+
+/* ---------------- Kashier (Hosted Payment Page) ---------------- */
+
+function kashier_amount(float $v): string { return number_format($v, 2, '.', ''); }
+
+function kashier_start(int $oid, string $code, string $name, string $phone, string $city, string $address, array $lines, float $fee, float $total): string {
+    $p = payment_settings();
+    $amount = kashier_amount($total);
+    $path = "/?payment={$p['kashier_mid']}.$code.$amount.EGP";
+    $hash = hash_hmac('sha256', $path, $p['kashier_api_key']);
+    $base = site_base();
+    db()->prepare('UPDATE orders SET payment_ref = ? WHERE id = ?')->execute([$code, $oid]);
+    return 'https://checkout.kashier.io/?' . http_build_query([
+        'merchantId' => $p['kashier_mid'], 'orderId' => $code, 'amount' => $amount, 'currency' => 'EGP', 'hash' => $hash,
+        'mode' => $p['pay_card_test'] === '1' ? 'test' : 'live',
+        'merchantRedirect' => "$base/api/?r=kashier-return", 'serverWebhook' => "$base/api/?r=kashier-webhook",
+        'redirectMethod' => 'get', 'allowedMethods' => 'card,wallet', 'display' => 'ar', 'failureRedirect' => 'true',
+    ]);
+}
+
+/** Kashier signs the redirect: HMAC-SHA256 of the query (without signature & mode) with the API key. */
+function kashier_return(): void {
+    $f = raw_query();
+    $sig = (string)($f['signature'] ?? '');
+    $parts = [];
+    foreach ($f as $k => $v) if ($k !== 'signature' && $k !== 'mode' && $k !== 'r') $parts[] = "$k=$v";
+    $ok = $sig !== '' && hash_equals(hash_hmac('sha256', implode('&', $parts), payment_settings()['kashier_api_key']), strtolower($sig));
+    $paid = $ok && strtoupper((string)($f['paymentStatus'] ?? '')) === 'SUCCESS';
+    $code = $ok ? card_settle((string)($f['merchantOrderId'] ?? ''), '', $paid, (int)round(((float)($f['amount'] ?? 0)) * 100), (string)($f['transactionId'] ?? '')) : null;
+    back_to_store($paid, $code);
+}
+
+/** Server webhook: header x-kashier-signature = HMAC-SHA256 of data[signatureKeys] (sorted) with the API key. */
+function kashier_webhook(): array {
+    $body = json_decode(file_get_contents('php://input') ?: '', true);
+    $d = $body['data'] ?? null;
+    if (!is_array($d)) return ['ignored' => true];
+    $keys = (array)($d['signatureKeys'] ?? []);
+    sort($keys);
+    $parts = [];
+    foreach ($keys as $k) $parts[] = $k . '=' . rawurlencode(is_scalar($d[$k] ?? '') ? (string)($d[$k] ?? '') : json_encode($d[$k]));
+    $given = strtolower((string)($_SERVER['HTTP_X_KASHIER_SIGNATURE'] ?? ''));
+    if ($given === '' || !hash_equals(hash_hmac('sha256', implode('&', $parts), payment_settings()['kashier_api_key']), $given)) throw new ApiError('invalid signature', 403);
+    if (($body['event'] ?? '') !== 'pay') return ['ignored' => true];
+    $paid = strtoupper((string)($d['status'] ?? '')) === 'SUCCESS';
+    $code = card_settle((string)($d['merchantOrderId'] ?? ''), '', $paid, (int)round(((float)($d['amount'] ?? 0)) * 100), (string)($d['transactionId'] ?? ''));
+    return ['received' => true, 'order' => $code];
+}
+
+/* ---------------- Fawry (FawryPay Express Checkout link) ---------------- */
+
+function fawry_host(): string {
+    return payment_settings()['pay_card_test'] === '1' ? 'https://atfawry.fawrystaging.com' : 'https://atfawry.com';
+}
+
+function fawry_start(int $oid, string $code, string $name, string $phone, string $city, string $address, array $lines, float $fee, float $total): string {
+    $p = payment_settings();
+    $base = site_base();
+    $return = "$base/api/?r=fawry-return";
+    $money = fn(float $v) => number_format($v, 2, '.', '');
+    $items = [];
+    foreach ($lines as [$prod, $qty]) $items[] = ['itemId' => 'P' . $prod['id'], 'description' => mb_substr($prod['name'], 0, 100), 'price' => $money((float)$prod['price']), 'quantity' => $qty];
+    if ($fee > 0) $items[] = ['itemId' => 'SHIPPING', 'description' => 'مصاريف الشحن', 'price' => $money($fee), 'quantity' => 1];
+    usort($items, fn($a, $b) => strcmp($a['itemId'], $b['itemId']));
+    $sig = $p['fawry_merchant_code'] . $code . '' . $return;
+    foreach ($items as $it) $sig .= $it['itemId'] . $it['quantity'] . $it['price'];
+    $sig = hash('sha256', $sig . $p['fawry_secure_key']);
+    $email = filter_var(get_setting('email', ''), FILTER_VALIDATE_EMAIL) ?: 'orders@' . (parse_url($base, PHP_URL_HOST) ?: 'home-x.online');
+
+    $ch = curl_init(fawry_host() . '/fawrypay-api/api/payments/init');
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 30, CURLOPT_POST => true,
+        CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
+        CURLOPT_POSTFIELDS => json_encode([
+            'merchantCode' => $p['fawry_merchant_code'], 'merchantRefNum' => $code,
+            'customerMobile' => $phone, 'customerEmail' => $email, 'customerName' => $name, 'customerProfileId' => '',
+            'language' => 'ar-eg', 'chargeItems' => $items, 'returnUrl' => $return, 'authCaptureModePayment' => false,
+            'signature' => $sig,
+        ], JSON_UNESCAPED_UNICODE),
+    ]);
+    $raw = (string)curl_exec($ch);
+    $http = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+    curl_close($ch);
+    $url = trim($raw, " \"\n\r\t");
+    if ($http >= 400 || !preg_match('#^https://#', $url)) throw new RuntimeException("Fawry init failed ($http) " . mb_substr($raw, 0, 300));
+    db()->prepare('UPDATE orders SET payment_ref = ? WHERE id = ?')->execute([$code, $oid]);
+    return $url;
+}
+
+/** Never trust what comes back in the browser: ask Fawry directly for the order's status. */
+function fawry_check(string $code): array {
+    $p = payment_settings();
+    $sig = hash('sha256', $p['fawry_merchant_code'] . $code . $p['fawry_secure_key']);
+    $d = http_get_json(fawry_host() . '/ECommerceWeb/Fawry/payments/status/v2?' . http_build_query(['merchantCode' => $p['fawry_merchant_code'], 'merchantRefNumber' => $code, 'signature' => $sig]));
+    if (!is_array($d)) throw new RuntimeException('bad Fawry status response');
+    return $d;
+}
+
+function fawry_apply(string $code): array {
+    $d = fawry_check($code);
+    $status = strtoupper((string)($d['orderStatus'] ?? ''));
+    if (in_array($status, ['NEW', 'UNPAID', ''], true)) return ['code' => $code, 'paid' => false, 'final' => false];
+    $paid = $status === 'PAID';
+    $settled = card_settle($code, '', $paid, (int)round(((float)($d['paymentAmount'] ?? $d['orderAmount'] ?? 0)) * 100), (string)($d['fawryRefNumber'] ?? ''));
+    return ['code' => $settled, 'paid' => $paid, 'final' => true];
+}
+
+function fawry_return(): void {
+    $code = (string)(raw_query()['merchantRefNumber'] ?? '');
+    try {
+        $r = $code !== '' ? fawry_apply($code) : ['code' => null, 'paid' => false];
+    } catch (Throwable $e) {
+        error_log('[homex fawry] ' . $e->getMessage());
+        $r = ['code' => $code, 'paid' => false];
+    }
+    back_to_store($r['paid'], $r['code']);
+}
+
+function fawry_callback(): array {
+    $body = json_decode(file_get_contents('php://input') ?: '', true);
+    $code = (string)($body['merchantRefNumber'] ?? '');
+    if ($code === '') return ['ignored' => true];
+    return fawry_apply($code);
 }

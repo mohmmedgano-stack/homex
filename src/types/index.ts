@@ -95,7 +95,7 @@ export interface CustomerDetails {
   city: string;
   address: string;
   notes?: string;
-  paymentMethod: 'cod' | 'vodafone' | 'instapay';
+  paymentMethod: 'cod' | 'vodafone' | 'instapay' | 'card';
 }
 
 export interface Order {

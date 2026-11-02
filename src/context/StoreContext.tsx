@@ -131,7 +131,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     store_name: 'HOMEX', logo: '', top_bar_text: 'شحن لكل محافظات مصر',
     phone: '', whatsapp: '', email: '', address: '', facebook: '', instagram: '', tiktok: '',
     shipping_fee: '60', free_shipping_over: '0', pay_cod: '1', pay_vodafone: '', pay_instapay: '',
-    hero_title: '', hero_subtitle: '',
+    hero_title: '', hero_subtitle: '', pay_card: '0',
   });
 
   // Load the live catalog + settings from the server.
@@ -488,6 +488,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       paymentMethod: customer.paymentMethod,
       items: cart.map((i) => ({ productId: Number(i.product.id), quantity: i.quantity })),
     });
+    if (res.payUrl) {
+      // Card payment: keep the cart until the gateway confirms, then go pay
+      window.location.href = res.payUrl;
+      return new Promise<Order>(() => {});
+    }
     const order: Order = {
       id: res.code,
       customer,

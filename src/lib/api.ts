@@ -64,4 +64,5 @@ export interface StoreSettings {
   pay_instapay: string;
   hero_title: string;
   hero_subtitle: string;
+  pay_card?: string; // '1' when a card gateway is connected
 }

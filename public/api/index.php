@@ -17,6 +17,12 @@ try {
         case 'POST order':     ok(create_order(body())); break;
         case 'GET img':        serve_image($_GET['f'] ?? ''); break;
         case 'GET dealers':    ok(dealers_public()); break;
+        case 'POST paymob-callback': ok(paymob_callback()); break;
+        case 'GET paymob-return': paymob_return(); break;
+        case 'GET kashier-return': kashier_return(); break;
+        case 'POST kashier-webhook': ok(kashier_webhook()); break;
+        case 'GET fawry-return': fawry_return(); break;
+        case 'POST fawry-callback': ok(fawry_callback()); break;
         case 'POST dealer-click': ok(dealer_click(body())); break;
 
         /* ---------- auth ---------- */

@@ -40,11 +40,16 @@ export const CheckoutView: React.FC = () => {
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  React.useEffect(() => {
+    // pick the first method the store offers (card when connected, else cash)
+    if (settings.pay_card === '1' && form.paymentMethod === 'cod') setForm((f) => ({ ...f, paymentMethod: 'card' }));
+  }, [settings.pay_card]);
   const [completedOrder, setCompletedOrder] = useState<Order | null>(null);
 
   const freeOver = Number(settings.free_shipping_over) || 0;
   const shippingFee = freeOver > 0 && cartTotal >= freeOver ? 0 : Number(settings.shipping_fee) || 0;
   const payOptions = [
+    settings.pay_card === '1' && { id: 'card' as const, title: 'فيزا / ماستركارد', sub: 'دفع آمن أونلاين، هتتحول لصفحة الدفع' },
     settings.pay_cod !== '0' && { id: 'cod' as const, title: 'الدفع عند الاستلام', sub: 'كاش للمندوب وقت ما تستلم' },
     settings.pay_vodafone && { id: 'vodafone' as const, title: 'فودافون كاش', sub: `حوّل على ${settings.pay_vodafone}` },
     settings.pay_instapay && { id: 'instapay' as const, title: 'إنستاباي', sub: `حوّل على ${settings.pay_instapay}` },
@@ -385,10 +390,10 @@ export const CheckoutView: React.FC = () => {
                 className="w-full py-4 bg-amber-500 hover:bg-amber-400 active:scale-98 text-slate-950 font-black rounded-2xl shadow-xl shadow-amber-500/20 transition-all flex items-center justify-center gap-2 text-base mt-4 disabled:opacity-50"
               >
                 {isSubmitting ? (
-                  <span>جاري تأكيد وتسجيل الطلب...</span>
+                  <span>{form.paymentMethod === 'card' ? 'بنحوّلك لصفحة الدفع...' : 'جاري تأكيد وتسجيل الطلب...'}</span>
                 ) : (
                   <>
-                    <span>تأكيد الطلب الآن ({finalTotal.toLocaleString()} ج.م)</span>
+                    <span>{form.paymentMethod === 'card' ? 'ادفع' : 'تأكيد الطلب'} ({finalTotal.toLocaleString()} ج.م)</span>
                     <ArrowLeft className="w-5 h-5" />
                   </>
                 )}
