@@ -185,6 +185,7 @@ const StoreContent: React.FC = () => {
               )}
 
               {/* Brands */}
+              {brands.length > 0 && (
               <section className="bg-white rounded-xl border border-line p-4 sm:p-6">
                 <h2 className="text-lg sm:text-xl font-extrabold text-ink mb-4">أشهر الماركات</h2>
                 <div className="flex gap-2.5 sm:gap-3 overflow-x-auto no-scrollbar">
@@ -204,6 +205,7 @@ const StoreContent: React.FC = () => {
                   ))}
                 </div>
               </section>
+              )}
             </>
           )}
 

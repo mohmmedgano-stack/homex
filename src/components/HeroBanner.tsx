@@ -40,7 +40,26 @@ export const HeroBanner: React.FC = () => {
     <div className="space-y-5 sm:space-y-6">
       {/* Offers carousel + side banners */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="relative lg:col-span-2 rounded-2xl overflow-hidden h-[230px] min-[400px]:h-[260px] sm:h-[340px]">
+        <div className={`relative ${sideDeals.length ? 'lg:col-span-2' : 'lg:col-span-3'} rounded-2xl overflow-hidden h-[230px] min-[400px]:h-[260px] sm:h-[340px]`}>
+          {slides.length === 0 && (
+            // Brand banner — shown until the store has discounted products to feature
+            <div className="absolute inset-0 bg-gradient-to-l from-[#131518] via-[#1c1f24] to-[#3a414c] text-white flex items-center">
+              <div className="absolute -left-24 -bottom-24 w-80 h-80 rounded-full bg-gold/20" aria-hidden="true" />
+              <div className="absolute left-24 -top-16 w-40 h-40 rounded-full bg-gold/10" aria-hidden="true" />
+              <div className="relative p-6 sm:p-12 space-y-3 sm:space-y-5 max-w-2xl">
+                <img src={settings.logo || '/logo.png'} alt={settings.store_name} className="h-8 sm:h-12 w-auto" />
+                <h2 className="text-2xl sm:text-4xl font-extrabold leading-snug">
+                  {settings.hero_title || 'أجهزة بيتك بضمان حقيقي، وسعر يريحك'}
+                </h2>
+                <p className="text-sm sm:text-lg text-white/80">
+                  {settings.hero_subtitle || 'الدفع عند الاستلام، وافحص الجهاز قبل ما تدفع'}
+                </p>
+                <button onClick={() => scrollToCatalog()} className="btn-gold h-11 sm:h-12 px-6 sm:px-8 rounded-xl text-sm sm:text-base font-extrabold shadow-lg">
+                  تسوق دلوقتي
+                </button>
+              </div>
+            </div>
+          )}
           {slides.map((p, i) => {
             const th = SLIDE_THEMES[i % SLIDE_THEMES.length];
             const pct = Math.round(((p.originalPrice! - p.price) / p.originalPrice!) * 100);
@@ -117,6 +136,7 @@ export const HeroBanner: React.FC = () => {
         </div>
 
         {/* Side banners (desktop) */}
+        {sideDeals.length > 0 && (
         <div className="hidden lg:grid grid-rows-2 gap-4">
           {sideDeals.map((p, i) => (
             <button
@@ -133,6 +153,7 @@ export const HeroBanner: React.FC = () => {
             </button>
           ))}
         </div>
+        )}
       </div>
 
       {/* Service strip */}
@@ -161,6 +182,7 @@ export const HeroBanner: React.FC = () => {
       </div>
 
       {/* Category tiles — "كل أساسيات بيتك" */}
+      {tiles.length > 0 && (
       <section>
         <div className="flex items-end justify-between mb-3 sm:mb-4">
           <div>
@@ -192,6 +214,7 @@ export const HeroBanner: React.FC = () => {
           })}
         </div>
       </section>
+      )}
     </div>
   );
 };
