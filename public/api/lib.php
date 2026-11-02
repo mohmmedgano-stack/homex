@@ -118,6 +118,26 @@ function migrate(PDO $db): void {
         created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
     CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS dealers (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        governorate TEXT NOT NULL,
+        area TEXT NOT NULL DEFAULT '',
+        address TEXT NOT NULL DEFAULT '',
+        phone TEXT NOT NULL DEFAULT '',
+        whatsapp TEXT NOT NULL DEFAULT '',
+        map_url TEXT NOT NULL DEFAULT '',
+        logo TEXT NOT NULL DEFAULT '',
+        categories TEXT NOT NULL DEFAULT '[]',
+        hours TEXT NOT NULL DEFAULT '',
+        featured INTEGER NOT NULL DEFAULT 0,
+        active INTEGER NOT NULL DEFAULT 1,
+        calls INTEGER NOT NULL DEFAULT 0,
+        whatsapps INTEGER NOT NULL DEFAULT 0,
+        maps INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_dealers_gov ON dealers(governorate);
     CREATE TABLE IF NOT EXISTS login_attempts (ip TEXT NOT NULL, at INTEGER NOT NULL);
     CREATE INDEX IF NOT EXISTS idx_orders_created ON orders(created_at);
     CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(date);
@@ -313,7 +333,7 @@ function delete_admin(int $id): array {
 const PUBLIC_SETTINGS = [
     'store_name' => 'HOMEX',
     'logo' => '',
-    'top_bar_text' => 'توصيل لكل المحافظات والدفع عند الاستلام',
+    'top_bar_text' => 'شحن لكل محافظات مصر',
     'phone' => '', 'whatsapp' => '', 'email' => '', 'address' => '',
     'facebook' => '', 'instagram' => '', 'tiktok' => '',
     'shipping_fee' => '60', 'free_shipping_over' => '0',
@@ -326,6 +346,8 @@ function public_settings(): array {
     foreach (db()->query('SELECT key, value FROM settings') as $row) {
         if (array_key_exists($row['key'], $out)) $out[$row['key']] = $row['value'];
     }
+    // The old default mentioned cash on delivery; the brand doesn't advertise it outside checkout
+    if ($out['top_bar_text'] === 'توصيل لكل المحافظات والدفع عند الاستلام') $out['top_bar_text'] = PUBLIC_SETTINGS['top_bar_text'];
     return $out;
 }
 
@@ -511,14 +533,36 @@ function delete_category(string $id): array {
    Orders — prices & cost always taken from the DB, never the browser
    ============================================================ */
 
+const GOVERNORATES = [
+    'القاهرة', 'الجيزة', 'الإسكندرية', 'القليوبية', 'الشرقية', 'الدقهلية', 'الغربية', 'المنوفية',
+    'البحيرة', 'كفر الشيخ', 'دمياط', 'بورسعيد', 'الإسماعيلية', 'السويس', 'الفيوم', 'بني سويف',
+    'المنيا', 'أسيوط', 'سوهاج', 'قنا', 'الأقصر', 'أسوان', 'البحر الأحمر', 'الوادي الجديد',
+    'مطروح', 'شمال سيناء', 'جنوب سيناء',
+];
+
+/** Normalises an Egyptian mobile number to 01XXXXXXXXX, or null if it isn't one. */
+function egypt_mobile(string $v): ?string {
+    $v = strtr($v, ['٠'=>'0','١'=>'1','٢'=>'2','٣'=>'3','٤'=>'4','٥'=>'5','٦'=>'6','٧'=>'7','٨'=>'8','٩'=>'9']);
+    $v = preg_replace('/[^0-9]/', '', $v);
+    if (str_starts_with($v, '20') && strlen($v) === 12) $v = '0' . substr($v, 2);
+    return preg_match('/^01[0125][0-9]{8}$/', $v) ? $v : null;
+}
+
 const ORDER_STATUSES = ['pending', 'confirmed', 'shipped', 'delivered', 'cancelled', 'returned'];
 
 function create_order(array $b): array {
     $c = (array)($b['customer'] ?? []);
-    $name = str($c['name'] ?? '', 100);
-    $phone = preg_replace('/[^0-9+]/', '', (string)($c['phone'] ?? ''));
+    $name = preg_replace('/\s+/u', ' ', str($c['name'] ?? '', 100));
+    $phone = egypt_mobile((string)($c['phone'] ?? ''));
+    $alt = trim((string)($c['altPhone'] ?? '')) === '' ? '' : egypt_mobile((string)$c['altPhone']);
     $address = str($c['address'] ?? '', 500);
-    if ($name === '' || strlen($phone) < 10 || $address === '') throw new ApiError('اكتب الاسم ورقم الموبايل والعنوان صح');
+    $city = str($c['city'] ?? '', 60);
+    $words = array_filter(explode(' ', $name), fn($w) => mb_strlen($w) >= 2);
+    if (count($words) < 3) throw new ApiError('اكتب الاسم ثلاثي');
+    if ($phone === null) throw new ApiError('رقم الموبايل لازم يكون رقم مصري صحيح من 11 رقم');
+    if ($alt === null) throw new ApiError('رقم الموبايل الإضافي مش صحيح');
+    if (!in_array($city, GOVERNORATES, true)) throw new ApiError('اختار المحافظة');
+    if (mb_strlen($address) < 10) throw new ApiError('اكتب العنوان بالتفصيل');
 
     $items = (array)($b['items'] ?? []);
     if (!$items || count($items) > 50) throw new ApiError('السلة فاضية');
@@ -547,7 +591,7 @@ function create_order(array $b): array {
         if (!in_array($pm, ['cod', 'vodafone', 'instapay'], true)) $pm = 'cod';
         $code = 'HX' . date('ymd') . strtoupper(substr(bin2hex(random_bytes(3)), 0, 4));
         $db->prepare('INSERT INTO orders (code, customer_name, phone, alt_phone, city, address, notes, payment_method, subtotal, shipping_fee, total, cost_total) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)')
-            ->execute([$code, $name, $phone, str($c['altPhone'] ?? '', 20), str($c['city'] ?? '', 60), $address, str($c['notes'] ?? '', 500), $pm, $sub, $fee, $total, $cost]);
+            ->execute([$code, $name, $phone, $alt, $city, $address, str($c['notes'] ?? '', 500), $pm, $sub, $fee, $total, $cost]);
         $oid = (int)$db->lastInsertId();
         $ins = $db->prepare('INSERT INTO order_items (order_id, product_id, name, image, price, cost, qty) VALUES (?,?,?,?,?,?,?)');
         $dec = $db->prepare('UPDATE products SET stock = stock - ? WHERE id = ?');
@@ -683,4 +727,70 @@ function summary(?string $from, ?string $to): array {
         'days' => $days, 'topProducts' => $top,
         'stock' => ['cost' => (float)$stock['cost'], 'value' => (float)$stock['value'], 'low' => (int)$stock['low']],
     ];
+}
+
+
+/* ============================================================
+   Authorised dealers (shops that stock HOMEX near the customer)
+   ============================================================ */
+
+function dealer_out(array $d, bool $admin = false): array {
+    $o = [
+        'id' => (int)$d['id'], 'name' => $d['name'], 'governorate' => $d['governorate'], 'area' => $d['area'],
+        'address' => $d['address'], 'phone' => $d['phone'], 'whatsapp' => $d['whatsapp'], 'mapUrl' => $d['map_url'],
+        'logo' => $d['logo'], 'categories' => json_decode($d['categories'], true) ?: [], 'hours' => $d['hours'],
+        'featured' => (bool)$d['featured'],
+    ];
+    if ($admin) $o += ['active' => (bool)$d['active'], 'calls' => (int)$d['calls'], 'whatsapps' => (int)$d['whatsapps'], 'maps' => (int)$d['maps'], 'createdAt' => $d['created_at']];
+    return $o;
+}
+
+function dealers_public(): array {
+    $rows = db()->query('SELECT * FROM dealers WHERE active = 1 ORDER BY featured DESC, governorate, name')->fetchAll();
+    return array_map('dealer_out', $rows);
+}
+
+function dealers_admin(): array {
+    $rows = db()->query('SELECT * FROM dealers ORDER BY governorate, name')->fetchAll();
+    return array_map(fn($d) => dealer_out($d, true), $rows);
+}
+
+function save_dealer(array $b): array {
+    $name = str($b['name'] ?? '', 120);
+    $gov = str($b['governorate'] ?? '', 60);
+    if ($name === '') throw new ApiError('اكتب اسم التاجر أو المحل');
+    if (!in_array($gov, GOVERNORATES, true)) throw new ApiError('اختار المحافظة');
+    $phone = trim((string)($b['phone'] ?? ''));
+    $wa = trim((string)($b['whatsapp'] ?? ''));
+    if ($phone === '' && $wa === '') throw new ApiError('اكتب رقم تليفون أو واتساب للتاجر');
+    $map = str($b['mapUrl'] ?? '', 500);
+    if ($map !== '' && !preg_match('#^https://#i', $map)) throw new ApiError('لينك الخريطة لازم يبدأ بـ https://');
+    $cats = clean_list($b['categories'] ?? [], 50);
+    $vals = [
+        $name, $gov, str($b['area'] ?? '', 80), str($b['address'] ?? '', 300),
+        preg_replace('/[^0-9+]/', '', $phone), preg_replace('/[^0-9+]/', '', $wa), $map,
+        str($b['logo'] ?? '', 500), json_encode($cats, JSON_UNESCAPED_UNICODE), str($b['hours'] ?? '', 120),
+        !empty($b['featured']) ? 1 : 0, array_key_exists('active', $b) ? (!empty($b['active']) ? 1 : 0) : 1,
+    ];
+    $id = (int)($b['id'] ?? 0);
+    if ($id) {
+        $vals[] = $id;
+        db()->prepare('UPDATE dealers SET name=?, governorate=?, area=?, address=?, phone=?, whatsapp=?, map_url=?, logo=?, categories=?, hours=?, featured=?, active=? WHERE id=?')->execute($vals);
+    } else {
+        db()->prepare('INSERT INTO dealers (name, governorate, area, address, phone, whatsapp, map_url, logo, categories, hours, featured, active) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)')->execute($vals);
+    }
+    return dealers_admin();
+}
+
+function delete_dealer(int $id): array {
+    db()->prepare('DELETE FROM dealers WHERE id = ?')->execute([$id]);
+    return dealers_admin();
+}
+
+/** Counts a customer tapping call / WhatsApp / map on a dealer card — proof of value for the dealer. */
+function dealer_click(array $b): bool {
+    $col = ['call' => 'calls', 'whatsapp' => 'whatsapps', 'map' => 'maps'][$b['kind'] ?? ''] ?? null;
+    if (!$col) return false;
+    db()->prepare("UPDATE dealers SET $col = $col + 1 WHERE id = ? AND active = 1")->execute([(int)($b['id'] ?? 0)]);
+    return true;
 }

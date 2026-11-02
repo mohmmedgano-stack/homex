@@ -16,6 +16,8 @@ try {
         case 'GET catalog':    ok(catalog()); break;
         case 'POST order':     ok(create_order(body())); break;
         case 'GET img':        serve_image($_GET['f'] ?? ''); break;
+        case 'GET dealers':    ok(dealers_public()); break;
+        case 'POST dealer-click': ok(dealer_click(body())); break;
 
         /* ---------- auth ---------- */
         case 'GET me':         ok(me()); break;
@@ -32,6 +34,11 @@ try {
         case 'GET admin/categories':   need(); ok(categories(true)); break;
         case 'POST admin/category':    need(); ok(save_category(body())); break;
         case 'POST admin/category-delete': need(); ok(delete_category((string)(body()['id'] ?? ''))); break;
+
+        /* ---------- admin: dealers ---------- */
+        case 'GET admin/dealers':      need(); ok(dealers_admin()); break;
+        case 'POST admin/dealer':      need(); ok(save_dealer(body())); break;
+        case 'POST admin/dealer-delete': need(); ok(delete_dealer((int)(body()['id'] ?? 0))); break;
 
         /* ---------- admin: orders ---------- */
         case 'GET admin/orders':       need(); ok(admin_orders($_GET)); break;

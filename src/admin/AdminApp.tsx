@@ -1,13 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { api, ApiError } from '../lib/api';
 import { ToastProvider, Button, Field, Input, Spinner } from './ui';
-import { LayoutDashboard, Package, ShoppingBag, Calculator, Settings, Users, LogOut, Menu, X, ExternalLink } from 'lucide-react';
+import { LayoutDashboard, Package, ShoppingBag, Calculator, Settings, Users, LogOut, Menu, X, ExternalLink, Store } from 'lucide-react';
 import { Overview } from './pages/Overview';
 import { Products } from './pages/Products';
 import { Orders } from './pages/Orders';
 import { Accounting } from './pages/Accounting';
 import { StoreSettingsPage } from './pages/StoreSettings';
 import { Team } from './pages/Team';
+import { Dealers } from './pages/Dealers';
 
 export interface Admin {
   id: number;
@@ -16,12 +17,13 @@ export interface Admin {
   role: 'owner' | 'staff';
 }
 
-type Page = 'overview' | 'products' | 'orders' | 'accounting' | 'settings' | 'team';
+type Page = 'overview' | 'products' | 'orders' | 'dealers' | 'accounting' | 'settings' | 'team';
 
 const NAV: { id: Page; label: string; Icon: React.FC<any>; owner?: boolean }[] = [
   { id: 'overview', label: 'الرئيسية', Icon: LayoutDashboard },
   { id: 'orders', label: 'الطلبات', Icon: ShoppingBag },
   { id: 'products', label: 'المنتجات والأقسام', Icon: Package },
+  { id: 'dealers', label: 'التجار المعتمدين', Icon: Store },
   { id: 'accounting', label: 'الحسابات', Icon: Calculator },
   { id: 'settings', label: 'إعدادات المتجر', Icon: Settings },
   { id: 'team', label: 'المستخدمين والباسورد', Icon: Users },
@@ -209,6 +211,7 @@ const Shell: React.FC<{ admin: Admin; onLogout: () => void }> = ({ admin, onLogo
         {page === 'overview' && <Overview go={setPage} />}
         {page === 'orders' && <Orders />}
         {page === 'products' && <Products />}
+        {page === 'dealers' && <Dealers />}
         {page === 'accounting' && <Accounting />}
         {page === 'settings' && <StoreSettingsPage admin={admin} />}
         {page === 'team' && <Team admin={admin} />}

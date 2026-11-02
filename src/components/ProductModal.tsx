@@ -635,7 +635,7 @@ export const ProductModal: React.FC = () => {
                       <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
                         <span className="flex items-center gap-1">
                           <UserCheck className="w-3.5 h-3.5 text-emerald-600" />
-                          <span>تم فحص الجهاز وتشغيله قبل الدفع</span>
+                          <span>مشتري موثّق</span>
                         </span>
                         <button className="flex items-center gap-1 hover:text-slate-600 text-slate-400">
                           <ThumbsUp className="w-3.5 h-3.5" />

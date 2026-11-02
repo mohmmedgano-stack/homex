@@ -128,7 +128,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [categoryList, setCategoryList] = useState<{ id: string; name: string; description?: string }[]>([]);
   const [catalogLoaded, setCatalogLoaded] = useState(false);
   const [settings, setSettings] = useState<StoreSettings>({
-    store_name: 'HOMEX', logo: '', top_bar_text: 'توصيل لكل المحافظات والدفع عند الاستلام',
+    store_name: 'HOMEX', logo: '', top_bar_text: 'شحن لكل محافظات مصر',
     phone: '', whatsapp: '', email: '', address: '', facebook: '', instagram: '', tiktok: '',
     shipping_fee: '60', free_shipping_over: '0', pay_cod: '1', pay_vodafone: '', pay_instapay: '',
     hero_title: '', hero_subtitle: '',

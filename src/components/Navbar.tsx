@@ -45,6 +45,15 @@ export const Navbar: React.FC = () => {
     setTimeout(() => document.getElementById('appliances-catalog-section')?.scrollIntoView({ behavior: 'smooth' }), 50);
   };
 
+  const toDealers = () => {
+    setCurrentView('store');
+    setSelectedCategory('all');
+    setSearchQuery('');
+    setShopOpen(false);
+    setMenuOpen(false);
+    setTimeout(() => document.getElementById('dealers-section')?.scrollIntoView({ behavior: 'smooth' }), 80);
+  };
+
   const onSearch = (value: string) => {
     setSearchQuery(value);
     if (currentView !== 'store') setCurrentView('store');
@@ -188,6 +197,7 @@ export const Navbar: React.FC = () => {
               { label: 'العروض', on: () => toCatalog('all', 'price-asc'), hot: true },
               { label: 'وصل حديثاً', on: () => toCatalog('all', 'newest') },
               { label: 'الأعلى تقييماً', on: () => toCatalog('all', 'rating') },
+              { label: 'أقرب تاجر', on: () => toDealers() },
             ].map((l) => (
               <button key={l.label} onClick={l.on} className="h-12 px-4 hover:text-gold-hi transition-colors flex items-center gap-1.5">
                 {l.label}
@@ -238,6 +248,7 @@ export const Navbar: React.FC = () => {
               <p className="px-4 pt-5 pb-2 text-xs font-bold text-steel">تسوق</p>
               <button onClick={() => toCatalog('all', 'price-asc')} className="w-full text-right px-4 h-12 border-b border-line font-bold text-sale">العروض</button>
               <button onClick={() => toCatalog('all', 'newest')} className="w-full text-right px-4 h-12 border-b border-line font-bold text-ink">وصل حديثاً</button>
+              <button onClick={toDealers} className="w-full text-right px-4 h-12 border-b border-line font-bold text-ink">اشتري من أقرب تاجر</button>
               <button onClick={() => { setCompareOpen(true); setMenuOpen(false); }} className="w-full text-right px-4 h-12 border-b border-line font-bold text-ink">
                 مقارنة الأجهزة ({compareList.length})
               </button>

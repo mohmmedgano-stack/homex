@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { StoreProvider, useStore } from './context/StoreContext';
 import { Navbar } from './components/Navbar';
 import { HeroBanner } from './components/HeroBanner';
+import { DealersSection } from './components/DealersSection';
 import { ProductCard } from './components/ProductCard';
 import { ProductModal } from './components/ProductModal';
 import { CartDrawer } from './components/CartDrawer';
@@ -184,6 +185,8 @@ const StoreContent: React.FC = () => {
                 )
               )}
 
+              <DealersSection />
+
               {/* Brands */}
               {brands.length > 0 && (
               <section className="bg-white rounded-xl border border-line p-4 sm:p-6">
@@ -294,7 +297,7 @@ const StoreContent: React.FC = () => {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
             <div className="col-span-2 md:col-span-1 space-y-4">
               <img src={settings.logo || '/logo.png'} alt="HOMEX" className="h-10 w-auto" />
-              <p className="leading-relaxed max-w-xs">كل أساسيات بيتك من أجهزة منزلية بأفضل سعر، مع التوصيل والدفع عند الاستلام.</p>
+              <p className="leading-relaxed max-w-xs">كل أساسيات بيتك من أجهزة منزلية بضمان حقيقي، مع شحن لكل محافظات مصر.</p>
             </div>
             <div>
               <h4 className="text-gold-hi font-extrabold mb-4">الأقسام</h4>

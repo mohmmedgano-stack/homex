@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useStore } from '../context/StoreContext';
 import { CustomerDetails, Order } from '../types';
+import { EGYPT_GOVERNORATES, isEgyptMobile, isTripleName, normalizePhone } from '../data/governorates';
 import confetti from 'canvas-confetti';
 import { 
   ArrowRight, 
@@ -16,32 +17,7 @@ import {
   Home
 } from 'lucide-react';
 
-const EGYPT_GOVERNORATES = [
-  'القاهرة',
-  'الجيزة',
-  'الإسكندرية',
-  'القليوبية',
-  'الشرقية',
-  'الدقهلية',
-  'الغربية',
-  'المنوفية',
-  'البحيرة',
-  'كفر الشيخ',
-  'دمياط',
-  'بورسعيد',
-  'الإسماعيلية',
-  'السويس',
-  'الفيوم',
-  'بني سويف',
-  'المنيا',
-  'أسيوط',
-  'سوهاج',
-  'قنا',
-  'الأقصر',
-  'أسوان',
-  'البحر الأحمر',
-  'مطروح'
-];
+
 
 export const CheckoutView: React.FC = () => {
   const { 
@@ -69,7 +45,7 @@ export const CheckoutView: React.FC = () => {
   const freeOver = Number(settings.free_shipping_over) || 0;
   const shippingFee = freeOver > 0 && cartTotal >= freeOver ? 0 : Number(settings.shipping_fee) || 0;
   const payOptions = [
-    settings.pay_cod !== '0' && { id: 'cod' as const, title: 'الدفع عند الاستلام', sub: 'كاش بعد ما تستلم وتفحص الجهاز' },
+    settings.pay_cod !== '0' && { id: 'cod' as const, title: 'الدفع عند الاستلام', sub: 'كاش للمندوب وقت ما تستلم' },
     settings.pay_vodafone && { id: 'vodafone' as const, title: 'فودافون كاش', sub: `حوّل على ${settings.pay_vodafone}` },
     settings.pay_instapay && { id: 'instapay' as const, title: 'إنستاباي', sub: `حوّل على ${settings.pay_instapay}` },
   ].filter(Boolean) as { id: 'cod' | 'vodafone' | 'instapay'; title: string; sub: string }[];
@@ -78,6 +54,22 @@ export const CheckoutView: React.FC = () => {
   const handleSubmitOrder = (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (!isTripleName(form.name)) {
+      showToast('اكتب اسمك ثلاثي (الاسم واسم الأب والجد)', 'error');
+      return;
+    }
+    if (!isEgyptMobile(form.phone)) {
+      showToast('اكتب رقم موبايل مصري صحيح من 11 رقم، يبدأ بـ 010 أو 011 أو 012 أو 015', 'error');
+      return;
+    }
+    if (form.altPhone && !isEgyptMobile(form.altPhone)) {
+      showToast('رقم الموبايل الإضافي مش صحيح، صحّحه أو سيبه فاضي', 'error');
+      return;
+    }
+    if (form.address.trim().length < 10) {
+      showToast('اكتب العنوان بالتفصيل: المنطقة والشارع ورقم العمارة والدور', 'error');
+      return;
+    }
     if (!form.name.trim() || !form.phone.trim() || !form.address.trim() || !form.city) {
       showToast('اكتب الاسم والموبايل والمحافظة والعنوان', 'error');
       return;
@@ -90,7 +82,7 @@ export const CheckoutView: React.FC = () => {
 
     setIsSubmitting(true);
 
-    submitOrder(form).then((order) => {
+    submitOrder({ ...form, name: form.name.trim().replace(/\s+/g, ' '), phone: normalizePhone(form.phone), altPhone: form.altPhone ? normalizePhone(form.altPhone) : '' }).then((order) => {
       setCompletedOrder(order);
       setIsSubmitting(false);
 
@@ -266,12 +258,13 @@ export const CheckoutView: React.FC = () => {
               {/* Name */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                  الاسم بالكامل <span className="text-rose-500">*</span>
+                  الاسم ثلاثي <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="text"
                   required
                   placeholder="مثال: أحمد محمد علي"
+                  autoComplete="name"
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
                   className="w-full bg-slate-50 text-slate-900 text-sm rounded-xl px-4 py-3 border border-slate-200 focus:outline-hidden focus:border-amber-500 focus:bg-white"
@@ -286,6 +279,8 @@ export const CheckoutView: React.FC = () => {
                   </label>
                   <input
                     type="tel"
+                    inputMode="numeric"
+                    autoComplete="tel"
                     required
                     placeholder="01012345678"
                     value={form.phone}
@@ -459,7 +454,7 @@ export const CheckoutView: React.FC = () => {
               </div>
               <div className="flex items-center gap-2">
                 <Truck className="w-4 h-4 text-amber-600" />
-                <span>معاينة وفحص الجهاز بالكامل قبل دفع الحساب</span>
+                <span>شحن لكل محافظات مصر مع شركات شحن موثوقة</span>
               </div>
             </div>
 

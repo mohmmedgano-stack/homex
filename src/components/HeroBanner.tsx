@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useStore } from '../context/StoreContext';
-import { ChevronLeft, ChevronRight, Truck, ShieldCheck, Banknote, RotateCcw } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Truck, ShieldCheck, Banknote, RotateCcw, Wrench } from 'lucide-react';
 
 const SLIDE_THEMES = [
   { bg: 'from-[#1c1f24] to-[#3a414c]', tag: 'bg-gold text-white', accent: 'text-gold-hi', cta: 'btn-gold' },
@@ -52,7 +52,7 @@ export const HeroBanner: React.FC = () => {
                   {settings.hero_title || 'أجهزة بيتك بضمان حقيقي، وسعر يريحك'}
                 </h2>
                 <p className="text-sm sm:text-lg text-white/80">
-                  {settings.hero_subtitle || 'الدفع عند الاستلام، وافحص الجهاز قبل ما تدفع'}
+                  {settings.hero_subtitle || 'شحن لكل محافظات مصر، وضمان ومراكز صيانة معتمدة'}
                 </p>
                 <button onClick={() => scrollToCatalog()} className="btn-gold h-11 sm:h-12 px-6 sm:px-8 rounded-xl text-sm sm:text-base font-extrabold shadow-lg">
                   تسوق دلوقتي
@@ -159,7 +159,7 @@ export const HeroBanner: React.FC = () => {
       {/* Service strip */}
       <div className="grid grid-cols-2 lg:grid-cols-4 bg-white rounded-2xl border border-line divide-line [&>*]:border-line">
         {[
-          { Icon: Banknote, t: 'الدفع عند الاستلام', s: 'ادفع بعد ما تستلم', c: 'text-save bg-save/10' },
+          { Icon: Wrench, t: 'مراكز صيانة معتمدة', s: 'في محافظات مصر', c: 'text-save bg-save/10' },
           { Icon: Truck, t: 'توصيل لحد البيت', s: 'لكل المحافظات', c: 'text-ink bg-ink/5' },
           { Icon: ShieldCheck, t: 'ضمان على كل جهاز', s: 'ضمان الوكيل', c: 'text-gold-deep bg-gold/15' },
           { Icon: RotateCcw, t: 'استبدال سهل', s: 'لو فيه عيب صناعة', c: 'text-sale bg-sale/10' },
