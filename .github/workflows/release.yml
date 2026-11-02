@@ -36,3 +36,12 @@ jobs:
           git add -A
           git commit -q -m "Release build from ${GITHUB_SHA::7}"
           git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" hostinger-release
+      - name: Tell home-x.online to install this build
+        run: |
+          for i in 1 2 3 4 5; do
+            sleep 10
+            res=$(curl -sS --max-time 120 https://home-x.online/api/deploy.php || true)
+            echo "$res"
+            echo "$res" | grep -q '"ok":true' && exit 0
+          done
+          echo "::warning::Site did not confirm the deploy"
