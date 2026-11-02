@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { api, money } from '../../lib/api';
 import { Card, Spinner, StatusBadge, STATUS, Empty, Input, Modal, Button, useToast } from '../ui';
-import { Phone, MessageCircle, Search } from 'lucide-react';
+import { Phone, MessageCircle, Search, Download } from 'lucide-react';
 
 const PAY: Record<string, string> = { cod: 'الدفع عند الاستلام', vodafone: 'فودافون كاش', instapay: 'إنستاباي', card: 'فيزا / ماستركارد' };
 const FLOW = ['pending', 'confirmed', 'shipped', 'delivered'];
@@ -39,7 +39,15 @@ export const Orders: React.FC = () => {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-xl sm:text-2xl font-extrabold text-ink">الطلبات</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-xl sm:text-2xl font-extrabold text-ink">الطلبات</h1>
+        <a
+          href={`/api/?r=admin/orders-export${status ? `&status=${status}` : ''}`}
+          className="h-10 px-4 rounded-lg text-sm font-bold inline-flex items-center gap-2 bg-white text-ink border border-line hover:border-ink"
+        >
+          <Download className="w-4 h-4" /> تصدير Excel لشركة الشحن
+        </a>
+      </div>
 
       <div className="flex gap-2 overflow-x-auto no-scrollbar -mx-3 px-3 sm:mx-0 sm:px-0">
         {[['', 'الكل', total], ...Object.keys(STATUS).map((s) => [s, STATUS[s].label, data?.counts[s] || 0])].map(([id, label, n]) => (

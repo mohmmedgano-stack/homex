@@ -209,17 +209,19 @@ export const ProductModal: React.FC = () => {
 
               {/* Guarantees Box */}
               <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200 space-y-2 text-xs text-slate-600">
+                {product.warranty && (
                 <div className="flex items-center gap-2">
                   <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
                   <span className="font-semibold text-slate-800">{product.warranty}</span>
                 </div>
+                )}
                 <div className="flex items-center gap-2">
                   <Truck className="w-4 h-4 text-amber-600 shrink-0" />
-                  <span>شحن وتوصيل فوري لجميع محافظات مصر</span>
+                  <span>شحن لكل محافظات مصر</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <RotateCcw className="w-4 h-4 text-blue-600 shrink-0" />
-                  <span>إمكانية الاسترجاع أو الاستبدال خلال 14 يوماً</span>
+                  <a href="/p/returns" target="_blank" className="underline underline-offset-2">الاسترجاع أو الاستبدال خلال 14 يوم</a>
                 </div>
               </div>
             </div>
@@ -331,51 +333,6 @@ export const ProductModal: React.FC = () => {
                 {hasDiscount && (
                   <div className="text-left bg-rose-100 text-rose-800 font-bold px-3 py-1.5 rounded-xl text-xs">
                     وفرت {savedAmount.toLocaleString()} ج.م
-                  </div>
-                )}
-              </div>
-
-              {/* FEATURE: Price Drop Alert (تنبيه انخفاض السعر) */}
-              <div className="rounded-2xl border border-amber-200 bg-amber-50/40 p-3.5 space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-amber-900 font-bold text-xs">
-                    <Bell className="w-4 h-4 text-amber-600 animate-bounce" />
-                    <span>تنبيه انخفاض السعر: أبلغني عند عمل خصم على هذا الجهاز</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setAlertBoxOpen(!alertBoxOpen)}
-                    className="text-[11px] font-bold text-amber-700 hover:underline"
-                  >
-                    {alertBoxOpen ? 'إغلاق' : 'تفعيل التنبيه'}
-                  </button>
-                </div>
-
-                {(alertBoxOpen || isAlreadyAlerted) && (
-                  <div>
-                    {alertSubmitted || isAlreadyAlerted ? (
-                      <div className="flex items-center gap-2 text-xs text-emerald-800 bg-emerald-50 p-2.5 rounded-xl border border-emerald-200 font-medium">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                        <span>أنت مشترك في تنبيهات هذا الجهاز. سنرسل لك إشعاراً فور تطبيق أي خصم جديد!</span>
-                      </div>
-                    ) : (
-                      <form onSubmit={handlePriceAlertSubmit} className="flex gap-2 pt-1">
-                        <input
-                          type="email"
-                          required
-                          placeholder="اكتب بريدك الإلكتروني ليصلك إشعار الخصم..."
-                          value={alertEmail}
-                          onChange={(e) => setAlertEmail(e.target.value)}
-                          className="flex-1 bg-white text-slate-900 text-xs rounded-xl px-3 py-2 border border-slate-300 focus:outline-hidden focus:border-amber-500 font-mono"
-                        />
-                        <button
-                          type="submit"
-                          className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-colors whitespace-nowrap shadow-xs"
-                        >
-                          تفعيل التنبيه
-                        </button>
-                      </form>
-                    )}
                   </div>
                 )}
               </div>
@@ -494,83 +451,8 @@ export const ProductModal: React.FC = () => {
 
               <div className="text-xs text-emerald-800 bg-emerald-50 px-4 py-2.5 rounded-2xl border border-emerald-200 flex items-center gap-2 font-bold">
                 <UserCheck className="w-4 h-4 text-emerald-600" />
-                <span>جميع التقييمات من مشترين حقيقيين تم تسليم الجهاز لهم</span>
+                <span>تقييمات عملائنا</span>
               </div>
-            </div>
-
-            {/* Add New Review Form */}
-            <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200 shadow-xs space-y-4">
-              <h3 className="font-bold text-sm text-slate-900 flex items-center gap-2">
-                <Star className="w-4 h-4 text-amber-500" />
-                <span>أضف تقييمك ورأيك حول هذا الجهاز:</span>
-              </h3>
-
-              <form onSubmit={handleReviewSubmit} className="space-y-4 text-xs">
-                
-                {/* Clickable Star Rating Picker */}
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1.5">اختر عدد النجوم:</label>
-                  <div className="flex items-center gap-2">
-                    {[1, 2, 3, 4, 5].map((star) => (
-                      <button
-                        key={star}
-                        type="button"
-                        onMouseEnter={() => setHoverRating(star)}
-                        onMouseLeave={() => setHoverRating(0)}
-                        onClick={() => setReviewRating(star)}
-                        className="p-1 hover:scale-125 transition-transform"
-                        title={`${star} نجوم`}
-                      >
-                        <Star
-                          className={`w-6 h-6 ${
-                            star <= (hoverRating || reviewRating)
-                              ? 'fill-amber-400 text-amber-400'
-                              : 'text-slate-300 fill-slate-100'
-                          }`}
-                        />
-                      </button>
-                    ))}
-                    <span className="font-bold text-amber-700 mr-2 text-xs font-mono">
-                      {reviewRating} من 5 نجوم
-                    </span>
-                  </div>
-                </div>
-
-                {/* Reviewer Name */}
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">اسمك (أو كما تحب أن يظهر):</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="مثال: م. مصطفى خالد"
-                    value={reviewName}
-                    onChange={(e) => setReviewName(e.target.value)}
-                    className="w-full sm:max-w-md bg-slate-50 text-slate-900 rounded-xl px-3.5 py-2.5 border border-slate-200 focus:outline-hidden focus:border-amber-500 focus:bg-white text-xs"
-                  />
-                </div>
-
-                {/* Review Comment */}
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">اكتب رأيك وتجربتك بالتفصيل *</label>
-                  <textarea
-                    required
-                    rows={3}
-                    placeholder="شاركنا رأيك في سرعة الجهاز، جودة الخامات، استهلاك الكهرباء، وسرعة التوصيل..."
-                    value={reviewComment}
-                    onChange={(e) => setReviewComment(e.target.value)}
-                    className="w-full bg-slate-50 text-slate-900 rounded-xl px-3.5 py-2.5 border border-slate-200 focus:outline-hidden focus:border-amber-500 focus:bg-white text-xs resize-none"
-                  />
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={isSubmittingReview}
-                  className="px-6 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl text-xs flex items-center gap-2 shadow-sm transition-all"
-                >
-                  <Send className="w-3.5 h-3.5" />
-                  <span>نشر المراجعة والتقييم</span>
-                </button>
-              </form>
             </div>
 
             {/* Reviews List */}

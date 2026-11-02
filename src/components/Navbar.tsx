@@ -36,7 +36,15 @@ export const Navbar: React.FC = () => {
     return () => document.removeEventListener('mousedown', close);
   }, []);
 
+  // On a policy page (/p/...) the store lives at "/", so store actions go home first
+  const leavePolicyPage = (hash = '') => {
+    if (!location.pathname.startsWith('/p/')) return false;
+    location.href = '/' + hash;
+    return true;
+  };
+
   const toCatalog = (cat: string = 'all', sort?: any) => {
+    if (leavePolicyPage('#catalog')) return;
     setCurrentView('store');
     setSelectedCategory(cat as any);
     if (sort) setSortBy(sort);
@@ -46,6 +54,7 @@ export const Navbar: React.FC = () => {
   };
 
   const toDealers = () => {
+    if (leavePolicyPage('#dealers')) return;
     setCurrentView('store');
     setSelectedCategory('all');
     setSearchQuery('');
@@ -55,6 +64,7 @@ export const Navbar: React.FC = () => {
   };
 
   const onSearch = (value: string) => {
+    if (leavePolicyPage()) return;
     setSearchQuery(value);
     if (currentView !== 'store') setCurrentView('store');
   };
@@ -111,6 +121,7 @@ export const Navbar: React.FC = () => {
 
           <button
             onClick={() => {
+              if (leavePolicyPage()) return;
               setCurrentView('store');
               setSelectedCategory('all');
               setSearchQuery('');

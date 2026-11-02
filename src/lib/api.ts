@@ -65,4 +65,20 @@ export interface StoreSettings {
   hero_title: string;
   hero_subtitle: string;
   pay_card?: string; // '1' when a card gateway is connected
+  page_about?: string;
+  page_shipping?: string;
+  page_returns?: string;
+  page_privacy?: string;
+  page_terms?: string;
+  meta_pixel_id?: string;
+  tiktok_pixel_id?: string;
+  ga4_id?: string;
 }
+
+export const POLICY_PAGES = [
+  { key: 'about', title: 'من نحن' },
+  { key: 'shipping', title: 'سياسة الشحن والتوصيل' },
+  { key: 'returns', title: 'سياسة الاسترجاع والاستبدال' },
+  { key: 'privacy', title: 'سياسة الخصوصية' },
+  { key: 'terms', title: 'الشروط والأحكام' },
+] as const;

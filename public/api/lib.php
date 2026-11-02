@@ -343,6 +343,19 @@ const PUBLIC_SETTINGS = [
     'shipping_fee' => '60', 'free_shipping_over' => '0',
     'pay_cod' => '1', 'pay_vodafone' => '', 'pay_instapay' => '',
     'hero_title' => '', 'hero_subtitle' => '',
+    // Policy pages (empty = the default text below)
+    'page_about' => '', 'page_shipping' => '', 'page_returns' => '', 'page_privacy' => '', 'page_terms' => '',
+    // Tracking
+    'meta_pixel_id' => '', 'tiktok_pixel_id' => '', 'ga4_id' => '',
+];
+
+/** Starting text for the policy pages. The brand edits them from the dashboard. */
+const DEFAULT_PAGES = [
+    'page_about' => "{store} براند مصري للأجهزة المنزلية: كاتيل، مكاوي، كبة ومفارم، خلاطات، وأجهزة المطبخ.\n\nكل أجهزتنا عليها ضمان، ولينا مراكز صيانة معتمدة في محافظات مصر، وبنشحن لكل المحافظات.\n\nكمان تقدر تشتري منتجاتنا من التجار المعتمدين القريبين منك.",
+    'page_shipping' => "بنشحن لكل محافظات مصر مع شركات شحن معتمدة.\n\nمدة التوصيل: من 2 لـ 5 أيام عمل حسب المحافظة، من وقت تأكيد الطلب.\n\nمصاريف الشحن بتظهر لك في صفحة الطلب قبل ما تأكد، ومفيش أي مصاريف تانية بعد كده.\n\nبعد ما تطلب، فريقنا هيكلمك يأكد الطلب والعنوان قبل الشحن.",
+    'page_returns' => "تقدر ترجّع أو تستبدل المنتج خلال 14 يوم من استلامه، بشرط يكون بحالته الأصلية وفي كرتونته ومعاه كل ملحقاته.\n\nلو في المنتج عيب صناعة، بنستبدله أو نصلحه في مراكز الصيانة المعتمدة حسب شروط الضمان المكتوبة على المنتج.\n\nلطلب استرجاع أو استبدال كلمنا على رقم خدمة العملاء أو الواتساب ومعاك رقم الطلب.\n\nالفلوس بترجع بنفس طريقة الدفع خلال 14 يوم عمل من استلام المنتج المرتجع. لو دفعت بالكارت، الفلوس بترجع على نفس الكارت.",
+    'page_privacy' => "بنجمع البيانات اللي محتاجينها لتوصيل طلبك بس: الاسم، رقم الموبايل، المحافظة، والعنوان.\n\nبنستخدم البيانات دي لتأكيد الطلب وشحنه والتواصل معاك بخصوصه، ومش بنبيعها أو نشاركها مع أي حد غير شركة الشحن اللي هتوصّل طلبك.\n\nلو دفعت بالكارت، بيانات الكارت بتتكتب مباشرة في صفحة شركة الدفع المعتمدة، وإحنا مش بنشوفها ولا بنخزّنها.\n\nممكن نستخدم أدوات قياس زي بيكسل فيسبوك وجوجل أناليتكس عشان نحسّن الإعلانات وتجربة الموقع.",
+    'page_terms' => "الأسعار على الموقع بالجنيه المصري.\n\nالطلب بيتأكد بعد ما فريقنا يكلمك ويراجع البيانات. لو منتج خلص من المخزن بعد طلبك، هنبلغك ونلغي الطلب أو نقترح بديل، ولو كنت دافع بالكارت الفلوس بترجعلك كاملة.\n\nالضمان بيغطي عيوب الصناعة حسب مدة الضمان المكتوبة على كل منتج، ومش بيغطي سوء الاستخدام أو الكسر.\n\nبطلبك من الموقع انت موافق على سياسة الشحن وسياسة الاسترجاع وسياسة الخصوصية.",
 ];
 
 /** Card-payment keys for each gateway. Never sent to the storefront; secrets are masked in the dashboard. */
@@ -351,6 +364,7 @@ const PAYMENT_SETTINGS = [
     'pay_card_test' => '1',      // Kashier / Fawry test (sandbox) mode
     'paymob_public_key' => '', 'paymob_secret_key' => '', 'paymob_integration_id' => '', 'paymob_hmac' => '',
     'kashier_mid' => '', 'kashier_api_key' => '',
+    'notify_email' => '',        // where new-order alerts go (dashboard only)
     'fawry_merchant_code' => '', 'fawry_secure_key' => '',
 ];
 const SECRET_SETTINGS = ['paymob_secret_key', 'paymob_hmac', 'kashier_api_key', 'fawry_secure_key'];
@@ -387,6 +401,9 @@ function public_settings(): array {
     // The old default mentioned cash on delivery; the brand doesn't advertise it outside checkout
     if ($out['top_bar_text'] === 'توصيل لكل المحافظات والدفع عند الاستلام') $out['top_bar_text'] = PUBLIC_SETTINGS['top_bar_text'];
     $out['pay_card'] = card_ready() ? '1' : '0';
+    foreach (DEFAULT_PAGES as $k => $text) {
+        if (trim($out[$k]) === '') $out[$k] = str_replace('{store}', $out['store_name'] ?: 'HOMEX', $text);
+    }
     return $out;
 }
 
@@ -406,13 +423,17 @@ function all_settings(): array {
 function save_settings(array $b): array {
     $st = db()->prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value');
     foreach (PUBLIC_SETTINGS as $k => $_) {
-        if (array_key_exists($k, $b)) $st->execute([$k, str($b[$k], 500)]);
+        if (!array_key_exists($k, $b)) continue;
+        $v = str($b[$k], str_starts_with($k, 'page_') ? 20000 : 500);
+        if (in_array($k, ['meta_pixel_id', 'tiktok_pixel_id', 'ga4_id'], true) && $v !== '' && !preg_match('/^[A-Za-z0-9\-]{4,40}$/', $v)) throw new ApiError('رقم البيكسل/التتبع فيه حروف مش مسموحة');
+        $st->execute([$k, $v]);
     }
     foreach (PAYMENT_SETTINGS as $k => $_) {
         if (!array_key_exists($k, $b)) continue;
         $v = trim((string)$b[$k]);
         // A masked secret coming back unchanged means "keep the saved one"
         if (in_array($k, SECRET_SETTINGS, true) && str_starts_with($v, '••••')) continue;
+        if ($k === 'notify_email' && $v !== '' && !filter_var($v, FILTER_VALIDATE_EMAIL)) throw new ApiError('إيميل الإشعارات مش صحيح');
         if ($k === 'paymob_integration_id' && $v !== '' && !ctype_digit($v)) throw new ApiError('رقم الـ Integration ID في Paymob لازم يكون أرقام بس');
         if ($k === 'pay_card_provider' && !in_array($v, ['', 'paymob', 'kashier', 'fawry'], true)) $v = '';
         $st->execute([$k, mb_substr($v, 0, 1000)]);
@@ -666,6 +687,7 @@ function create_order(array $b): array {
         throw $e;
     }
     $res = ['code' => $code, 'subtotal' => $sub, 'shippingFee' => $fee, 'total' => $total];
+    if ($pm !== 'card') notify_new_order($code);
     if ($pm === 'card') {
         try {
             $args = [$oid, $code, $name, $phone, $city, $address, $lines, $fee, $total];
@@ -956,6 +978,7 @@ function card_settle(string $code, string $gatewayOrder, bool $success, int $amo
     if ($o['payment_status'] === 'paid') return $o['code'];
     if ($success && $amountCents === (int)round($o['total'] * 100)) {
         db()->prepare("UPDATE orders SET payment_status = 'paid', payment_ref = ?, status = 'pending', updated_at = datetime('now') WHERE id = ?")->execute(["txn:$txn", $o['id']]);
+        notify_new_order($o['code']);
     } elseif ($o['status'] === 'awaiting_payment') {
         db()->prepare("UPDATE orders SET payment_status = 'failed' WHERE id = ?")->execute([$o['id']]);
         set_order_status(['id' => (int)$o['id'], 'status' => 'cancelled']);
@@ -1149,4 +1172,82 @@ function fawry_callback(): array {
     $code = (string)($body['merchantRefNumber'] ?? '');
     if ($code === '') return ['ignored' => true];
     return fawry_apply($code);
+}
+
+
+/* ============================================================
+   New-order email + export for the shipping company
+   ============================================================ */
+
+function order_with_items(string $code): ?array {
+    $st = db()->prepare('SELECT * FROM orders WHERE code = ?');
+    $st->execute([$code]);
+    $o = $st->fetch();
+    if (!$o) return null;
+    $st = db()->prepare('SELECT * FROM order_items WHERE order_id = ?');
+    $st->execute([$o['id']]);
+    $o['items'] = $st->fetchAll();
+    return $o;
+}
+
+/** Emails the store owner about a new order. Never blocks or breaks the order if mail fails. */
+function notify_new_order(string $code): void {
+    try {
+        $to = payment_settings()['notify_email'];
+        if ($to === '' || !function_exists('mail')) return;
+        $o = order_with_items($code);
+        if (!$o) return;
+        $store = get_setting('store_name', 'HOMEX') ?: 'HOMEX';
+        $pay = ['cod' => 'الدفع عند الاستلام', 'card' => 'فيزا (مدفوع)', 'vodafone' => 'فودافون كاش', 'instapay' => 'إنستاباي'][$o['payment_method']] ?? $o['payment_method'];
+        $lines = array_map(fn($i) => "- {$i['name']} × {$i['qty']} = " . number_format($i['price'] * $i['qty']) . ' ج.م', $o['items']);
+        $base = site_base();
+        $body = "طلب جديد {$o['code']}\n\n"
+            . "العميل: {$o['customer_name']}\nالموبايل: {$o['phone']}" . ($o['alt_phone'] ? " / {$o['alt_phone']}" : '') . "\n"
+            . "المحافظة: {$o['city']}\nالعنوان: {$o['address']}\n" . ($o['notes'] ? "ملاحظات: {$o['notes']}\n" : '')
+            . "\nالمنتجات:\n" . implode("\n", $lines) . "\n\n"
+            . 'الشحن: ' . number_format((float)$o['shipping_fee']) . " ج.م\nالإجمالي: " . number_format((float)$o['total']) . " ج.م\nالدفع: $pay\n\n"
+            . "افتح الطلب: $base/admin/#orders\n";
+        $host = parse_url($base, PHP_URL_HOST) ?: 'home-x.online';
+        $subject = '=?UTF-8?B?' . base64_encode("طلب جديد {$o['code']} - " . number_format((float)$o['total']) . " ج.م") . '?=';
+        $from = '=?UTF-8?B?' . base64_encode($store) . "?= <no-reply@$host>";
+        @mail($to, $subject, $body, "From: $from\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: 8bit");
+    } catch (Throwable $e) {
+        error_log('[homex notify] ' . $e->getMessage());
+    }
+}
+
+/** CSV (opens in Excel with Arabic) of orders, filtered like the orders page. */
+function export_orders(array $q): void {
+    $where = []; $args = [];
+    if (!empty($q['status']) && in_array($q['status'], ORDER_STATUSES, true)) { $where[] = 'status = ?'; $args[] = $q['status']; }
+    else $where[] = "status <> 'awaiting_payment'";
+    $st = db()->prepare('SELECT * FROM orders' . ($where ? ' WHERE ' . implode(' AND ', $where) : '') . ' ORDER BY id DESC LIMIT 5000');
+    $st->execute($args);
+    $orders = $st->fetchAll();
+    $items = [];
+    if ($orders) {
+        $ids = implode(',', array_map(fn($o) => (int)$o['id'], $orders));
+        foreach (db()->query("SELECT * FROM order_items WHERE order_id IN ($ids)") as $it) $items[$it['order_id']][] = $it;
+    }
+    $statusAr = ['awaiting_payment' => 'مستني الدفع', 'pending' => 'جديد', 'confirmed' => 'متأكد', 'shipped' => 'مع الشحن', 'delivered' => 'اتسلّم', 'cancelled' => 'ملغي', 'returned' => 'مرتجع'];
+    $payAr = ['cod' => 'عند الاستلام', 'card' => 'فيزا', 'vodafone' => 'فودافون كاش', 'instapay' => 'إنستاباي'];
+
+    header('Content-Type: text/csv; charset=utf-8');
+    header('Content-Disposition: attachment; filename="homex-orders-' . date('Y-m-d') . '.csv"');
+    header('Cache-Control: no-store');
+    $out = fopen('php://output', 'w');
+    fwrite($out, "\xEF\xBB\xBF"); // BOM so Excel reads Arabic
+    fputcsv($out, ['رقم الطلب', 'التاريخ', 'الحالة', 'اسم العميل', 'الموبايل', 'موبايل إضافي', 'المحافظة', 'العنوان', 'المنتجات', 'عدد القطع', 'قيمة المنتجات', 'الشحن', 'الإجمالي', 'المطلوب تحصيله', 'طريقة الدفع', 'ملاحظات']);
+    foreach ($orders as $o) {
+        $its = $items[$o['id']] ?? [];
+        $collect = $o['payment_method'] === 'cod' ? (float)$o['total'] : 0; // what the courier collects
+        fputcsv($out, [
+            $o['code'], $o['created_at'], $statusAr[$o['status']] ?? $o['status'], $o['customer_name'], $o['phone'], $o['alt_phone'],
+            $o['city'], $o['address'], implode(' + ', array_map(fn($i) => "{$i['name']} ×{$i['qty']}", $its)),
+            array_sum(array_map(fn($i) => (int)$i['qty'], $its)), $o['subtotal'], $o['shipping_fee'], $o['total'], $collect,
+            $payAr[$o['payment_method']] ?? $o['payment_method'], $o['notes'],
+        ]);
+    }
+    fclose($out);
+    exit;
 }

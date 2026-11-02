@@ -399,6 +399,9 @@ export const CheckoutView: React.FC = () => {
                 )}
               </button>
 
+              <p className="text-[11px] text-slate-500 text-center leading-relaxed">
+                بتأكيد الطلب انت موافق على <a href="/p/terms" target="_blank" className="underline">الشروط والأحكام</a> و<a href="/p/returns" target="_blank" className="underline">سياسة الاسترجاع</a> و<a href="/p/privacy" target="_blank" className="underline">سياسة الخصوصية</a>.
+              </p>
             </form>
           </div>
         </div>
@@ -455,7 +458,7 @@ export const CheckoutView: React.FC = () => {
             <div className="bg-slate-50 rounded-2xl p-3.5 space-y-2 text-[11px] text-slate-600 border border-slate-200">
               <div className="flex items-center gap-2">
                 <ShieldCheck className="w-4 h-4 text-emerald-600" />
-                <span>ضمان الوكيل المعتمد ساري ومرفق مع الفاتورة</span>
+                <span>ضمان على كل جهاز ومراكز صيانة معتمدة</span>
               </div>
               <div className="flex items-center gap-2">
                 <Truck className="w-4 h-4 text-amber-600" />

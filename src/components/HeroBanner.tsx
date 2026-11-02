@@ -161,7 +161,7 @@ export const HeroBanner: React.FC = () => {
         {[
           { Icon: Wrench, t: 'مراكز صيانة معتمدة', s: 'في محافظات مصر', c: 'text-save bg-save/10' },
           { Icon: Truck, t: 'توصيل لحد البيت', s: 'لكل المحافظات', c: 'text-ink bg-ink/5' },
-          { Icon: ShieldCheck, t: 'ضمان على كل جهاز', s: 'ضمان الوكيل', c: 'text-gold-deep bg-gold/15' },
+          { Icon: ShieldCheck, t: 'ضمان على كل جهاز', s: 'مدته مكتوبة على كل منتج', c: 'text-gold-deep bg-gold/15' },
           { Icon: RotateCcw, t: 'استبدال سهل', s: 'لو فيه عيب صناعة', c: 'text-sale bg-sale/10' },
         ].map(({ Icon, t, s, c }, i) => (
           <div

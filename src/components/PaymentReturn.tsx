@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useStore } from '../context/StoreContext';
 import { CheckCircle2, XCircle } from 'lucide-react';
+import { trackPurchase } from '../lib/track';
 
 // Shown when the customer comes back from the card payment page (/?pay=success|failed&order=CODE)
 export const PaymentReturn: React.FC = () => {
@@ -13,7 +14,17 @@ export const PaymentReturn: React.FC = () => {
     if (pay !== 'success' && pay !== 'failed') return;
     const ok = pay === 'success';
     setState({ ok, code: q.get('order') || '' });
-    if (ok) clearCart();
+    if (ok) {
+      clearCart();
+      try {
+        const pending = JSON.parse(sessionStorage.getItem('homex_pending_purchase') || 'null');
+        if (pending && pending.code === q.get('order')) {
+          // pixels load right after settings; give them a moment
+          setTimeout(() => trackPurchase(pending.code, pending.total, pending.items), 1500);
+        }
+        sessionStorage.removeItem('homex_pending_purchase');
+      } catch {}
+    }
     history.replaceState(null, '', location.pathname);
   }, []);
 

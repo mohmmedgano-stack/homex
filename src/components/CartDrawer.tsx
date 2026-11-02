@@ -23,32 +23,19 @@ export const CartDrawer: React.FC = () => {
     cartTotal, 
     cartCount,
     setCurrentView,
-    showToast
+    settings,
   } = useStore();
-
-  const [couponCode, setCouponCode] = useState('');
-  const [appliedCoupon, setAppliedCoupon] = useState<string | null>(null);
 
   if (!cartOpen) return null;
 
-  const FREE_SHIPPING_THRESHOLD = 5000;
-  const progressToFreeShipping = Math.min(100, (cartTotal / FREE_SHIPPING_THRESHOLD) * 100);
-  const remainingForFreeShipping = Math.max(0, FREE_SHIPPING_THRESHOLD - cartTotal);
+  // Same rules as the server (dashboard → store settings)
+  const FREE_SHIPPING_THRESHOLD = Number(settings.free_shipping_over) || 0;
+  const progressToFreeShipping = FREE_SHIPPING_THRESHOLD ? Math.min(100, (cartTotal / FREE_SHIPPING_THRESHOLD) * 100) : 0;
+  const remainingForFreeShipping = FREE_SHIPPING_THRESHOLD ? Math.max(0, FREE_SHIPPING_THRESHOLD - cartTotal) : 0;
 
-  const discountAmount = appliedCoupon === 'HOME10' ? Math.round(cartTotal * 0.1) : 0;
-  const shippingFee = cartTotal >= FREE_SHIPPING_THRESHOLD || cartTotal === 0 ? 0 : 50;
-  const finalTotal = Math.max(0, cartTotal - discountAmount + shippingFee);
-
-  const handleApplyCoupon = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (couponCode.trim().toUpperCase() === 'HOME10') {
-      setAppliedCoupon('HOME10');
-      showToast('تم تطبيق كود الخصم (HOME10) بنجاح - خصم 10%!', 'success');
-      setCouponCode('');
-    } else {
-      showToast('كود الخصم غير صالح. جرب كود: HOME10', 'error');
-    }
-  };
+  const discountAmount = 0;
+  const shippingFee = cartTotal === 0 || (FREE_SHIPPING_THRESHOLD > 0 && cartTotal >= FREE_SHIPPING_THRESHOLD) ? 0 : Number(settings.shipping_fee) || 0;
+  const finalTotal = Math.max(0, cartTotal + shippingFee);
 
   const handleProceedToCheckout = () => {
     setCartOpen(false);
@@ -82,7 +69,8 @@ export const CartDrawer: React.FC = () => {
             </button>
           </div>
 
-          {/* Free Shipping Progress */}
+          {/* Free Shipping Progress (only when the store offers it) */}
+          {FREE_SHIPPING_THRESHOLD > 0 && cart.length > 0 && (
           <div className="px-5 py-3 bg-amber-50/80 border-b border-amber-100 text-xs text-amber-900">
             {remainingForFreeShipping > 0 ? (
               <div className="space-y-1.5">
@@ -103,10 +91,11 @@ export const CartDrawer: React.FC = () => {
             ) : (
               <div className="flex items-center gap-1.5 text-emerald-700 font-bold">
                 <CheckCircle2 className="w-4 h-4" />
-                <span>تهانينا! طلبك مؤهل للشحن السريع المجاني 🎉</span>
+                <span>طلبك عليه شحن مجاني</span>
               </div>
             )}
           </div>
+          )}
 
           {/* Items List */}
           <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-3">
@@ -194,41 +183,6 @@ export const CartDrawer: React.FC = () => {
           {cart.length > 0 && (
             <div className="p-4 sm:p-5 border-t border-slate-200 bg-slate-50 space-y-3">
               
-              {/* Coupon input */}
-              <form onSubmit={handleApplyCoupon} className="flex gap-2">
-                <div className="relative flex-1">
-                  <input
-                    type="text"
-                    placeholder="كود الخصم (جرب HOME10)"
-                    value={couponCode}
-                    onChange={(e) => setCouponCode(e.target.value)}
-                    className="w-full bg-white text-slate-800 placeholder-slate-400 text-xs rounded-xl px-3 py-2 border border-slate-300 focus:outline-hidden focus:border-amber-500"
-                  />
-                  <Tag className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                </div>
-                <button
-                  type="submit"
-                  className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-colors"
-                >
-                  تطبيق
-                </button>
-              </form>
-
-              {appliedCoupon && (
-                <div className="flex items-center justify-between text-xs text-emerald-700 bg-emerald-50 px-2.5 py-1.5 rounded-lg border border-emerald-200">
-                  <span className="flex items-center gap-1 font-bold">
-                    <Sparkles className="w-3.5 h-3.5" />
-                    تم تطبيق كوبون {appliedCoupon} (10% خصم)
-                  </span>
-                  <button 
-                    onClick={() => setAppliedCoupon(null)}
-                    className="text-rose-600 hover:underline font-bold text-[10px]"
-                  >
-                    إلغاء
-                  </button>
-                </div>
-              )}
-
               {/* Price Calculations */}
               <div className="space-y-1.5 text-xs text-slate-600 pt-1">
                 <div className="flex justify-between">

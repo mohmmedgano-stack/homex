@@ -92,6 +92,9 @@ export const StoreSettingsPage: React.FC<{ admin: Admin }> = ({ admin }) => {
             <Field label="رقم الواتساب" hint="بيظهر زرار واتساب عائم في الموقع">
               <Input value={s.whatsapp} onChange={(e) => set('whatsapp', e.target.value)} dir="ltr" inputMode="tel" placeholder="2010xxxxxxxx" />
             </Field>
+            <Field label="إيميل إشعارات الطلبات" hint="كل طلب جديد بيوصلك عليه إيميل فيه كل التفاصيل. مش بيظهر للعملاء">
+              <Input value={s.notify_email || ''} onChange={(e) => set('notify_email', e.target.value)} dir="ltr" type="email" placeholder="you@gmail.com" />
+            </Field>
             <Field label="الإيميل">
               <Input value={s.email} onChange={(e) => set('email', e.target.value)} dir="ltr" type="email" />
             </Field>
@@ -160,6 +163,48 @@ export const StoreSettingsPage: React.FC<{ admin: Admin }> = ({ admin }) => {
               <Field label="Merchant Code"><Input dir="ltr" value={s.fawry_merchant_code || ''} onChange={(e) => set('fawry_merchant_code', e.target.value)} /></Field>
               <Field label="Secure Key"><Input dir="ltr" type="password" autoComplete="off" value={s.fawry_secure_key || ''} onChange={(e) => set('fawry_secure_key', e.target.value)} /></Field>
             </Gateway>
+          </div>
+        </Card>
+
+        <Card title="بيكسلات الإعلانات والتتبع">
+          <p className="text-sm text-steel -mt-1 mb-4">
+            حط الأرقام بس، والموقع بيبعت لوحده: زيارة الصفحة، مشاهدة منتج، الإضافة للسلة، بدء الطلب، والشراء بقيمته.
+          </p>
+          <div className="grid sm:grid-cols-3 gap-4">
+            <Field label="Meta (Facebook) Pixel ID" hint="من Events Manager، أرقام بس">
+              <Input dir="ltr" inputMode="numeric" value={s.meta_pixel_id || ''} onChange={(e) => set('meta_pixel_id', e.target.value.trim())} placeholder="123456789012345" />
+            </Field>
+            <Field label="TikTok Pixel ID" hint="من TikTok Ads ← Events">
+              <Input dir="ltr" value={s.tiktok_pixel_id || ''} onChange={(e) => set('tiktok_pixel_id', e.target.value.trim())} placeholder="C1A2B3C4D5E6F7G8H9" />
+            </Field>
+            <Field label="Google Analytics 4" hint="Measurement ID">
+              <Input dir="ltr" value={s.ga4_id || ''} onChange={(e) => set('ga4_id', e.target.value.trim())} placeholder="G-XXXXXXXXXX" />
+            </Field>
+          </div>
+        </Card>
+
+        <Card title="صفحات المتجر (من نحن والسياسات)">
+          <p className="text-sm text-steel -mt-1 mb-4">
+            الصفحات دي بتظهر في آخر الموقع، وشركات الدفع بتطلبها قبل ما تفعّل الحساب. الكلام اللي فيها مبدئي، راجعه مع الشركة وعدّله. سيب سطر فاضي بين كل فقرة.
+          </p>
+          <div className="space-y-4">
+            {[
+              ['page_about', 'من نحن', 'about'],
+              ['page_shipping', 'سياسة الشحن والتوصيل', 'shipping'],
+              ['page_returns', 'سياسة الاسترجاع والاستبدال', 'returns'],
+              ['page_privacy', 'سياسة الخصوصية', 'privacy'],
+              ['page_terms', 'الشروط والأحكام', 'terms'],
+            ].map(([k, label, slug]) => (
+              <details key={k} className="rounded-xl border border-line">
+                <summary className="cursor-pointer list-none px-4 h-12 flex items-center justify-between font-bold text-ink">
+                  {label}
+                  <a href={`/p/${slug}`} target="_blank" rel="noreferrer" className="text-xs text-gold-deep underline" onClick={(e) => e.stopPropagation()}>فتح الصفحة</a>
+                </summary>
+                <div className="px-4 pb-4">
+                  <Textarea rows={8} value={s[k] || ''} onChange={(e) => set(k, e.target.value)} />
+                </div>
+              </details>
+            ))}
           </div>
         </Card>
 

@@ -17,6 +17,7 @@ import {
   CATEGORIES 
 } from '../data/initialData';
 import { api, StoreSettings } from '../lib/api';
+import { initTracking, trackAddToCart, trackViewContent, trackInitiateCheckout, trackPurchase } from '../lib/track';
 
 interface ToastState {
   id: string;
@@ -150,7 +151,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         }
       })
       .finally(() => setCatalogLoaded(true));
-    api.get('settings').then(setSettings).catch(() => {});
+    api.get('settings').then((st) => { setSettings(st); initTracking(st); }).catch(() => {});
   }, []);
 
   // Price Drop Alerts Subscriptions
@@ -236,6 +237,19 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   // Toast notifications
   const [toasts, setToasts] = useState<ToastState[]>([]);
+
+  useEffect(() => {
+    if (selectedProduct) trackViewContent({ id: String(selectedProduct.id), name: selectedProduct.name, price: selectedProduct.price });
+  }, [selectedProduct?.id]);
+
+  useEffect(() => {
+    if (currentView === 'checkout' && cart.length) {
+      trackInitiateCheckout(
+        cart.map((i) => ({ id: String(i.product.id), name: i.product.name, price: i.product.price, quantity: i.quantity })),
+        cart.reduce((a, i) => a + i.product.price * i.quantity, 0)
+      );
+    }
+  }, [currentView]);
 
   // Sync to localStorage
 
@@ -398,6 +412,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   // Cart Operations
   const addToCart = (product: Product, quantity = 1) => {
+    trackAddToCart({ id: String(product.id), name: product.name, price: product.price, quantity });
     setCart(prev => {
       const existing = prev.find(item => item.product.id === product.id);
       if (existing) {
@@ -490,6 +505,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     });
     if (res.payUrl) {
       // Card payment: keep the cart until the gateway confirms, then go pay
+      try {
+        sessionStorage.setItem('homex_pending_purchase', JSON.stringify({ code: res.code, total: res.total, items: cart.map((i) => ({ id: String(i.product.id), name: i.product.name, price: i.product.price, quantity: i.quantity })) }));
+      } catch {}
       window.location.href = res.payUrl;
       return new Promise<Order>(() => {});
     }
@@ -504,6 +522,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       status: 'pending',
       createdAt: new Date().toISOString(),
     };
+    trackPurchase(res.code, res.total, cart.map((i) => ({ id: String(i.product.id), name: i.product.name, price: i.product.price, quantity: i.quantity })));
     // reflect the new stock locally so the page stays accurate
     setProducts((prev) => prev.map((p) => {
       const line = cart.find((c) => c.product.id === p.id);

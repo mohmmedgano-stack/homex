@@ -49,6 +49,7 @@ try {
         /* ---------- admin: orders ---------- */
         case 'GET admin/orders':       need(); ok(admin_orders($_GET)); break;
         case 'POST admin/order-status': need(); ok(set_order_status(body())); break;
+        case 'GET admin/orders-export': need(); export_orders($_GET); break;
 
         /* ---------- admin: accounting ---------- */
         case 'GET admin/summary':      need(); ok(summary($_GET['from'] ?? null, $_GET['to'] ?? null)); break;

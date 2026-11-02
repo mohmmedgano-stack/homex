@@ -4,6 +4,8 @@ import { Navbar } from './components/Navbar';
 import { HeroBanner } from './components/HeroBanner';
 import { DealersSection } from './components/DealersSection';
 import { PaymentReturn } from './components/PaymentReturn';
+import { PolicyPage, policyKeyFromPath } from './components/PolicyPage';
+import { POLICY_PAGES } from './lib/api';
 import { ProductCard } from './components/ProductCard';
 import { ProductModal } from './components/ProductModal';
 import { CartDrawer } from './components/CartDrawer';
@@ -73,6 +75,13 @@ const StoreContent: React.FC = () => {
     settings,
   } = useStore();
   const STORE_INFO = settings;
+  const [policyPage] = useState(policyKeyFromPath);
+  useEffect(() => {
+    const target = { '#catalog': 'appliances-catalog-section', '#dealers': 'dealers-section' }[location.hash];
+    if (!target) return;
+    const t = setTimeout(() => document.getElementById(target)?.scrollIntoView({ behavior: 'smooth' }), 700);
+    return () => clearTimeout(t);
+  }, []);
 
   const [selectedBrand, setSelectedBrand] = useState<string>('all');
   const [priceFilter, setPriceFilter] = useState<'all' | 'under2k' | '2k-6k' | '6k-15k' | 'above15k'>('all');
@@ -156,7 +165,9 @@ const StoreContent: React.FC = () => {
     <div className="min-h-screen flex flex-col bg-page text-ink pb-20 md:pb-0">
       <Navbar />
 
-      {currentView === 'checkout' ? (
+      {policyPage && currentView === 'store' ? (
+        <PolicyPage pageKey={policyPage} />
+      ) : currentView === 'checkout' ? (
         <main className="flex-1">
           <CheckoutView />
         </main>
@@ -322,12 +333,11 @@ const StoreContent: React.FC = () => {
             <div>
               <h4 className="text-gold-hi font-extrabold mb-4">خدمة العملاء</h4>
               <ul className="space-y-2.5">
-                <li>الشحن والتوصيل</li>
-                <li>الضمان والاستبدال</li>
-                <li>طرق الدفع</li>
-                <li>
-                  <button onClick={() => setCurrentView('checkout')} className="hover:text-white">إتمام الطلب</button>
-                </li>
+                {POLICY_PAGES.map((pg) => (
+                  <li key={pg.key}>
+                    <a href={`/p/${pg.key}`} className="hover:text-white">{pg.title}</a>
+                  </li>
+                ))}
               </ul>
             </div>
             <div>

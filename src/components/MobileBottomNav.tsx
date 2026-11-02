@@ -23,6 +23,7 @@ export const MobileBottomNav: React.FC = () => {
         {/* Home */}
         <button
           onClick={() => {
+            if (location.pathname.startsWith('/p/')) { location.href = '/'; return; }
             setCurrentView('store');
             setSelectedCategory('all');
           }}

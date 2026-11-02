@@ -32,9 +32,9 @@ export const Products: React.FC = () => {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-xl sm:text-2xl font-extrabold text-ink">المنتجات</h1>
+        <h1 className="text-xl sm:text-2xl font-extrabold text-ink">المنتجات والأقسام</h1>
         <div className="flex gap-2">
-          <Button variant="ghost" onClick={() => setCatsOpen(true)}>الأقسام</Button>
+          <Button variant="ghost" onClick={() => setCatsOpen(true)}><Plus className="w-4 h-4" /> إضافة قسم</Button>
           <Button onClick={() => setEdit({ ...blank, category: cats[0]?.id || '' })}>
             <Plus className="w-4 h-4" /> منتج جديد
           </Button>
@@ -107,6 +107,21 @@ const ProductEditor: React.FC<{ initial: any; cats: any[]; onClose: () => void; 
   const [uploading, setUploading] = useState(0);
   const fileRef = useRef<HTMLInputElement>(null);
   const set = (k: string, v: any) => setP((x: any) => ({ ...x, [k]: v }));
+  const [catList, setCatList] = useState<any[]>(cats);
+
+  const addCategory = async () => {
+    const name = prompt('اسم القسم الجديد؟ (مثلاً: مكانس كهربائية)')?.trim();
+    if (!name) return;
+    try {
+      const list = await api.post('admin/category', { name, sort: catList.length });
+      setCatList(list);
+      const created = list.find((c: any) => c.name === name);
+      if (created) set('category', created.id);
+      toast(`قسم «${name}» اتضاف`);
+    } catch (e: any) {
+      toast(e.message, 'err');
+    }
+  };
 
   const price = Number(p.price) || 0, cost = Number(p.cost) || 0;
   const profit = price - cost;
@@ -201,10 +216,15 @@ const ProductEditor: React.FC<{ initial: any; cats: any[]; onClose: () => void; 
             <Input value={p.name} onChange={(e) => set('name', e.target.value)} placeholder="مثلاً: كاتيل فيليبس 1.7 لتر 2200 واط" />
           </Field>
           <Field label="القسم">
-            <Select value={p.category || ''} onChange={(e) => set('category', e.target.value)}>
-              <option value="">بدون قسم</option>
-              {cats.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </Select>
+            <div className="flex gap-2">
+              <Select value={p.category || ''} onChange={(e) => set('category', e.target.value)}>
+                <option value="">بدون قسم</option>
+                {catList.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </Select>
+              <Button type="button" variant="ghost" className="shrink-0 h-11" onClick={addCategory} title="إضافة قسم جديد">
+                <Plus className="w-4 h-4" /> قسم
+              </Button>
+            </div>
           </Field>
           <Field label="الماركة">
             <Input value={p.brand} onChange={(e) => set('brand', e.target.value)} placeholder="فيليبس، توشيبا، كينوود..." />
