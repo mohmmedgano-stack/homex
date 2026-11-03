@@ -39,7 +39,7 @@ interface StoreContextType {
   subscribePriceAlert: (productId: string, email: string, targetPrice?: number) => boolean;
 
   // Categories
-  categories: { id: string; name: string; description?: string }[];
+  categories: { id: string; name: string; description?: string; image?: string }[];
   settings: StoreSettings;
   catalogLoaded: boolean;
   submitOrder: (customer: CustomerDetails) => Promise<Order>;

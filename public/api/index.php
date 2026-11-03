@@ -39,6 +39,7 @@ try {
         case 'POST admin/upload':      need(); ok(upload_image('img')); break;
         case 'GET admin/categories':   need(); ok(categories(true)); break;
         case 'POST admin/category':    need(); ok(save_category(body())); break;
+        case 'POST admin/categories-order': need(); ok(reorder_categories(body())); break;
         case 'POST admin/category-delete': need(); ok(delete_category((string)(body()['id'] ?? ''))); break;
 
         /* ---------- admin: dealers ---------- */

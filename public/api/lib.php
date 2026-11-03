@@ -146,6 +146,8 @@ function migrate(PDO $db): void {
     $cols = array_column($db->query('PRAGMA table_info(orders)')->fetchAll(), 'name');
     if (!in_array('payment_status', $cols, true)) $db->exec("ALTER TABLE orders ADD COLUMN payment_status TEXT NOT NULL DEFAULT 'unpaid'");
     if (!in_array('payment_ref', $cols, true)) $db->exec("ALTER TABLE orders ADD COLUMN payment_ref TEXT NOT NULL DEFAULT ''");
+    $ccols = array_column($db->query('PRAGMA table_info(categories)')->fetchAll(), 'name');
+    if (!in_array('image', $ccols, true)) $db->exec("ALTER TABLE categories ADD COLUMN image TEXT NOT NULL DEFAULT ''");
 
     if (!(int)$db->query('SELECT COUNT(*) FROM categories')->fetchColumn()) {
         $seed = [
@@ -592,12 +594,23 @@ function save_category(array $b): array {
     if ($name === '') throw new ApiError('اكتب اسم القسم');
     $id = str($b['id'] ?? '', 40);
     $sort = (int)($b['sort'] ?? 0);
-    if ($id !== '' && db()->query("SELECT 1 FROM categories WHERE id = " . db()->quote($id))->fetchColumn()) {
-        db()->prepare('UPDATE categories SET name = ?, sort = ? WHERE id = ?')->execute([$name, $sort, $id]);
+    $image = str($b['image'] ?? '', 300);
+    if ($image !== '' && !preg_match('~^(/api/\?r=img&f=[\w.-]+|https://[^\s"\'<>]+)$~', $image)) throw new ApiError('رابط الصورة مش صحيح');
+    $st = db()->prepare('SELECT 1 FROM categories WHERE id = ?');
+    $st->execute([$id]);
+    if ($id !== '' && $st->fetchColumn()) {
+        db()->prepare('UPDATE categories SET name = ?, sort = ?, image = ? WHERE id = ?')->execute([$name, $sort, $image, $id]);
     } else {
         $id = 'c' . substr(bin2hex(random_bytes(4)), 0, 7);
-        db()->prepare('INSERT INTO categories (id, name, sort) VALUES (?, ?, ?)')->execute([$id, $name, $sort]);
+        db()->prepare('INSERT INTO categories (id, name, sort, image) VALUES (?, ?, ?, ?)')->execute([$id, $name, $sort, $image]);
     }
+    return categories(true);
+}
+
+function reorder_categories(array $b): array {
+    $ids = is_array($b['ids'] ?? null) ? $b['ids'] : [];
+    $st = db()->prepare('UPDATE categories SET sort = ? WHERE id = ?');
+    foreach (array_values($ids) as $i => $id) $st->execute([$i, str((string)$id, 40)]);
     return categories(true);
 }
 

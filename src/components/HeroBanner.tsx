@@ -196,7 +196,7 @@ export const HeroBanner: React.FC = () => {
         <div className={`grid grid-cols-3 ${colsFor[tiles.length] || 'sm:grid-cols-6'} gap-2.5 sm:gap-4`}>
           {tiles.map((cat) => {
             const items = products.filter((p) => p.category === cat.id);
-            const cover = items[0];
+            const cover = cat.image || items.find((p) => p.image)?.image;
             return (
               <button
                 key={cat.id}
@@ -205,7 +205,7 @@ export const HeroBanner: React.FC = () => {
               >
                 <span className="block aspect-square bg-shelf overflow-hidden">
                   {cover && (
-                    <img src={cover.image} alt="" loading="lazy" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                    <img src={cover} alt="" loading="lazy" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                   )}
                 </span>
                 <span className="block px-1.5 py-2 sm:py-2.5 text-[12px] sm:text-sm font-bold text-ink leading-tight">{cat.name}</span>

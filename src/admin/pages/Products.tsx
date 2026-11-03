@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { api, money } from '../../lib/api';
 import { Card, Spinner, Empty, Input, Textarea, Select, Field, Modal, Button, Toggle, useToast } from '../ui';
-import { Plus, Search, ImagePlus, Trash2, Star, X, Pencil } from 'lucide-react';
+import { Plus, Search, ImagePlus, Trash2, Star, X, Pencil, ChevronUp, ChevronDown, FolderCog } from 'lucide-react';
 
 const blank = {
   id: '', name: '', category: '', brand: '', price: '', originalPrice: '', cost: '', stock: '',
@@ -27,15 +27,21 @@ export const Products: React.FC = () => {
   const list = (items || []).filter(
     (p) => (!cat || p.category === cat) && (!q || p.name.includes(q) || p.brand.includes(q))
   );
-  const catName = (id: string) => cats.find((c) => c.id === id)?.name || 'بدون قسم';
+  const moveTo = async (p: any, category: string) => {
+    try {
+      setItems(await api.post('admin/product', { ...blank, ...p, originalPrice: p.originalPrice ?? '', category, id: Number(p.id) }));
+      api.get('admin/categories').then(setCats);
+      toast(`«${p.name}» اتنقل لقسم ${cats.find((c) => c.id === category)?.name || 'بدون قسم'}`);
+    } catch (e: any) { toast(e.message, 'err'); }
+  };
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-xl sm:text-2xl font-extrabold text-ink">المنتجات والأقسام</h1>
         <div className="flex gap-2">
-          <Button variant="ghost" onClick={() => setCatsOpen(true)}><Plus className="w-4 h-4" /> إضافة قسم</Button>
-          <Button onClick={() => setEdit({ ...blank, category: cats[0]?.id || '' })}>
+          <Button variant="ghost" onClick={() => setCatsOpen(true)}><FolderCog className="w-4 h-4" /> الأقسام (إضافة وتعديل)</Button>
+          <Button onClick={() => setEdit({ ...blank, category: cat || '' })}>
             <Plus className="w-4 h-4" /> منتج جديد
           </Button>
         </div>
@@ -61,7 +67,7 @@ export const Products: React.FC = () => {
           <Empty
             title={items.length ? 'مفيش منتجات مطابقة' : 'لسه مضفتش منتجات'}
             text={items.length ? undefined : 'ضيف أول منتج بالصور والسعر والتكلفة.'}
-            action={!items.length && <Button onClick={() => setEdit({ ...blank, category: cats[0]?.id || '' })}><Plus className="w-4 h-4" /> منتج جديد</Button>}
+            action={!items.length && <Button onClick={() => setEdit({ ...blank, category: cat || '' })}><Plus className="w-4 h-4" /> منتج جديد</Button>}
           />
         ) : (
           <ul className="divide-y divide-line -my-2">
@@ -74,7 +80,18 @@ export const Products: React.FC = () => {
                     <p className="font-bold text-ink text-sm sm:text-base line-clamp-1">
                       {p.name} {!p.active && <span className="text-xs font-bold text-steel bg-shelf px-1.5 py-0.5 rounded">مخفي</span>}
                     </p>
-                    <p className="text-xs text-steel mt-0.5">{catName(p.category)}{p.brand ? ` · ${p.brand}` : ''}</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <select
+                        value={p.category || ''}
+                        onChange={(e) => moveTo(p, e.target.value)}
+                        className={`h-7 max-w-[160px] rounded-md border text-xs font-bold px-1.5 bg-white ${p.category ? 'border-line text-ink' : 'border-sale text-sale'}`}
+                        aria-label={`قسم ${p.name}`}
+                      >
+                        <option value="">بدون قسم</option>
+                        {cats.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                      </select>
+                      {p.brand && <span className="text-xs text-steel truncate">{p.brand}</span>}
+                    </div>
                     <p className="text-xs mt-1 price flex flex-wrap gap-x-3">
                       <span className="font-bold text-ink">بيع {money(p.price)}</span>
                       <span className="text-steel">تكلفة {money(p.cost)}</span>
@@ -142,6 +159,7 @@ const ProductEditor: React.FC<{ initial: any; cats: any[]; onClose: () => void; 
   };
 
   const save = async () => {
+    if (!p.category) return toast('اختار القسم اللي المنتج هيظهر فيه', 'err');
     setBusy(true);
     try {
       const body = { ...p, image: p.gallery[0] || '', id: p.id ? Number(p.id) : 0 };
@@ -215,10 +233,10 @@ const ProductEditor: React.FC<{ initial: any; cats: any[]; onClose: () => void; 
           <Field label="اسم المنتج" className="sm:col-span-2">
             <Input value={p.name} onChange={(e) => set('name', e.target.value)} placeholder="مثلاً: كاتيل فيليبس 1.7 لتر 2200 واط" />
           </Field>
-          <Field label="القسم">
+          <Field label="القسم اللي هيظهر فيه المنتج">
             <div className="flex gap-2">
-              <Select value={p.category || ''} onChange={(e) => set('category', e.target.value)}>
-                <option value="">بدون قسم</option>
+              <Select value={p.category || ''} onChange={(e) => set('category', e.target.value)} className={p.category ? '' : '!border-sale'}>
+                <option value="" disabled>اختار القسم...</option>
                 {catList.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </Select>
               <Button type="button" variant="ghost" className="shrink-0 h-11" onClick={addCategory} title="إضافة قسم جديد">
@@ -325,39 +343,114 @@ const SpecsEditor: React.FC<{ specs: { label: string; value: string }[]; onChang
 const CategoriesModal: React.FC<{ open: boolean; onClose: () => void; cats: any[]; setCats: (c: any[]) => void }> = ({ open, onClose, cats, setCats }) => {
   const toast = useToast();
   const [name, setName] = useState('');
-  const [editing, setEditing] = useState<Record<string, string>>({});
+  const [newImage, setNewImage] = useState('');
+  const [drafts, setDrafts] = useState<Record<string, { name: string; image: string }>>({});
+  const [busy, setBusy] = useState('');
+  const fileRef = useRef<HTMLInputElement>(null);
+  const uploadFor = useRef<string>('');
 
-  const save = async (c: any) => {
+  useEffect(() => { if (!open) { setDrafts({}); setName(''); setNewImage(''); } }, [open]);
+
+  const draft = (c: any) => drafts[c.id] ?? { name: c.name, image: c.image || '' };
+  const dirty = (c: any) => !!drafts[c.id] && (drafts[c.id].name !== c.name || drafts[c.id].image !== (c.image || ''));
+  const setDraft = (c: any, patch: Partial<{ name: string; image: string }>) => setDrafts((d) => ({ ...d, [c.id]: { ...draft(c), ...patch } }));
+
+  const pickImage = (id: string) => { uploadFor.current = id; fileRef.current?.click(); };
+  const onFile = async (f?: File) => {
+    if (!f) return;
+    const id = uploadFor.current;
+    setBusy(id || 'new');
     try {
-      setCats(await api.post('admin/category', c));
-      toast('اتحفظ');
+      const { url } = await api.upload(f);
+      if (id) { const c = cats.find((x) => x.id === id); if (c) setDraft(c, { image: url }); }
+      else setNewImage(url);
     } catch (e: any) { toast(e.message, 'err'); }
+    setBusy('');
+    if (fileRef.current) fileRef.current.value = '';
   };
+
+  const save = async (c: any, i: number) => {
+    const d = draft(c);
+    if (!d.name.trim()) return toast('اكتب اسم القسم', 'err');
+    setBusy(c.id);
+    try {
+      setCats(await api.post('admin/category', { id: c.id, name: d.name.trim(), image: d.image, sort: i }));
+      setDrafts((x) => { const n = { ...x }; delete n[c.id]; return n; });
+      toast(`قسم «${d.name.trim()}» اتحفظ`);
+    } catch (e: any) { toast(e.message, 'err'); }
+    setBusy('');
+  };
+
+  const add = async () => {
+    if (!name.trim()) return;
+    setBusy('new');
+    try {
+      setCats(await api.post('admin/category', { name: name.trim(), image: newImage, sort: cats.length }));
+      toast(`قسم «${name.trim()}» اتضاف`);
+      setName(''); setNewImage('');
+    } catch (e: any) { toast(e.message, 'err'); }
+    setBusy('');
+  };
+
+  const move = async (i: number, d: number) => {
+    const j = i + d;
+    if (j < 0 || j >= cats.length) return;
+    const ids = cats.map((c) => c.id);
+    [ids[i], ids[j]] = [ids[j], ids[i]];
+    try { setCats(await api.post('admin/categories-order', { ids })); } catch (e: any) { toast(e.message, 'err'); }
+  };
+
   const del = async (c: any) => {
     if (!confirm(`تمسح قسم «${c.name}»؟`)) return;
     try { setCats(await api.post('admin/category-delete', { id: c.id })); toast('القسم اتمسح'); } catch (e: any) { toast(e.message, 'err'); }
   };
 
+  const Thumb: React.FC<{ src: string; onClick: () => void; loading?: boolean }> = ({ src, onClick, loading }) => (
+    <button type="button" onClick={onClick} title="غيّر صورة القسم" className="relative w-14 h-14 shrink-0 rounded-lg overflow-hidden bg-shelf border-2 border-dashed border-line hover:border-gold text-steel hover:text-gold-deep flex items-center justify-center">
+      {loading ? <span className="w-5 h-5 border-2 border-gold border-t-transparent rounded-full animate-spin" />
+        : src ? <><img src={src} alt="" className="w-full h-full object-cover" /><span className="absolute inset-x-0 bottom-0 bg-black/55 text-white text-[10px] font-bold py-0.5">تغيير</span></>
+        : <ImagePlus className="w-5 h-5" />}
+    </button>
+  );
+
   return (
-    <Modal open={open} onClose={onClose} title="أقسام المتجر">
-      <form onSubmit={(e) => { e.preventDefault(); if (name.trim()) { save({ name, sort: cats.length }); setName(''); } }} className="flex gap-2 mb-4">
-        <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="اسم قسم جديد" />
-        <Button type="submit" className="shrink-0"><Plus className="w-4 h-4" /> ضيف</Button>
-      </form>
+    <Modal open={open} onClose={onClose} title="أقسام المتجر" wide>
+      <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => onFile(e.target.files?.[0])} />
+
+      <div className="bg-shelf rounded-xl p-3 mb-5">
+        <p className="text-sm font-extrabold text-ink mb-2">قسم جديد</p>
+        <form onSubmit={(e) => { e.preventDefault(); add(); }} className="flex items-center gap-2">
+          <Thumb src={newImage} onClick={() => pickImage('')} loading={busy === 'new' && !name} />
+          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="اسم القسم (مثلاً: مكانس كهربائية)" />
+          <Button type="submit" className="shrink-0" loading={busy === 'new' && !!name}><Plus className="w-4 h-4" /> ضيف</Button>
+        </form>
+      </div>
+
+      <p className="text-sm font-extrabold text-ink mb-1">الأقسام الحالية</p>
       <ul className="divide-y divide-line">
-        {cats.map((c, i) => (
-          <li key={c.id} className="py-2.5 flex items-center gap-2">
-            <Input
-              value={editing[c.id] ?? c.name}
-              onChange={(e) => setEditing({ ...editing, [c.id]: e.target.value })}
-              onBlur={() => editing[c.id] !== undefined && editing[c.id] !== c.name && save({ ...c, name: editing[c.id], sort: i })}
-            />
-            <span className="text-xs text-steel w-14 shrink-0 price">{c.count} منتج</span>
-            <button onClick={() => del(c)} className="p-2 text-steel hover:text-sale" aria-label={`مسح ${c.name}`}><Trash2 className="w-4 h-4" /></button>
-          </li>
-        ))}
+        {cats.map((c, i) => {
+          const d = draft(c);
+          return (
+            <li key={c.id} className="py-3 flex items-center gap-2">
+              <div className="flex flex-col shrink-0">
+                <button type="button" onClick={() => move(i, -1)} disabled={i === 0} className="p-1 text-steel hover:text-ink disabled:opacity-25" aria-label="طلّع القسم لفوق"><ChevronUp className="w-4 h-4" /></button>
+                <button type="button" onClick={() => move(i, 1)} disabled={i === cats.length - 1} className="p-1 text-steel hover:text-ink disabled:opacity-25" aria-label="نزّل القسم لتحت"><ChevronDown className="w-4 h-4" /></button>
+              </div>
+              <Thumb src={d.image} onClick={() => pickImage(c.id)} loading={busy === c.id && !dirty(c)} />
+              <div className="flex-1 min-w-0">
+                <Input value={d.name} onChange={(e) => setDraft(c, { name: e.target.value })} onKeyDown={(e) => { if (e.key === 'Enter') save(c, i); }} />
+                <div className="flex items-center gap-3 mt-1 text-xs text-steel">
+                  <span className="price">{c.count} منتج</span>
+                  {d.image && <button type="button" onClick={() => setDraft(c, { image: '' })} className="hover:text-sale">شيل الصورة</button>}
+                </div>
+              </div>
+              {dirty(c) && <Button className="shrink-0 h-10 px-3" onClick={() => save(c, i)} loading={busy === c.id}>حفظ</Button>}
+              <button onClick={() => del(c)} className="p-2 text-steel hover:text-sale shrink-0" aria-label={`مسح ${c.name}`}><Trash2 className="w-4 h-4" /></button>
+            </li>
+          );
+        })}
       </ul>
-      <p className="text-xs text-steel mt-3">عدّل الاسم واضغط برا الخانة عشان يتحفظ. القسم اللي فيه منتجات مينفعش يتمسح.</p>
+      <p className="text-xs text-steel mt-3">اضغط على الصورة عشان تغيرها، عدّل الاسم واضغط «حفظ». الأسهم بترتب الأقسام في المتجر. لو القسم مالوش صورة، بتظهر صورة أول منتج فيه. القسم اللي فيه منتجات مينفعش يتمسح.</p>
     </Modal>
   );
 };

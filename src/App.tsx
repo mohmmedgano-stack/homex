@@ -29,7 +29,6 @@ import {
   Layers,
   ArrowUpDown,
   FilterX,
-  Lock,
   MessageCircle
 } from 'lucide-react';
 
@@ -376,9 +375,6 @@ const StoreContent: React.FC = () => {
           </div>
           <div className="border-t border-white/10 mt-10 pt-5 flex flex-wrap items-center justify-between gap-3 text-xs text-white/50">
             <p>© {new Date().getFullYear()} {settings.store_name}. كل الحقوق محفوظة.</p>
-            <a href="/admin/" className="hover:text-white flex items-center gap-1.5">
-              <Lock className="w-3 h-3" /> دخول الإدارة
-            </a>
           </div>
         </div>
       </footer>
