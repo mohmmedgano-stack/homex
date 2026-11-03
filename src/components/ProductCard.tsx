@@ -1,4 +1,5 @@
 import React from 'react';
+import { thumb } from '../lib/api';
 import { Product } from '../types';
 import { useStore } from '../context/StoreContext';
 import { Heart, Star, ShoppingCart, Check, Scale } from 'lucide-react';
@@ -28,9 +29,10 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, compact }) =>
       <div className="relative aspect-square bg-white overflow-hidden">
         <button onClick={() => setSelectedProduct(product)} className="absolute inset-0" aria-label={`تفاصيل ${product.name}`}>
           <img
-            src={product.image}
+            src={thumb(product.image)}
             alt={product.name}
             loading="lazy"
+            decoding="async"
             className={`w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ${isOut ? 'opacity-40 grayscale' : ''}`}
           />
         </button>

@@ -82,3 +82,6 @@ export const POLICY_PAGES = [
   { key: 'privacy', title: 'سياسة الخصوصية' },
   { key: 'terms', title: 'الشروط والأحكام' },
 ] as const;
+
+/** Small version of an uploaded image (cards, lists). External URLs are returned as-is. */
+export const thumb = (url?: string) => (url && url.startsWith('/api/?r=img&f=') ? `${url}&s=1` : url || '');

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useStore } from '../context/StoreContext';
+import { thumb } from '../lib/api';
 import { ChevronLeft, ChevronRight, Truck, ShieldCheck, Banknote, RotateCcw, Wrench } from 'lucide-react';
 
 const SLIDE_THEMES = [
@@ -47,7 +48,7 @@ export const HeroBanner: React.FC = () => {
               <div className="absolute -left-24 -bottom-24 w-80 h-80 rounded-full bg-gold/20" aria-hidden="true" />
               <div className="absolute left-24 -top-16 w-40 h-40 rounded-full bg-gold/10" aria-hidden="true" />
               <div className="relative p-6 sm:p-12 space-y-3 sm:space-y-5 max-w-2xl">
-                <img src={settings.logo || '/logo.png'} alt={settings.store_name} className="h-8 sm:h-12 w-auto" />
+                <img src={settings.logo || '/logo.webp'} alt={settings.store_name} className="h-8 sm:h-12 w-auto" />
                 <h2 className="text-2xl sm:text-4xl font-extrabold leading-snug">
                   {settings.hero_title || 'أجهزة بيتك بضمان حقيقي، وسعر يريحك'}
                 </h2>
@@ -72,13 +73,13 @@ export const HeroBanner: React.FC = () => {
                 aria-hidden={i !== index}
               >
                 <div className="h-full grid grid-cols-[1.15fr_1fr] items-center">
-                  <div className="p-5 sm:p-10 sm:pr-16 text-white space-y-2 sm:space-y-4">
+                  <div className="p-4 min-[360px]:p-5 sm:p-10 sm:pr-16 text-white space-y-2 sm:space-y-4">
                     <span className={`inline-block text-xs sm:text-sm font-extrabold px-3 py-1 rounded-full ${th.tag}`}>
                       خصم {pct}%
                     </span>
-                    <h2 className="text-lg min-[400px]:text-xl sm:text-3xl font-extrabold leading-snug line-clamp-3">{p.name}</h2>
+                    <h2 className="text-base min-[360px]:text-lg min-[400px]:text-xl sm:text-3xl font-extrabold leading-snug line-clamp-2 sm:line-clamp-3">{p.name}</h2>
                     <div className="flex items-baseline gap-2 flex-wrap">
-                      <span className={`price text-2xl sm:text-4xl font-black ${th.accent}`}>
+                      <span className={`price text-xl min-[360px]:text-2xl sm:text-4xl font-black ${th.accent}`}>
                         {p.price.toLocaleString('en-US')} <span className="text-base sm:text-lg">ج.م</span>
                       </span>
                       <span className="price text-sm sm:text-base text-white/70 line-through">
@@ -87,7 +88,7 @@ export const HeroBanner: React.FC = () => {
                     </div>
                     <button
                       onClick={() => setSelectedProduct(p)}
-                      className={`${th.cta} h-10 sm:h-12 px-5 sm:px-8 rounded-xl text-sm sm:text-base font-extrabold shadow-lg`}
+                      className={`${th.cta} h-9 min-[360px]:h-10 sm:h-12 px-4 min-[360px]:px-5 sm:px-8 rounded-xl text-sm sm:text-base font-extrabold shadow-lg`}
                       tabIndex={i === index ? 0 : -1}
                     >
                       اطلب دلوقتي
@@ -95,8 +96,10 @@ export const HeroBanner: React.FC = () => {
                   </div>
                   <div className="h-full p-3 sm:p-6 flex items-center">
                     <img
-                      src={p.image}
+                      src={thumb(p.image)}
                       alt=""
+                      loading={i === 0 ? 'eager' : 'lazy'}
+                      decoding="async"
                       className="w-full h-full max-h-[85%] object-cover rounded-2xl shadow-2xl ring-4 ring-white/15"
                     />
                   </div>
@@ -144,7 +147,7 @@ export const HeroBanner: React.FC = () => {
               onClick={() => setSelectedProduct(p)}
               className={`relative rounded-2xl overflow-hidden text-right ${i === 0 ? 'bg-gold' : 'bg-ink'}`}
             >
-              <img src={p.image} alt="" className="absolute left-0 top-0 h-full w-1/2 object-cover" />
+              <img src={thumb(p.image)} alt="" loading="lazy" decoding="async" className="absolute left-0 top-0 h-full w-1/2 object-cover" />
               <div className={`relative w-1/2 mr-0 p-5 h-full flex flex-col justify-center text-white`}>
                 <span className="text-xs font-bold opacity-80">{i === 0 ? 'الأكثر مبيعاً' : 'وصل جديد'}</span>
                 <span className="font-extrabold leading-snug line-clamp-2 mt-1">{p.name}</span>
@@ -205,7 +208,7 @@ export const HeroBanner: React.FC = () => {
               >
                 <span className="block aspect-square bg-shelf overflow-hidden">
                   {cover && (
-                    <img src={cover} alt="" loading="lazy" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                    <img src={thumb(cover)} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                   )}
                 </span>
                 <span className="block px-1.5 py-2 sm:py-2.5 text-[12px] sm:text-sm font-bold text-ink leading-tight">{cat.name}</span>

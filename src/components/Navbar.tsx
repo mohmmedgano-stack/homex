@@ -22,7 +22,7 @@ export const Navbar: React.FC = () => {
     setSortBy,
     settings,
   } = useStore();
-  const logo = settings.logo || '/logo.png';
+  const logo = settings.logo || '/logo.webp';
 
   const [menuOpen, setMenuOpen] = useState(false); // mobile drawer
   const [shopOpen, setShopOpen] = useState(false); // "تسوق الآن" dropdown

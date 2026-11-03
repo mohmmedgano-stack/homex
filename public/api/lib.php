@@ -482,10 +482,35 @@ function upload_image(string $field): array {
     return ['url' => "/api/?r=img&f=$name.$ext"];
 }
 
+function image_thumb(string $path, string $f): string {
+    $dir = data_dir() . '/uploads/s';
+    $thumb = "$dir/$f";
+    if (is_file($thumb)) return $thumb;
+    if (!function_exists('imagecreatefromstring') || str_ends_with($f, '.gif')) return $path;
+    $src = @imagecreatefromstring((string)file_get_contents($path));
+    if (!$src) return $path;
+    $w = imagesx($src); $h = imagesy($src); $max = 560;
+    if ($w <= $max && $h <= $max) return $path;
+    $r = min($max / $w, $max / $h);
+    $nw = max(1, (int)round($w * $r)); $nh = max(1, (int)round($h * $r));
+    $dst = imagecreatetruecolor($nw, $nh);
+    imagealphablending($dst, false); imagesavealpha($dst, true);
+    imagecopyresampled($dst, $src, 0, 0, 0, 0, $nw, $nh, $w, $h);
+    if (!is_dir($dir)) @mkdir($dir, 0755, true);
+    $ok = match (pathinfo($f, PATHINFO_EXTENSION)) {
+        'png' => imagepng($dst, $thumb, 7),
+        'webp' => imagewebp($dst, $thumb, 80),
+        default => imagejpeg($dst, $thumb, 80),
+    };
+    return $ok ? $thumb : $path;
+}
+
 function serve_image(string $f): void {
     if (!preg_match('/^[0-9]{8}-[a-f0-9]{12}\.(jpg|png|webp|gif)$/', $f)) { http_response_code(404); exit; }
     $path = data_dir() . "/uploads/$f";
     if (!is_file($path)) { http_response_code(404); exit; }
+    // ?s=1 → small copy (max 560px) for cards and lists, made once and cached on disk
+    if (!empty($_GET['s'])) $path = image_thumb($path, $f);
     $types = ['jpg' => 'image/jpeg', 'png' => 'image/png', 'webp' => 'image/webp', 'gif' => 'image/gif'];
     header('Content-Type: ' . $types[pathinfo($f, PATHINFO_EXTENSION)]);
     header('Cache-Control: public, max-age=31536000, immutable');

@@ -1,538 +1,225 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { thumb } from '../lib/api';
 import { useStore } from '../context/StoreContext';
-import { 
-  X, 
-  ShoppingBag, 
-  Heart, 
-  Scale, 
-  Star, 
-  ShieldCheck, 
-  Truck, 
-  RotateCcw, 
-  Zap, 
-  Check, 
-  Plus, 
-  Minus,
-  Share2,
-  CheckCircle2,
-  Bell,
-  MessageSquare,
-  ThumbsUp,
-  UserCheck,
-  Send
-} from 'lucide-react';
+import { X, ShoppingBag, Heart, Scale, ShieldCheck, Truck, RotateCcw, Zap, Plus, Minus, Share2, CheckCircle2 } from 'lucide-react';
 
+/**
+ * Product details — full-screen sheet on phones (sticky buy bar at the bottom),
+ * centred dialog on tablets/desktop.
+ */
 export const ProductModal: React.FC = () => {
-  const { 
-    selectedProduct, 
-    setSelectedProduct, 
-    addToCart, 
-    isWishlisted, 
-    toggleWishlist,
-    isInCompare,
-    toggleCompare,
-    setCurrentView,
-    addReview,
-    subscribePriceAlert,
-    priceAlerts,
-    showToast
-  } = useStore();
-
+  const { selectedProduct, setSelectedProduct, addToCart, isWishlisted, toggleWishlist, isInCompare, toggleCompare, setCurrentView, showToast } = useStore();
   const [quantity, setQuantity] = useState(1);
-  const [activeImageIndex, setActiveImageIndex] = useState(0);
+  const [active, setActive] = useState(0);
 
-  // Price Alert Form State
-  const [alertEmail, setAlertEmail] = useState('');
-  const [alertSubmitted, setAlertSubmitted] = useState(false);
-  const [alertBoxOpen, setAlertBoxOpen] = useState(false);
-
-  // Review Form State
-  const [reviewName, setReviewName] = useState('');
-  const [reviewRating, setReviewRating] = useState(5);
-  const [hoverRating, setHoverRating] = useState(0);
-  const [reviewComment, setReviewComment] = useState('');
-  const [isSubmittingReview, setIsSubmittingReview] = useState(false);
-  const [activeTab, setActiveTab] = useState<'details' | 'reviews'>('details');
+  useEffect(() => {
+    setQuantity(1);
+    setActive(0);
+    if (!selectedProduct) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setSelectedProduct(null);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.body.style.overflow = prev;
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [selectedProduct?.id]);
 
   if (!selectedProduct) return null;
-
   const product = selectedProduct;
+  const close = () => setSelectedProduct(null);
+
+  const images = product.gallery && product.gallery.length ? product.gallery : [product.image];
+  const hasDiscount = !!product.originalPrice && product.originalPrice > product.price;
+  const pct = hasDiscount ? Math.round(((product.originalPrice! - product.price) / product.originalPrice!) * 100) : 0;
+  const saved = hasDiscount ? product.originalPrice! - product.price : 0;
+  const isOut = product.stock <= 0;
   const isWished = isWishlisted(product.id);
   const inCompare = isInCompare(product.id);
 
-  const images = product.gallery && product.gallery.length > 0 
-    ? product.gallery 
-    : [product.image];
-
-  const hasDiscount = product.originalPrice && product.originalPrice > product.price;
-  const discountPercent = hasDiscount 
-    ? Math.round(((product.originalPrice! - product.price) / product.originalPrice!) * 100) 
-    : 0;
-  const savedAmount = hasDiscount ? product.originalPrice! - product.price : 0;
-
-  const isAlreadyAlerted = priceAlerts.some(a => a.productId === product.id);
-
-  const handleAddToCart = () => {
+  const add = () => addToCart(product, quantity);
+  const buyNow = () => {
     addToCart(product, quantity);
-  };
-
-  const handleBuyNow = () => {
-    addToCart(product, quantity);
-    setSelectedProduct(null);
+    close();
     setCurrentView('checkout');
   };
-
-  const handleShare = () => {
-    if (navigator.clipboard) {
-      navigator.clipboard.writeText(window.location.href);
-      showToast('تم نسخ رابط المنتج بنجاح!', 'success');
+  const share = async () => {
+    const url = window.location.href;
+    try {
+      if (navigator.share) await navigator.share({ title: product.name, url });
+      else {
+        await navigator.clipboard.writeText(url);
+        showToast('اتنسخ رابط المنتج', 'success');
+      }
+    } catch {
+      /* user cancelled */
     }
   };
 
-  const handlePriceAlertSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!alertEmail.trim() || !alertEmail.includes('@')) {
-      showToast('يرجى إدخال بريد إلكتروني صحيح', 'error');
-      return;
-    }
-    const success = subscribePriceAlert(product.id, alertEmail);
-    if (success) {
-      setAlertSubmitted(true);
-      setAlertEmail('');
-    }
-  };
-
-  const handleReviewSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!reviewComment.trim()) {
-      showToast('يرجى كتابة نص رأيك ومراجعتك للمنتج', 'error');
-      return;
-    }
-
-    setIsSubmittingReview(true);
-    addReview(product.id, {
-      userName: reviewName.trim() || 'عميل موثق',
-      rating: reviewRating,
-      comment: reviewComment.trim()
-    });
-
-    setReviewName('');
-    setReviewComment('');
-    setReviewRating(5);
-    setIsSubmittingReview(false);
-  };
-
-  const reviewsList = product.reviews || [];
+  const iconBtn = 'w-10 h-10 rounded-full border border-line bg-white flex items-center justify-center text-steel hover:text-ink shrink-0';
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/70 backdrop-blur-sm p-3 sm:p-6 lg:p-8 flex items-center justify-center animate-in fade-in duration-200">
-      
-      {/* Modal Dialog Card */}
-      <div 
-        className="relative bg-white rounded-3xl max-w-4xl w-full max-h-[92vh] overflow-y-auto shadow-2xl border border-slate-200/80 my-auto text-right"
+    <div className="fixed inset-0 z-50 bg-black/60 sm:p-6 flex sm:items-center justify-center" onClick={close}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={product.name}
+        className="relative bg-white w-full sm:max-w-4xl sheet-h sm:h-auto sm:max-h-[92vh] sm:rounded-2xl flex flex-col overflow-hidden text-right shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        
-        {/* Close Button */}
-        <button
-          onClick={() => setSelectedProduct(null)}
-          className="absolute top-4 left-4 z-20 w-10 h-10 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center transition-colors shadow-xs"
-          aria-label="إغلاق"
-        >
-          <X className="w-5 h-5" />
-        </button>
-
-        {/* Tab switch header: Details vs Customer Reviews */}
-        <div className="flex border-b border-slate-200 pt-5 px-6 sm:px-8 gap-4 bg-slate-50/50">
-          <button
-            onClick={() => setActiveTab('details')}
-            className={`pb-3 text-sm font-bold border-b-2 transition-all ${
-              activeTab === 'details'
-                ? 'border-amber-500 text-amber-700'
-                : 'border-transparent text-slate-500 hover:text-slate-800'
-            }`}
-          >
-            تفاصيل ومواصفات الجهاز
+        {/* Top bar */}
+        <div className="flex items-center justify-between gap-2 px-3 sm:px-5 h-14 border-b border-line shrink-0">
+          <button onClick={close} className={iconBtn} aria-label="إغلاق">
+            <X className="w-5 h-5" />
           </button>
-          <button
-            onClick={() => setActiveTab('reviews')}
-            className={`pb-3 text-sm font-bold border-b-2 transition-all flex items-center gap-1.5 ${
-              activeTab === 'reviews'
-                ? 'border-amber-500 text-amber-700'
-                : 'border-transparent text-slate-500 hover:text-slate-800'
-            }`}
-          >
-            <MessageSquare className="w-4 h-4 text-amber-500" />
-            <span>آراء وتقييمات العملاء ({product.reviewsCount})</span>
-            <span className="bg-amber-100 text-amber-800 text-[10px] px-1.5 py-0.2 rounded-full font-bold">
-              ★ {product.rating.toFixed(1)}
-            </span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={share} className={iconBtn} aria-label="مشاركة المنتج">
+              <Share2 className="w-4 h-4" />
+            </button>
+            <button onClick={() => toggleCompare(product)} className={`${iconBtn} ${inCompare ? '!border-gold !text-gold-deep' : ''}`} aria-label="قارن">
+              <Scale className="w-4 h-4" />
+            </button>
+            <button onClick={() => toggleWishlist(product.id)} className={`${iconBtn} ${isWished ? '!border-sale !text-sale' : ''}`} aria-label="المفضلة">
+              <Heart className={`w-4 h-4 ${isWished ? 'fill-current' : ''}`} />
+            </button>
+          </div>
         </div>
 
-        {activeTab === 'details' ? (
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-6 sm:gap-8 p-6 sm:p-8">
-            
-            {/* Product Media (Gallery & Main Preview) */}
-            <div className="md:col-span-5 space-y-4">
-              
-              <div className="relative aspect-square rounded-2xl overflow-hidden bg-slate-100 border border-slate-200">
-                <img
-                  src={images[activeImageIndex] || product.image}
-                  alt={product.name}
-                  className="w-full h-full object-cover transition-all duration-300"
-                />
-
+        {/* Scrollable content */}
+        <div className="flex-1 overflow-y-auto overscroll-contain">
+          <div className="grid md:grid-cols-2 gap-5 md:gap-8 p-4 sm:p-6">
+            {/* Images */}
+            <div className="space-y-3">
+              <div className="relative aspect-square rounded-xl overflow-hidden bg-shelf border border-line">
+                <img src={images[active] || product.image} alt={product.name} decoding="async" className="w-full h-full object-cover" />
                 {hasDiscount && (
-                  <span className="absolute top-3 right-3 bg-rose-600 text-white text-xs font-black px-2.5 py-1 rounded-xl shadow-md">
-                    وفر {savedAmount.toLocaleString()} ج.م ({discountPercent}%)
-                  </span>
+                  <span className="absolute top-3 right-3 bg-sale text-white text-xs font-extrabold px-2.5 py-1 rounded-md">خصم {pct}%</span>
                 )}
+                {isOut && <span className="absolute inset-x-0 bottom-0 bg-ink/80 text-white text-sm font-bold text-center py-2">نفد من المخزن</span>}
               </div>
-
-              {/* Thumbnail switcher if multiple images exist */}
               {images.length > 1 && (
-                <div className="flex gap-2 overflow-x-auto pb-1">
-                  {images.map((img, idx) => (
+                <div className="flex gap-2 overflow-x-auto no-scrollbar">
+                  {images.map((img, i) => (
                     <button
-                      key={idx}
-                      onClick={() => setActiveImageIndex(idx)}
-                      className={`w-16 h-16 rounded-xl overflow-hidden border-2 transition-all shrink-0 ${
-                        activeImageIndex === idx ? 'border-amber-500 ring-2 ring-amber-500/30' : 'border-slate-200 opacity-70 hover:opacity-100'
-                      }`}
+                      key={i}
+                      onClick={() => setActive(i)}
+                      className={`w-16 h-16 rounded-lg overflow-hidden border-2 shrink-0 ${active === i ? 'border-gold' : 'border-line opacity-70'}`}
+                      aria-label={`صورة ${i + 1}`}
                     >
-                      <img src={img} alt="Thumbnail" className="w-full h-full object-cover" />
+                      <img src={thumb(img)} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover" />
                     </button>
                   ))}
                 </div>
               )}
-
-              {/* Guarantees Box */}
-              <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200 space-y-2 text-xs text-slate-600">
-                {product.warranty && (
-                <div className="flex items-center gap-2">
-                  <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <span className="font-semibold text-slate-800">{product.warranty}</span>
-                </div>
-                )}
-                <div className="flex items-center gap-2">
-                  <Truck className="w-4 h-4 text-amber-600 shrink-0" />
-                  <span>شحن لكل محافظات مصر</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <RotateCcw className="w-4 h-4 text-blue-600 shrink-0" />
-                  <a href="/p/returns" target="_blank" className="underline underline-offset-2">الاسترجاع أو الاستبدال خلال 14 يوم</a>
-                </div>
-              </div>
             </div>
 
-            {/* Product Details & Specs */}
-            <div className="md:col-span-7 space-y-4">
-              
-              {/* Brand, Rating, Share */}
-              <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-3">
-                <div className="flex items-center gap-3">
-                  <span className="bg-amber-100 text-amber-900 font-bold text-xs px-3 py-1 rounded-lg">
-                    {product.brand}
-                  </span>
-                  
-                  {/* Clickable rating leading to reviews */}
-                  <button 
-                    onClick={() => setActiveTab('reviews')}
-                    className="flex items-center gap-1 font-mono text-amber-500 font-bold text-xs hover:underline cursor-pointer"
-                  >
-                    <div className="flex items-center text-amber-400">
-                      {[1, 2, 3, 4, 5].map((star) => (
-                        <Star
-                          key={star}
-                          className={`w-3.5 h-3.5 ${
-                            star <= Math.round(product.rating)
-                              ? 'fill-amber-400 text-amber-400'
-                              : 'text-slate-200 fill-slate-100'
-                          }`}
-                        />
-                      ))}
-                    </div>
-                    <span className="text-slate-900 font-black">{product.rating.toFixed(1)}</span>
-                    <span className="text-slate-400 font-normal">({product.reviewsCount} تقييم)</span>
-                  </button>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={handleShare}
-                    className="p-2 rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-100"
-                    title="مشاركة المنتج"
-                  >
-                    <Share2 className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => toggleWishlist(product.id)}
-                    className={`p-2 rounded-xl border transition-colors ${
-                      isWished 
-                        ? 'bg-rose-50 border-rose-200 text-rose-600' 
-                        : 'border-slate-200 text-slate-500 hover:bg-slate-50'
-                    }`}
-                    title="المفضلة"
-                  >
-                    <Heart className={`w-4 h-4 ${isWished ? 'fill-current' : ''}`} />
-                  </button>
-                  <button
-                    onClick={() => toggleCompare(product)}
-                    className={`p-2 rounded-xl border transition-colors ${
-                      inCompare
-                        ? 'bg-amber-50 border-amber-200 text-amber-700 font-bold'
-                        : 'border-slate-200 text-slate-500 hover:bg-slate-50'
-                    }`}
-                    title="مقارنة المواصفات"
-                  >
-                    <Scale className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-
-              {/* Product Title */}
-              <h1 className="text-xl sm:text-2xl font-black text-slate-900 leading-snug">
-                {product.name}
-              </h1>
-
-              {/* Wattage & Capacity Key Metrics Pill */}
-              <div className="flex flex-wrap gap-2">
-                {product.wattage && (
-                  <div className="flex items-center gap-1.5 bg-slate-900 text-amber-300 text-xs font-bold px-3 py-1 rounded-lg">
-                    <Zap className="w-3.5 h-3.5 text-amber-400" />
-                    <span>القدرة: {product.wattage}</span>
-                  </div>
-                )}
-                {product.capacity && (
-                  <div className="flex items-center gap-1.5 bg-slate-100 text-slate-800 text-xs font-bold px-3 py-1 rounded-lg border border-slate-200">
-                    <span>السعة / المقاس: {product.capacity}</span>
-                  </div>
-                )}
-                <div className="flex items-center gap-1.5 bg-emerald-50 text-emerald-800 text-xs font-semibold px-3 py-1 rounded-lg border border-emerald-200">
-                  <span>المخزون المتاح: {product.stock} قطعة</span>
-                </div>
-              </div>
-
-              {/* Price Box */}
-              <div className="bg-amber-50/70 p-4 rounded-2xl border border-amber-200/80 flex items-center justify-between">
-                <div>
-                  <span className="text-xs text-amber-800 font-medium block">السعر الحالي شامل الضريبة:</span>
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-2xl sm:text-3xl font-black text-slate-950 font-mono">
-                      {product.price.toLocaleString()}
-                    </span>
-                    <span className="text-sm font-bold text-slate-700">جنيه مصري</span>
-                    {hasDiscount && (
-                      <span className="text-sm text-slate-400 line-through font-mono">
-                        {product.originalPrice!.toLocaleString()} ج.م
-                      </span>
-                    )}
-                  </div>
-                </div>
-                {hasDiscount && (
-                  <div className="text-left bg-rose-100 text-rose-800 font-bold px-3 py-1.5 rounded-xl text-xs">
-                    وفرت {savedAmount.toLocaleString()} ج.م
-                  </div>
-                )}
-              </div>
-
-              {/* Product Description */}
+            {/* Info */}
+            <div className="space-y-4">
               <div>
-                <h2 className="text-xs font-bold text-slate-700 uppercase mb-1">وصف الجهاز:</h2>
-                <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
-                  {product.description}
-                </p>
+                {product.brand && <span className="text-xs font-extrabold text-gold-deep">{product.brand}</span>}
+                <h1 className="text-lg sm:text-2xl font-extrabold text-ink leading-snug mt-1">{product.name}</h1>
               </div>
 
-              {/* Key Features */}
-              {product.features && product.features.length > 0 && (
-                <div>
-                  <h2 className="text-xs font-bold text-slate-700 uppercase mb-2">أبرز المميزات:</h2>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                    {product.features.map((feat, idx) => (
-                      <div key={idx} className="flex items-start gap-1.5 text-slate-700">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                        <span>{feat}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+              <div className="flex items-baseline flex-wrap gap-x-3 gap-y-1">
+                <span className={`price text-2xl sm:text-3xl font-black ${hasDiscount ? 'text-sale' : 'text-ink'}`}>
+                  {product.price.toLocaleString('en-US')} <span className="text-base">ج.م</span>
+                </span>
+                {hasDiscount && (
+                  <>
+                    <span className="price text-sm text-steel line-through">{product.originalPrice!.toLocaleString('en-US')} ج.م</span>
+                    <span className="price text-sm font-bold text-save">وفّر {saved.toLocaleString('en-US')} ج.م</span>
+                  </>
+                )}
+              </div>
 
-              {/* Detailed Technical Specifications Table */}
-              {product.specs && product.specs.length > 0 && (
-                <div className="pt-2">
-                  <h2 className="text-xs font-bold text-slate-700 uppercase mb-2">المواصفات الفنية التفصيلية:</h2>
-                  <div className="rounded-xl border border-slate-200 overflow-hidden divide-y divide-slate-200 text-xs">
-                    {product.specs.map((sp, idx) => (
-                      <div key={idx} className="grid grid-cols-2 py-2 px-3 bg-white even:bg-slate-50">
-                        <span className="text-slate-500 font-medium">{sp.label}</span>
-                        <span className="text-slate-900 font-bold">{sp.value}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Quantity Selector & Action Buttons */}
-              <div className="pt-4 border-t border-slate-200 space-y-3">
-                <div className="flex items-center gap-4">
-                  <div className="flex items-center border border-slate-300 rounded-2xl bg-white p-1">
-                    <button
-                      onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                      className="w-9 h-9 rounded-xl flex items-center justify-center hover:bg-slate-100 text-slate-700"
-                      disabled={quantity <= 1}
-                    >
-                      <Minus className="w-4 h-4" />
-                    </button>
-                    <span className="w-12 text-center font-bold text-base font-mono text-slate-900">
-                      {quantity}
+              {(product.wattage || product.capacity) && (
+                <div className="flex flex-wrap gap-2">
+                  {product.wattage && (
+                    <span className="inline-flex items-center gap-1 bg-ink text-white text-xs font-bold px-2.5 py-1 rounded-md">
+                      <Zap className="w-3.5 h-3.5 text-gold" /> {product.wattage}
                     </span>
-                    <button
-                      onClick={() => setQuantity(Math.min(product.stock, quantity + 1))}
-                      className="w-9 h-9 rounded-xl flex items-center justify-center hover:bg-slate-100 text-slate-700"
-                      disabled={quantity >= product.stock}
-                    >
-                      <Plus className="w-4 h-4" />
-                    </button>
-                  </div>
-
-                  <button
-                    onClick={handleAddToCart}
-                    disabled={product.stock <= 0}
-                    className="flex-1 py-3 px-4 bg-amber-500 hover:bg-amber-400 active:scale-95 text-slate-950 font-bold rounded-2xl shadow-lg shadow-amber-500/20 transition-all flex items-center justify-center gap-2 text-sm disabled:opacity-50"
-                  >
-                    <ShoppingBag className="w-4 h-4" />
-                    <span>إضافة إلى سلة المشتريات</span>
-                  </button>
+                  )}
+                  {product.capacity && <span className="bg-shelf text-ink text-xs font-bold px-2.5 py-1 rounded-md border border-line">{product.capacity}</span>}
                 </div>
+              )}
 
-                <button
-                  onClick={handleBuyNow}
-                  disabled={product.stock <= 0}
-                  className="w-full py-3 px-4 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-2xl transition-all text-sm disabled:opacity-50"
-                >
-                  شراء فوري والانتقال لإنهاء الطلب
+              <ul className="bg-shelf rounded-xl p-3 space-y-2 text-sm text-ink">
+                {product.warranty && (
+                  <li className="flex items-center gap-2">
+                    <ShieldCheck className="w-4 h-4 text-save shrink-0" /> ضمان {product.warranty.replace(/^ضمان\s*/, '')}
+                  </li>
+                )}
+                <li className="flex items-center gap-2">
+                  <Truck className="w-4 h-4 text-gold-deep shrink-0" /> شحن لكل محافظات مصر
+                </li>
+                <li className="flex items-center gap-2">
+                  <RotateCcw className="w-4 h-4 text-steel shrink-0" />
+                  <a href="/p/returns" target="_blank" rel="noreferrer" className="underline underline-offset-2">سياسة الاسترجاع والاستبدال</a>
+                </li>
+              </ul>
+
+              {product.description && (
+                <section>
+                  <h2 className="text-sm font-extrabold text-ink mb-1">عن المنتج</h2>
+                  <p className="text-sm text-steel leading-relaxed whitespace-pre-line">{product.description}</p>
+                </section>
+              )}
+
+              {product.features && product.features.length > 0 && (
+                <section>
+                  <h2 className="text-sm font-extrabold text-ink mb-2">المميزات</h2>
+                  <ul className="space-y-1.5 text-sm text-ink">
+                    {product.features.map((f, i) => (
+                      <li key={i} className="flex items-start gap-2">
+                        <CheckCircle2 className="w-4 h-4 text-save shrink-0 mt-0.5" /> <span>{f}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
+
+              {product.specs && product.specs.length > 0 && (
+                <section>
+                  <h2 className="text-sm font-extrabold text-ink mb-2">المواصفات</h2>
+                  <dl className="rounded-xl border border-line overflow-hidden divide-y divide-line text-sm">
+                    {product.specs.map((s, i) => (
+                      <div key={i} className="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-2 py-2 px-3 even:bg-shelf">
+                        <dt className="text-steel">{s.label}</dt>
+                        <dd className="font-bold text-ink break-words">{s.value}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                </section>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Sticky buy bar */}
+        <div className="shrink-0 border-t border-line bg-white px-3 sm:px-6 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          {isOut ? (
+            <p className="h-12 flex items-center justify-center rounded-xl bg-shelf text-steel font-bold">المنتج ده خلص حالياً</p>
+          ) : (
+            <div className="flex items-center gap-2">
+              <div className="flex items-center border border-line rounded-xl h-12 shrink-0">
+                <button onClick={() => setQuantity((q) => Math.min(product.stock, q + 1))} disabled={quantity >= product.stock} className="w-9 h-full flex items-center justify-center disabled:opacity-30" aria-label="زوّد">
+                  <Plus className="w-4 h-4" />
+                </button>
+                <span className="price w-7 text-center font-bold">{quantity}</span>
+                <button onClick={() => setQuantity((q) => Math.max(1, q - 1))} disabled={quantity <= 1} className="w-9 h-full flex items-center justify-center disabled:opacity-30" aria-label="قلّل">
+                  <Minus className="w-4 h-4" />
                 </button>
               </div>
-
+              <button onClick={add} className="flex-1 min-w-0 h-12 rounded-xl border-2 border-ink text-ink font-extrabold text-sm flex items-center justify-center gap-1.5">
+                <ShoppingBag className="w-4 h-4 shrink-0" /> <span className="truncate">أضف للسلة</span>
+              </button>
+              <button onClick={buyNow} className="flex-1 min-w-0 h-12 rounded-xl btn-gold font-extrabold text-sm">
+                <span className="truncate">اطلب دلوقتي</span>
+              </button>
             </div>
-
-          </div>
-        ) : (
-          /* REVIEWS & RATINGS TAB */
-          <div className="p-6 sm:p-8 space-y-6">
-            
-            {/* Rating Summary Header */}
-            <div className="bg-slate-50 rounded-3xl p-6 border border-slate-200/80 flex flex-col sm:flex-row items-center justify-between gap-6">
-              <div className="flex items-center gap-5 text-center sm:text-right">
-                <div className="text-4xl sm:text-5xl font-black text-slate-900 font-mono">
-                  {product.rating.toFixed(1)}
-                </div>
-                <div>
-                  <div className="flex items-center text-amber-400 justify-center sm:justify-start">
-                    {[1, 2, 3, 4, 5].map((star) => (
-                      <Star
-                        key={star}
-                        className={`w-5 h-5 ${
-                          star <= Math.round(product.rating)
-                            ? 'fill-amber-400 text-amber-400'
-                            : 'text-slate-300 fill-slate-200'
-                        }`}
-                      />
-                    ))}
-                  </div>
-                  <p className="text-xs text-slate-500 font-medium mt-1">
-                    استناداً إلى <strong>{product.reviewsCount} تقييم حقيقي</strong> من مشترين موثقين
-                  </p>
-                </div>
-              </div>
-
-              <div className="text-xs text-emerald-800 bg-emerald-50 px-4 py-2.5 rounded-2xl border border-emerald-200 flex items-center gap-2 font-bold">
-                <UserCheck className="w-4 h-4 text-emerald-600" />
-                <span>تقييمات عملائنا</span>
-              </div>
-            </div>
-
-            {/* Reviews List */}
-            <div className="space-y-3">
-              <h3 className="font-bold text-sm text-slate-900">المراجعات المنشورة:</h3>
-
-              {reviewsList.length === 0 ? (
-                <div className="text-center py-8 bg-slate-50 rounded-2xl text-xs text-slate-500 border border-slate-200">
-                  كن أول من يقيم هذا الجهاز ويشارك تجربته مع زوار المتجر!
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {reviewsList.map((rev) => (
-                    <div 
-                      key={rev.id} 
-                      className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/90 shadow-xs space-y-2 text-xs"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <div className="w-8 h-8 rounded-full bg-amber-100 text-amber-800 font-bold flex items-center justify-center text-xs">
-                            {rev.userName.charAt(0)}
-                          </div>
-                          <div>
-                            <span className="font-bold text-slate-900 block">{rev.userName}</span>
-                            <span className="text-[10px] text-slate-400 font-mono">
-                              {new Date(rev.createdAt).toLocaleDateString('ar-EG', {
-                                day: 'numeric',
-                                month: 'short',
-                                year: 'numeric'
-                              })}
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* Stars */}
-                        <div className="flex items-center gap-2">
-                          {rev.isVerifiedPurchase && (
-                            <span className="bg-emerald-50 text-emerald-700 text-[10px] font-bold px-2 py-0.5 rounded-md border border-emerald-200 hidden sm:inline-flex items-center gap-1">
-                              <Check className="w-3 h-3" />
-                              <span>مشتري موثق</span>
-                            </span>
-                          )}
-                          <div className="flex items-center text-amber-400">
-                            {[1, 2, 3, 4, 5].map((star) => (
-                              <Star
-                                key={star}
-                                className={`w-3.5 h-3.5 ${
-                                  star <= rev.rating
-                                    ? 'fill-amber-400 text-amber-400'
-                                    : 'text-slate-200 fill-slate-100'
-                                }`}
-                              />
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-
-                      <p className="text-slate-700 leading-relaxed pt-1 text-xs sm:text-sm">
-                        {rev.comment}
-                      </p>
-
-                      <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
-                        <span className="flex items-center gap-1">
-                          <UserCheck className="w-3.5 h-3.5 text-emerald-600" />
-                          <span>مشتري موثّق</span>
-                        </span>
-                        <button className="flex items-center gap-1 hover:text-slate-600 text-slate-400">
-                          <ThumbsUp className="w-3.5 h-3.5" />
-                          <span>مفيد ({rev.helpfulCount || 1})</span>
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-          </div>
-        )}
-
+          )}
+        </div>
       </div>
     </div>
   );

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { thumb } from '../lib/api';
 import { useStore } from '../context/StoreContext';
 import { 
   X, 
@@ -122,8 +123,10 @@ export const CartDrawer: React.FC = () => {
                   className="flex gap-3 p-3 rounded-2xl border border-slate-200/80 hover:border-slate-300 bg-white shadow-xs"
                 >
                   <img
-                    src={item.product.image}
+                    src={thumb(item.product.image)}
                     alt={item.product.name}
+                    loading="lazy"
+                    decoding="async"
                     className="w-20 h-20 rounded-xl object-cover bg-slate-100 shrink-0"
                   />
                   <div className="flex-1 flex flex-col justify-between">
