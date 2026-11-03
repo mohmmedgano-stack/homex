@@ -49,7 +49,7 @@ jobs:
           rm -f dist/README.md
           # Hostinger FTP accounts open either in the site's root or one level above it
           lftp -u "$FTP_USERNAME","$FTP_PASSWORD" "$FTP_SERVER" -e "set ftp:ssl-allow yes; set ssl:verify-certificate no; set net:max-retries 3; set net:timeout 30; \
-            cd public_html 2>/dev/null || cd domains/home-x.online/public_html 2>/dev/null || true; pwd; \
+            cd public_html || cd domains/home-x.online/public_html || echo using-ftp-root; pwd; \
             mirror -R --parallel=4 --verbose=1 dist/ ./; bye"
           echo "::notice::Site uploaded to Hostinger"
       - name: Tell home-x.online to install this build
