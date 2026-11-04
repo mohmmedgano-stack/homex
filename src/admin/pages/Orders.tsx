@@ -35,7 +35,7 @@ export const Orders: React.FC = () => {
   };
 
   const total = data ? Object.values(data.counts).reduce((a, b) => a + b, 0) : 0;
-  const wa = (phone: string) => `https://wa.me/2${phone.replace(/^\+?2?/, '')}`;
+  const wa = (phone: string) => { const d = phone.replace(/\D/g, ''); return `https://wa.me/${d.startsWith('0') ? '2' + d : d}`; };
 
   return (
     <div className="space-y-4">

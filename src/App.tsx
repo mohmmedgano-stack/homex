@@ -1,3 +1,4 @@
+import { FaWhatsapp } from 'react-icons/fa';
 import React, { useEffect, useState } from 'react';
 import { StoreProvider, useStore } from './context/StoreContext';
 import { Navbar } from './components/Navbar';
@@ -28,8 +29,7 @@ import {
   ChevronDown,
   Layers,
   ArrowUpDown,
-  FilterX,
-  MessageCircle
+  FilterX
 } from 'lucide-react';
 
 // Counts down to midnight — today's deals refresh daily
@@ -294,13 +294,13 @@ const StoreContent: React.FC = () => {
 
       {STORE_INFO.whatsapp && (
         <a
-          href={`https://wa.me/${STORE_INFO.whatsapp.replace(/\D/g, '')}`}
+          href={`https://wa.me/${waNumber(STORE_INFO.whatsapp)}`}
           target="_blank"
           rel="noopener noreferrer"
-          className="fixed bottom-20 md:bottom-6 left-4 z-40 w-14 h-14 rounded-full bg-[#25D366] text-white shadow-xl flex items-center justify-center"
+          className="fixed bottom-20 md:bottom-6 left-4 z-40 w-14 h-14 rounded-full bg-[#25D366] text-white shadow-xl shadow-black/20 flex items-center justify-center hover:scale-105 transition-transform"
           aria-label="كلمنا واتساب"
         >
-          <MessageCircle className="w-7 h-7" />
+          <FaWhatsapp className="w-8 h-8" />
         </a>
       )}
 
@@ -388,4 +388,12 @@ export default function App() {
       <StoreContent />
     </StoreProvider>
   );
+}
+
+/** Egyptian numbers → international format for wa.me (01xxxxxxxxx → 201xxxxxxxxx) */
+function waNumber(n: string) {
+  const d = n.replace(/\D/g, '');
+  if (d.startsWith('00')) return d.slice(2);
+  if (d.startsWith('0')) return '2' + d;
+  return d;
 }
