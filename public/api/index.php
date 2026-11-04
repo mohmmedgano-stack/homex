@@ -42,6 +42,12 @@ try {
         case 'POST admin/categories-order': need(); ok(reorder_categories(body())); break;
         case 'POST admin/category-delete': need(); ok(delete_category((string)(body()['id'] ?? ''))); break;
 
+        /* ---------- admin: site pages ---------- */
+        case 'GET admin/pages':        need(); ok(site_pages(true, public_settings()['store_name'])); break;
+        case 'POST admin/page':        need(); ok(save_page(body())); break;
+        case 'POST admin/page-delete': need(); ok(delete_page((string)(body()['slug'] ?? ''))); break;
+        case 'POST admin/pages-order': need(); ok(reorder_pages(body())); break;
+
         /* ---------- admin: home slider ---------- */
         case 'GET admin/banners':      need(); ok(banners(true)); break;
         case 'POST admin/banner':      need(); ok(save_banner(body())); break;

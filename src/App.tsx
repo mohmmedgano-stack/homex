@@ -330,9 +330,9 @@ const StoreContent: React.FC = () => {
               </ul>
             </div>
             <div>
-              <h4 className="text-gold-hi font-extrabold mb-4">خدمة العملاء</h4>
+              <h4 className="text-gold-hi font-extrabold mb-4">{settings.footer_pages_title || 'خدمة العملاء'}</h4>
               <ul className="space-y-2.5">
-                {POLICY_PAGES.map((pg) => (
+                {(settings.pages ? settings.pages.filter((pg) => pg.inFooter).map((pg) => ({ key: pg.slug, title: pg.title })) : POLICY_PAGES).map((pg) => (
                   <li key={pg.key}>
                     <a href={`/p/${pg.key}`} className="hover:text-white">{pg.title}</a>
                   </li>

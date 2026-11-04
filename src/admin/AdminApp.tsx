@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { api, ApiError } from '../lib/api';
 import { ToastProvider, Button, Field, Input, Spinner } from './ui';
-import { LayoutDashboard, Package, ShoppingBag, Calculator, Settings, Users, LogOut, Menu, X, ExternalLink, Store, Images } from 'lucide-react';
+import { LayoutDashboard, Package, ShoppingBag, Calculator, Settings, Users, LogOut, Menu, X, ExternalLink, Store, Images, FileText } from 'lucide-react';
 import { Overview } from './pages/Overview';
 import { Products } from './pages/Products';
 import { Orders } from './pages/Orders';
@@ -10,6 +10,7 @@ import { StoreSettingsPage } from './pages/StoreSettings';
 import { Team } from './pages/Team';
 import { Dealers } from './pages/Dealers';
 import { Banners } from './pages/Banners';
+import { SitePages } from './pages/SitePages';
 
 export interface Admin {
   id: number;
@@ -18,13 +19,14 @@ export interface Admin {
   role: 'owner' | 'staff';
 }
 
-type Page = 'overview' | 'products' | 'orders' | 'banners' | 'dealers' | 'accounting' | 'settings' | 'team';
+type Page = 'overview' | 'products' | 'orders' | 'banners' | 'pages' | 'dealers' | 'accounting' | 'settings' | 'team';
 
 const NAV: { id: Page; label: string; Icon: React.FC<any>; owner?: boolean }[] = [
   { id: 'overview', label: 'الرئيسية', Icon: LayoutDashboard },
   { id: 'orders', label: 'الطلبات', Icon: ShoppingBag },
   { id: 'products', label: 'المنتجات والأقسام', Icon: Package },
   { id: 'banners', label: 'البانرات', Icon: Images },
+  { id: 'pages', label: 'صفحات الموقع', Icon: FileText },
   { id: 'dealers', label: 'التجار المعتمدين', Icon: Store },
   { id: 'accounting', label: 'الحسابات', Icon: Calculator },
   { id: 'settings', label: 'إعدادات المتجر', Icon: Settings },
@@ -214,6 +216,7 @@ const Shell: React.FC<{ admin: Admin; onLogout: () => void }> = ({ admin, onLogo
         {page === 'orders' && <Orders />}
         {page === 'products' && <Products />}
         {page === 'banners' && <Banners />}
+        {page === 'pages' && <SitePages />}
         {page === 'dealers' && <Dealers />}
         {page === 'accounting' && <Accounting />}
         {page === 'settings' && <StoreSettingsPage admin={admin} />}

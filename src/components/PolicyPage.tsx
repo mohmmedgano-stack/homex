@@ -3,28 +3,41 @@ import { useStore } from '../context/StoreContext';
 import { POLICY_PAGES } from '../lib/api';
 
 export const policyKeyFromPath = (): string | null => {
-  const m = location.pathname.match(/^\/p\/(about|shipping|returns|privacy|terms)\/?$/);
+  const m = location.pathname.match(/^\/p\/([a-z0-9-]+)\/?$/);
   return m ? m[1] : null;
 };
 
+/** Pages managed from the dashboard («صفحات الموقع»); falls back to the built-in titles while settings load. */
 export const PolicyPage: React.FC<{ pageKey: string }> = ({ pageKey }) => {
   const { settings } = useStore();
-  const meta = POLICY_PAGES.find((p) => p.key === pageKey)!;
-  const text = ((settings as any)[`page_${pageKey}`] as string) || '';
+  const pages = settings.pages;
+  const page = pages?.find((p) => p.slug === pageKey);
+  const title = page?.title || POLICY_PAGES.find((p) => p.key === pageKey)?.title || '';
+  const text = page?.content ?? (((settings as any)[`page_${pageKey}`] as string) || '');
+  const others = (pages || []).filter((p) => p.inFooter && p.slug !== pageKey);
 
   React.useEffect(() => {
-    document.title = `${meta.title} | ${settings.store_name}`;
-  }, [meta.title, settings.store_name]);
+    if (title) document.title = `${title} | ${settings.store_name}`;
+  }, [title, settings.store_name]);
+
+  if (pages && !page) {
+    return (
+      <main className="flex-1 w-full max-w-3xl mx-auto px-4 sm:px-6 py-16 text-center">
+        <h1 className="text-2xl font-extrabold text-ink mb-3">الصفحة دي مش موجودة</h1>
+        <a href="/" className="btn-gold inline-flex h-11 px-6 rounded-xl items-center font-bold">ارجع للرئيسية</a>
+      </main>
+    );
+  }
 
   return (
     <main className="flex-1 w-full max-w-3xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
       <nav className="text-sm text-steel mb-4" aria-label="مسار الصفحة">
         <a href="/" className="hover:text-ink underline underline-offset-4">الرئيسية</a>
         <span className="mx-2">/</span>
-        <span className="text-ink">{meta.title}</span>
+        <span className="text-ink">{title}</span>
       </nav>
       <article className="bg-white rounded-2xl border border-line p-5 sm:p-10">
-        <h1 className="text-2xl sm:text-3xl font-extrabold text-ink mb-6">{meta.title}</h1>
+        <h1 className="text-2xl sm:text-3xl font-extrabold text-ink mb-6">{title}</h1>
         <div className="space-y-4 text-[15px] sm:text-base text-ink/90 leading-loose">
           {text.split(/\n{2,}/).map((para, i) => (
             <p key={i} className="whitespace-pre-line">{para}</p>
@@ -40,11 +53,13 @@ export const PolicyPage: React.FC<{ pageKey: string }> = ({ pageKey }) => {
           </div>
         )}
       </article>
-      <div className="mt-6 flex flex-wrap gap-x-5 gap-y-2 text-sm">
-        {POLICY_PAGES.filter((p) => p.key !== pageKey).map((p) => (
-          <a key={p.key} href={`/p/${p.key}`} className="text-steel hover:text-ink underline underline-offset-4">{p.title}</a>
-        ))}
-      </div>
+      {others.length > 0 && (
+        <div className="mt-6 flex flex-wrap gap-x-5 gap-y-2 text-sm">
+          {others.map((p) => (
+            <a key={p.slug} href={`/p/${p.slug}`} className="text-steel hover:text-ink underline underline-offset-4">{p.title}</a>
+          ))}
+        </div>
+      )}
     </main>
   );
 };

@@ -16,7 +16,7 @@ DirectoryIndex index.html index.php
   RewriteRule (^|/)\.(?!well-known/) - [F]
 
   # Store pages rendered by the app
-  RewriteRule ^p/(about|shipping|returns|privacy|terms)/?$ index.html [L]
+  RewriteRule ^p/[a-z0-9-]+/?$ index.html [L]
 </IfModule>
 
 <IfModule mod_headers.c>

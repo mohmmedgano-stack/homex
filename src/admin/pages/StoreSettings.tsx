@@ -183,29 +183,8 @@ export const StoreSettingsPage: React.FC<{ admin: Admin }> = ({ admin }) => {
           </div>
         </Card>
 
-        <Card title="صفحات المتجر (من نحن والسياسات)">
-          <p className="text-sm text-steel -mt-1 mb-4">
-            الصفحات دي بتظهر في آخر الموقع، وشركات الدفع بتطلبها قبل ما تفعّل الحساب. الكلام اللي فيها مبدئي، راجعه مع الشركة وعدّله. سيب سطر فاضي بين كل فقرة.
-          </p>
-          <div className="space-y-4">
-            {[
-              ['page_about', 'من نحن', 'about'],
-              ['page_shipping', 'سياسة الشحن والتوصيل', 'shipping'],
-              ['page_returns', 'سياسة الاسترجاع والاستبدال', 'returns'],
-              ['page_privacy', 'سياسة الخصوصية', 'privacy'],
-              ['page_terms', 'الشروط والأحكام', 'terms'],
-            ].map(([k, label, slug]) => (
-              <details key={k} className="rounded-xl border border-line">
-                <summary className="cursor-pointer list-none px-4 h-12 flex items-center justify-between font-bold text-ink">
-                  {label}
-                  <a href={`/p/${slug}`} target="_blank" rel="noreferrer" className="text-xs text-gold-deep underline" onClick={(e) => e.stopPropagation()}>فتح الصفحة</a>
-                </summary>
-                <div className="px-4 pb-4">
-                  <Textarea rows={8} value={s[k] || ''} onChange={(e) => set(k, e.target.value)} />
-                </div>
-              </details>
-            ))}
-          </div>
+        <Card title="صفحات الموقع (من نحن والسياسات)">
+          <p className="text-sm text-steel">الصفحات دي بقت ليها مكان لوحدها: من القايمة اختار «صفحات الموقع» عشان تعدّل كلامها أو تضيف صفحة جديدة أو تخفيها من الفوتر.</p>
         </Card>
 
         <Card title="كلام الصفحة الرئيسية">

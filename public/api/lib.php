@@ -141,6 +141,14 @@ function migrate(PDO $db): void {
     CREATE TABLE IF NOT EXISTS login_attempts (ip TEXT NOT NULL, at INTEGER NOT NULL);
     CREATE INDEX IF NOT EXISTS idx_orders_created ON orders(created_at);
     CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(date);
+    CREATE TABLE IF NOT EXISTS pages (
+        slug TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        content TEXT NOT NULL DEFAULT '',
+        in_footer INTEGER NOT NULL DEFAULT 1,
+        builtin INTEGER NOT NULL DEFAULT 0,
+        sort INTEGER NOT NULL DEFAULT 0
+    );
     CREATE TABLE IF NOT EXISTS banners (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         image TEXT NOT NULL,
@@ -158,6 +166,13 @@ function migrate(PDO $db): void {
     if (!in_array('payment_ref', $cols, true)) $db->exec("ALTER TABLE orders ADD COLUMN payment_ref TEXT NOT NULL DEFAULT ''");
     $ccols = array_column($db->query('PRAGMA table_info(categories)')->fetchAll(), 'name');
     if (!in_array('image', $ccols, true)) $db->exec("ALTER TABLE categories ADD COLUMN image TEXT NOT NULL DEFAULT ''");
+
+    // Footer pages: seed the 5 standard ones once, carrying over any text already saved in settings
+    if (!(int)$db->query('SELECT COUNT(*) FROM pages')->fetchColumn()) {
+        $old = $db->query("SELECT key, value FROM settings WHERE key LIKE 'page_%'")->fetchAll(PDO::FETCH_KEY_PAIR);
+        $st = $db->prepare('INSERT INTO pages (slug, title, content, in_footer, builtin, sort) VALUES (?, ?, ?, 1, 1, ?)');
+        foreach (BUILTIN_PAGES as $i => [$slug, $title]) $st->execute([$slug, $title, trim((string)($old["page_$slug"] ?? '')), $i]);
+    }
 
     if (!(int)$db->query('SELECT COUNT(*) FROM categories')->fetchColumn()) {
         $seed = [
@@ -354,7 +369,7 @@ const PUBLIC_SETTINGS = [
     'facebook' => '', 'instagram' => '', 'tiktok' => '',
     'shipping_fee' => '60', 'free_shipping_over' => '0',
     'pay_cod' => '1', 'pay_vodafone' => '', 'pay_instapay' => '',
-    'hero_title' => '', 'hero_subtitle' => '',
+    'hero_title' => '', 'hero_subtitle' => '', 'footer_pages_title' => 'خدمة العملاء',
     'brand_banner_desktop' => '1', 'brand_banner_mobile' => '1', 'brand_title' => '', 'brand_subtitle' => '',
     // Policy pages (empty = the default text below)
     'page_about' => '', 'page_shipping' => '', 'page_returns' => '', 'page_privacy' => '', 'page_terms' => '',
@@ -363,6 +378,11 @@ const PUBLIC_SETTINGS = [
 ];
 
 /** Starting text for the policy pages. The brand edits them from the dashboard. */
+const BUILTIN_PAGES = [
+    ['about', 'من نحن'], ['shipping', 'سياسة الشحن والتوصيل'], ['returns', 'سياسة الاسترجاع والاستبدال'],
+    ['privacy', 'سياسة الخصوصية'], ['terms', 'الشروط والأحكام'],
+];
+
 const DEFAULT_PAGES = [
     'page_about' => "{store} براند مصري للأجهزة المنزلية: كاتيل، مكاوي، كبة ومفارم، خلاطات، وأجهزة المطبخ.\n\nكل أجهزتنا عليها ضمان، ولينا مراكز صيانة معتمدة في محافظات مصر، وبنشحن لكل المحافظات.\n\nكمان تقدر تشتري منتجاتنا من التجار المعتمدين القريبين منك.",
     'page_shipping' => "بنشحن لكل محافظات مصر مع شركات شحن معتمدة.\n\nمدة التوصيل: من 2 لـ 5 أيام عمل حسب المحافظة، من وقت تأكيد الطلب.\n\nمصاريف الشحن بتظهر لك في صفحة الطلب قبل ما تأكد، ومفيش أي مصاريف تانية بعد كده.\n\nبعد ما تطلب، فريقنا هيكلمك يأكد الطلب والعنوان قبل الشحن.",
@@ -417,7 +437,64 @@ function public_settings(): array {
     foreach (DEFAULT_PAGES as $k => $text) {
         if (trim($out[$k]) === '') $out[$k] = str_replace('{store}', $out['store_name'] ?: 'HOMEX', $text);
     }
+    $out['pages'] = site_pages(false, $out['store_name']);
     return $out;
+}
+
+/* ---------- Site pages (footer «خدمة العملاء») ---------- */
+
+function site_pages(bool $admin = false, string $store = 'HOMEX'): array {
+    $rows = db()->query('SELECT * FROM pages ORDER BY sort, title')->fetchAll();
+    $out = [];
+    foreach ($rows as $p) {
+        $content = $p['content'];
+        if (!$admin && trim($content) === '' && isset(DEFAULT_PAGES['page_' . $p['slug']])) {
+            $content = str_replace('{store}', $store ?: 'HOMEX', DEFAULT_PAGES['page_' . $p['slug']]);
+        }
+        $item = ['slug' => $p['slug'], 'title' => $p['title'], 'content' => $content, 'inFooter' => (bool)$p['in_footer'], 'builtin' => (bool)$p['builtin']];
+        if ($admin) $item['defaultContent'] = isset(DEFAULT_PAGES['page_' . $p['slug']]) ? str_replace('{store}', $store ?: 'HOMEX', DEFAULT_PAGES['page_' . $p['slug']]) : '';
+        $out[] = $item;
+    }
+    return $out;
+}
+
+function save_page(array $b): array {
+    $title = str($b['title'] ?? '', 80);
+    if ($title === '') throw new ApiError('اكتب عنوان الصفحة');
+    $content = str($b['content'] ?? '', 30000);
+    $slug = strtolower(str($b['slug'] ?? '', 40));
+    $exists = false;
+    if ($slug !== '') {
+        $st = db()->prepare('SELECT 1 FROM pages WHERE slug = ?');
+        $st->execute([$slug]);
+        $exists = (bool)$st->fetchColumn();
+    }
+    $inFooter = !array_key_exists('inFooter', $b) || !empty($b['inFooter']) ? 1 : 0;
+    if ($exists) {
+        db()->prepare('UPDATE pages SET title = ?, content = ?, in_footer = ? WHERE slug = ?')->execute([$title, $content, $inFooter, $slug]);
+    } else {
+        if ($slug === '' ) $slug = 'page-' . substr(bin2hex(random_bytes(3)), 0, 5);
+        if (!preg_match('/^[a-z0-9][a-z0-9-]{1,39}$/', $slug)) throw new ApiError('رابط الصفحة لازم يكون حروف إنجليزي صغيرة وأرقام وشَرطة بس');
+        $sort = (int)db()->query('SELECT COALESCE(MAX(sort), -1) + 1 FROM pages')->fetchColumn();
+        db()->prepare('INSERT INTO pages (slug, title, content, in_footer, builtin, sort) VALUES (?, ?, ?, ?, 0, ?)')->execute([$slug, $title, $content, $inFooter, $sort]);
+    }
+    return site_pages(true, public_settings()['store_name']);
+}
+
+function delete_page(string $slug): array {
+    $st = db()->prepare('SELECT builtin FROM pages WHERE slug = ?');
+    $st->execute([$slug]);
+    $b = $st->fetchColumn();
+    if ($b === false) throw new ApiError('الصفحة مش موجودة', 404);
+    if ((int)$b) throw new ApiError('الصفحة دي أساسية (شركات الدفع بتطلبها)، تقدر تخفيها من الفوتر بس متتمسحش');
+    db()->prepare('DELETE FROM pages WHERE slug = ?')->execute([$slug]);
+    return site_pages(true, public_settings()['store_name']);
+}
+
+function reorder_pages(array $b): array {
+    $st = db()->prepare('UPDATE pages SET sort = ? WHERE slug = ?');
+    foreach (array_values(is_array($b['slugs'] ?? null) ? $b['slugs'] : []) as $i => $slug) $st->execute([$i, str((string)$slug, 40)]);
+    return site_pages(true, public_settings()['store_name']);
 }
 
 function all_settings(): array {

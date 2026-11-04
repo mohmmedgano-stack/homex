@@ -61,6 +61,8 @@ export interface StoreSettings {
   shipping_fee: string;
   free_shipping_over: string;
   pay_cod: string;
+  pages?: SitePage[];
+  footer_pages_title?: string;
   brand_banner_desktop?: string;
   brand_banner_mobile?: string;
   brand_title?: string;
@@ -79,6 +81,8 @@ export interface StoreSettings {
   tiktok_pixel_id?: string;
   ga4_id?: string;
 }
+
+export interface SitePage { slug: string; title: string; content: string; inFooter: boolean; builtin: boolean; defaultContent?: string }
 
 export const POLICY_PAGES = [
   { key: 'about', title: 'من نحن' },
