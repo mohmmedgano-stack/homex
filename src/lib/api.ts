@@ -34,9 +34,10 @@ export const api = {
       body: JSON.stringify(body),
     }).then((r) => handle<T>(r));
   },
-  upload(file: File): Promise<{ url: string }> {
+  upload(file: File, kind?: 'banner'): Promise<{ url: string }> {
     const fd = new FormData();
     fd.append('img', file);
+    if (kind) fd.append('kind', kind);
     return fetch(`${BASE}?r=admin/upload`, { method: 'POST', credentials: 'same-origin', body: fd }).then((r) =>
       handle<{ url: string }>(r)
     );

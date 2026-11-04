@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { useStore } from '../context/StoreContext';
+import React, { useEffect, useRef, useState } from 'react';
+import { useStore, HomeBanner } from '../context/StoreContext';
 import { thumb } from '../lib/api';
 import { ChevronLeft, ChevronRight, Truck, ShieldCheck, Banknote, RotateCcw, Wrench } from 'lucide-react';
 
@@ -10,7 +10,7 @@ const SLIDE_THEMES = [
 ];
 
 export const HeroBanner: React.FC = () => {
-  const { products, categories, setSelectedCategory, setSelectedProduct, settings } = useStore();
+  const { products, categories, setSelectedCategory, setSelectedProduct, settings, banners } = useStore();
 
   // Banner = only products the owner switched on as «يظهر في البانر» (isFeatured) in the dashboard
   const featured = products.filter((p) => p.isFeatured && p.stock > 0);
@@ -37,7 +37,20 @@ export const HeroBanner: React.FC = () => {
 
   return (
     <div className="space-y-5 sm:space-y-6">
-      {/* Offers carousel + side banners */}
+      {banners.length > 0 ? (
+        <BannerSlider
+          banners={banners}
+          onOpen={(link) => {
+            if (link.startsWith('product:')) {
+              const p = products.find((x) => String(x.id) === link.slice(8));
+              if (p) setSelectedProduct(p);
+            } else if (link.startsWith('category:')) scrollToCatalog(link.slice(9));
+            else if (link.startsWith('/')) window.location.href = link;
+            else if (link) window.open(link, '_blank', 'noopener');
+          }}
+        />
+      ) : (
+      /* Offers carousel + side banners */
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className={`relative ${sideDeals.length ? 'lg:col-span-2' : 'lg:col-span-3'} rounded-2xl overflow-hidden h-[230px] min-[400px]:h-[260px] sm:h-[340px]`}>
           {slides.length === 0 && (
@@ -159,6 +172,7 @@ export const HeroBanner: React.FC = () => {
         </div>
         )}
       </div>
+      )}
 
       {/* Service strip */}
       <div className="grid grid-cols-2 lg:grid-cols-4 bg-white rounded-2xl border border-line divide-line [&>*]:border-line">
@@ -218,6 +232,83 @@ export const HeroBanner: React.FC = () => {
           })}
         </div>
       </section>
+      )}
+    </div>
+  );
+};
+
+/** Owner-uploaded slider: separate artwork for phones (3:2) and desktop (3:1), swipe + autoplay. */
+const BannerSlider: React.FC<{ banners: HomeBanner[]; onOpen: (link: string) => void }> = ({ banners, onOpen }) => {
+  const [i, setI] = useState(0);
+  const [paused, setPaused] = useState(false);
+  const touch = useRef<number | null>(null);
+  const n = banners.length;
+  const go = (d: number) => setI((x) => (x + d + n) % n);
+
+  useEffect(() => {
+    if (n < 2 || paused) return;
+    const t = setInterval(() => setI((x) => (x + 1) % n), 5000);
+    return () => clearInterval(t);
+  }, [n, paused]);
+  useEffect(() => { if (i >= n) setI(0); }, [n]);
+
+  return (
+    <div
+      className="relative rounded-2xl overflow-hidden bg-shelf aspect-[3/2] sm:aspect-[3/1] select-none"
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
+      onTouchStart={(e) => { touch.current = e.touches[0].clientX; setPaused(true); }}
+      onTouchEnd={(e) => {
+        const start = touch.current;
+        touch.current = null;
+        setPaused(false);
+        if (start === null) return;
+        const dx = e.changedTouches[0].clientX - start;
+        if (Math.abs(dx) > 40) go(dx < 0 ? 1 : -1);
+      }}
+      aria-roledescription="carousel"
+    >
+      <div className="flex h-full transition-transform duration-500 ease-out" style={{ transform: `translateX(${i * 100}%)` }}>
+        {banners.map((b, k) => (
+          <button
+            key={b.id}
+            type="button"
+            onClick={() => b.link && onOpen(b.link)}
+            className={`relative w-full h-full shrink-0 ${b.link ? 'cursor-pointer' : 'cursor-default'}`}
+            aria-label={b.title || `بانر ${k + 1}`}
+            aria-hidden={k !== i}
+            tabIndex={k === i ? 0 : -1}
+          >
+            <picture>
+              {b.imageMobile && <source media="(max-width: 639px)" srcSet={b.imageMobile} />}
+              <img
+                src={b.image}
+                alt={b.title}
+                loading={k === 0 ? 'eager' : 'lazy'}
+                fetchPriority={k === 0 ? 'high' : 'auto'}
+                decoding="async"
+                draggable={false}
+                className="absolute inset-0 w-full h-full object-cover"
+              />
+            </picture>
+          </button>
+        ))}
+      </div>
+
+      {n > 1 && (
+        <>
+          <button onClick={() => go(-1)} className="hidden sm:flex absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/90 text-ink items-center justify-center shadow" aria-label="البانر السابق">
+            <ChevronRight className="w-5 h-5" />
+          </button>
+          <button onClick={() => go(1)} className="hidden sm:flex absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/90 text-ink items-center justify-center shadow" aria-label="البانر التالي">
+            <ChevronLeft className="w-5 h-5" />
+          </button>
+          <div className="absolute bottom-2.5 inset-x-0 flex justify-center gap-1.5">
+            {banners.map((_, k) => (
+              <button key={k} onClick={() => setI(k)} className={`h-2 rounded-full transition-all shadow ${k === i ? 'w-6 bg-white' : 'w-2 bg-white/60'}`} aria-label={`بانر ${k + 1}`} />
+            ))}
+          </div>
+        </>
       )}
     </div>
   );

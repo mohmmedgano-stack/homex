@@ -42,6 +42,12 @@ try {
         case 'POST admin/categories-order': need(); ok(reorder_categories(body())); break;
         case 'POST admin/category-delete': need(); ok(delete_category((string)(body()['id'] ?? ''))); break;
 
+        /* ---------- admin: home slider ---------- */
+        case 'GET admin/banners':      need(); ok(banners(true)); break;
+        case 'POST admin/banner':      need(); ok(save_banner(body())); break;
+        case 'POST admin/banner-delete': need(); ok(delete_banner((int)(body()['id'] ?? 0))); break;
+        case 'POST admin/banners-order': need(); ok(reorder_banners(body())); break;
+
         /* ---------- admin: dealers ---------- */
         case 'GET admin/dealers':      need(); ok(dealers_admin()); break;
         case 'POST admin/dealer':      need(); ok(save_dealer(body())); break;

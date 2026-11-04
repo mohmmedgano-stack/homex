@@ -25,6 +25,8 @@ interface ToastState {
   type: 'success' | 'error' | 'info';
 }
 
+export interface HomeBanner { id: number; image: string; imageMobile: string; title: string; link: string }
+
 interface StoreContextType {
   // Products
   products: Product[];
@@ -40,6 +42,7 @@ interface StoreContextType {
 
   // Categories
   categories: { id: string; name: string; description?: string; image?: string }[];
+  banners: HomeBanner[];
   settings: StoreSettings;
   catalogLoaded: boolean;
   submitOrder: (customer: CustomerDetails) => Promise<Order>;
@@ -128,6 +131,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [products, setProducts] = useState<Product[]>([]);
   const [categoryList, setCategoryList] = useState<{ id: string; name: string; description?: string }[]>([]);
   const [catalogLoaded, setCatalogLoaded] = useState(false);
+  const [banners, setBanners] = useState<HomeBanner[]>([]);
   const [settings, setSettings] = useState<StoreSettings>({
     store_name: 'HOMEX', logo: '', top_bar_text: 'شحن لكل محافظات مصر',
     phone: '', whatsapp: '', email: '', address: '', facebook: '', instagram: '', tiktok: '',
@@ -142,6 +146,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       .then((d) => {
         setProducts(d.products);
         setCategoryList(d.categories);
+        setBanners(d.banners || []);
       })
       .catch(() => {
         // Demo catalog only in local development — never show fake products on the live site
@@ -658,6 +663,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         categories: categoryList,
         settings,
         catalogLoaded,
+        banners,
         submitOrder,
         selectedCategory,
         setSelectedCategory,

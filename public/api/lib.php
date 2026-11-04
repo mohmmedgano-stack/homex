@@ -141,6 +141,16 @@ function migrate(PDO $db): void {
     CREATE TABLE IF NOT EXISTS login_attempts (ip TEXT NOT NULL, at INTEGER NOT NULL);
     CREATE INDEX IF NOT EXISTS idx_orders_created ON orders(created_at);
     CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(date);
+    CREATE TABLE IF NOT EXISTS banners (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        image TEXT NOT NULL,
+        image_mobile TEXT NOT NULL DEFAULT '',
+        title TEXT NOT NULL DEFAULT '',
+        link TEXT NOT NULL DEFAULT '',
+        sort INTEGER NOT NULL DEFAULT 0,
+        active INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
     SQL);
 
     $cols = array_column($db->query('PRAGMA table_info(orders)')->fetchAll(), 'name');
@@ -462,7 +472,7 @@ function upload_image(string $field): array {
         $src = @imagecreatefromstring(file_get_contents($f['tmp_name']));
         if ($src) {
             $w = imagesx($src); $h = imagesy($src);
-            $max = 1400;
+            $max = ($_POST['kind'] ?? '') === 'banner' ? 2400 : 1400;
             if ($w > $max) {
                 $nh = (int)round($h * $max / $w);
                 $dst = imagecreatetruecolor($max, $nh);
@@ -559,7 +569,56 @@ function product_out(array $p, bool $admin = false): array {
 
 function catalog(): array {
     $rows = db()->query('SELECT * FROM products WHERE active = 1 ORDER BY is_featured DESC, id DESC')->fetchAll();
-    return ['categories' => categories(), 'products' => array_map('product_out', $rows)];
+    return ['categories' => categories(), 'products' => array_map('product_out', $rows), 'banners' => banners(false)];
+}
+
+/* ---------- Home slider banners ---------- */
+
+function banner_out(array $b): array {
+    return [
+        'id' => (int)$b['id'], 'image' => $b['image'], 'imageMobile' => $b['image_mobile'],
+        'title' => $b['title'], 'link' => $b['link'], 'sort' => (int)$b['sort'], 'active' => (bool)$b['active'],
+    ];
+}
+
+function banners(bool $all): array {
+    $sql = 'SELECT * FROM banners ' . ($all ? '' : 'WHERE active = 1 ') . 'ORDER BY sort, id';
+    return array_map('banner_out', db()->query($sql)->fetchAll());
+}
+
+function banner_image(string $v): string {
+    $v = str($v, 300);
+    if ($v !== '' && !preg_match('~^(/api/\?r=img&f=[\w.-]+|https://[^\s"\'<>]+)$~', $v)) throw new ApiError('رابط الصورة مش صحيح');
+    return $v;
+}
+
+function save_banner(array $b): array {
+    $image = banner_image((string)($b['image'] ?? ''));
+    if ($image === '') throw new ApiError('ارفع صورة البانر للكمبيوتر');
+    $mobile = banner_image((string)($b['imageMobile'] ?? ''));
+    $link = str($b['link'] ?? '', 300);
+    // allowed: product:<id> · category:<id> · /path · https://...
+    if ($link !== '' && !preg_match('~^(product:\d+|category:[\w-]+|/[^\s"\'<>]*|https://[^\s"\'<>]+)$~', $link)) throw new ApiError('رابط البانر مش صحيح');
+    $vals = [$image, $mobile, str($b['title'] ?? '', 120), $link, !array_key_exists('active', $b) || !empty($b['active']) ? 1 : 0];
+    $id = (int)($b['id'] ?? 0);
+    if ($id) {
+        db()->prepare('UPDATE banners SET image=?, image_mobile=?, title=?, link=?, active=? WHERE id=?')->execute([...$vals, $id]);
+    } else {
+        $sort = (int)db()->query('SELECT COALESCE(MAX(sort), -1) + 1 FROM banners')->fetchColumn();
+        db()->prepare('INSERT INTO banners (image, image_mobile, title, link, active, sort) VALUES (?,?,?,?,?,?)')->execute([...$vals, $sort]);
+    }
+    return banners(true);
+}
+
+function reorder_banners(array $b): array {
+    $st = db()->prepare('UPDATE banners SET sort = ? WHERE id = ?');
+    foreach (array_values(is_array($b['ids'] ?? null) ? $b['ids'] : []) as $i => $id) $st->execute([$i, (int)$id]);
+    return banners(true);
+}
+
+function delete_banner(int $id): array {
+    db()->prepare('DELETE FROM banners WHERE id = ?')->execute([$id]);
+    return banners(true);
 }
 
 function admin_products(): array {
