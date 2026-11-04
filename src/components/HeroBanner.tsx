@@ -12,11 +12,9 @@ const SLIDE_THEMES = [
 export const HeroBanner: React.FC = () => {
   const { products, categories, setSelectedCategory, setSelectedProduct, settings } = useStore();
 
-  // Slides = the biggest discounts in the store, so the banners always match real products/prices
-  const slides = [...products]
-    .filter((p) => p.originalPrice && p.originalPrice > p.price && p.stock > 0)
-    .sort((a, b) => (b.originalPrice! - b.price) / b.originalPrice! - (a.originalPrice! - a.price) / a.originalPrice!)
-    .slice(0, 3);
+  // Banner = only products the owner switched on as «يظهر في البانر» (isFeatured) in the dashboard
+  const featured = products.filter((p) => p.isFeatured && p.stock > 0);
+  const slides = featured.slice(0, 3);
 
   const [index, setIndex] = useState(0);
   useEffect(() => {
@@ -35,7 +33,7 @@ export const HeroBanner: React.FC = () => {
   const tiles = categories.filter((c) => products.some((p) => p.category === c.id));
   const colsFor: Record<number, string> = { 2: 'sm:grid-cols-2', 3: 'sm:grid-cols-3', 4: 'sm:grid-cols-4', 5: 'sm:grid-cols-5', 6: 'sm:grid-cols-6' };
 
-  const sideDeals = slides.length ? products.filter((p) => !slides.includes(p) && p.isFeatured).slice(0, 2) : [];
+  const sideDeals = featured.slice(3, 5);
 
   return (
     <div className="space-y-5 sm:space-y-6">
@@ -63,7 +61,8 @@ export const HeroBanner: React.FC = () => {
           )}
           {slides.map((p, i) => {
             const th = SLIDE_THEMES[i % SLIDE_THEMES.length];
-            const pct = Math.round(((p.originalPrice! - p.price) / p.originalPrice!) * 100);
+            const hasDisc = !!p.originalPrice && p.originalPrice > p.price;
+            const pct = hasDisc ? Math.round(((p.originalPrice! - p.price) / p.originalPrice!) * 100) : 0;
             return (
               <div
                 key={p.id}
@@ -75,16 +74,18 @@ export const HeroBanner: React.FC = () => {
                 <div className="h-full grid grid-cols-[1.15fr_1fr] items-center">
                   <div className="p-4 min-[360px]:p-5 sm:p-10 sm:pr-16 text-white space-y-2 sm:space-y-4">
                     <span className={`inline-block text-xs sm:text-sm font-extrabold px-3 py-1 rounded-full ${th.tag}`}>
-                      خصم {pct}%
+                      {hasDisc ? `خصم ${pct}%` : p.isNewArrival ? 'وصل حديثاً' : 'الأكثر طلباً'}
                     </span>
                     <h2 className="text-base min-[360px]:text-lg min-[400px]:text-xl sm:text-3xl font-extrabold leading-snug line-clamp-2 sm:line-clamp-3">{p.name}</h2>
                     <div className="flex items-baseline gap-2 flex-wrap">
                       <span className={`price text-xl min-[360px]:text-2xl sm:text-4xl font-black ${th.accent}`}>
                         {p.price.toLocaleString('en-US')} <span className="text-base sm:text-lg">ج.م</span>
                       </span>
-                      <span className="price text-sm sm:text-base text-white/70 line-through">
-                        {p.originalPrice!.toLocaleString('en-US')}
-                      </span>
+                      {hasDisc && (
+                        <span className="price text-sm sm:text-base text-white/70 line-through">
+                          {p.originalPrice!.toLocaleString('en-US')}
+                        </span>
+                      )}
                     </div>
                     <button
                       onClick={() => setSelectedProduct(p)}
@@ -149,7 +150,7 @@ export const HeroBanner: React.FC = () => {
             >
               <img src={thumb(p.image)} alt="" loading="lazy" decoding="async" className="absolute left-0 top-0 h-full w-1/2 object-cover" />
               <div className={`relative w-1/2 mr-0 p-5 h-full flex flex-col justify-center text-white`}>
-                <span className="text-xs font-bold opacity-80">{i === 0 ? 'الأكثر مبيعاً' : 'وصل جديد'}</span>
+                <span className="text-xs font-bold opacity-80">{p.originalPrice && p.originalPrice > p.price ? `خصم ${Math.round(((p.originalPrice - p.price) / p.originalPrice) * 100)}%` : 'اختيارنا ليك'}</span>
                 <span className="font-extrabold leading-snug line-clamp-2 mt-1">{p.name}</span>
                 <span className="price font-black text-xl mt-2">{p.price.toLocaleString('en-US')} ج.م</span>
               </div>

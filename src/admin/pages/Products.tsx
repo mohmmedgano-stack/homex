@@ -78,7 +78,7 @@ export const Products: React.FC = () => {
                   {p.image ? <img src={p.image} alt="" className="w-14 h-14 rounded-lg object-cover bg-shelf shrink-0" /> : <span className="w-14 h-14 rounded-lg bg-shelf shrink-0" />}
                   <div className="flex-1 min-w-0">
                     <p className="font-bold text-ink text-sm sm:text-base line-clamp-1">
-                      {p.name} {!p.active && <span className="text-xs font-bold text-steel bg-shelf px-1.5 py-0.5 rounded">مخفي</span>}
+                      {p.name} {!p.active && <span className="text-xs font-bold text-steel bg-shelf px-1.5 py-0.5 rounded">مخفي</span>} {p.isFeatured && <span className="text-xs font-bold text-gold-deep bg-gold/15 px-1.5 py-0.5 rounded">في البانر</span>}
                     </p>
                     <div className="flex items-center gap-2 mt-1">
                       <select
@@ -290,7 +290,7 @@ const ProductEditor: React.FC<{ initial: any; cats: any[]; onClose: () => void; 
         {/* Visibility */}
         <section className="flex flex-wrap gap-x-8 gap-y-4 border-t border-line pt-5">
           <Toggle checked={!!p.active} onChange={(v) => set('active', v)} label="ظاهر في المتجر" />
-          <Toggle checked={!!p.isFeatured} onChange={(v) => set('isFeatured', v)} label="منتج مميز (يظهر في البانرات)" />
+          <Toggle checked={!!p.isFeatured} onChange={(v) => set('isFeatured', v)} label="يظهر في البانر الرئيسي" />
           <Toggle checked={!!p.isNewArrival} onChange={(v) => set('isNewArrival', v)} label="وصل حديثاً" />
         </section>
       </div>
