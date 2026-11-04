@@ -61,6 +61,10 @@ export interface StoreSettings {
   shipping_fee: string;
   free_shipping_over: string;
   pay_cod: string;
+  brand_banner_desktop?: string;
+  brand_banner_mobile?: string;
+  brand_title?: string;
+  brand_subtitle?: string;
   pay_vodafone: string;
   pay_instapay: string;
   hero_title: string;

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useStore, HomeBanner } from '../context/StoreContext';
 import { thumb } from '../lib/api';
+import { ApplianceArt } from './ApplianceArt';
 import { ChevronLeft, ChevronRight, Truck, ShieldCheck, Banknote, RotateCcw, Wrench } from 'lucide-react';
 
 const SLIDE_THEMES = [
@@ -11,168 +12,37 @@ const SLIDE_THEMES = [
 
 export const HeroBanner: React.FC = () => {
   const { products, categories, setSelectedCategory, setSelectedProduct, settings, banners } = useStore();
-
-  // Banner = only products the owner switched on as «يظهر في البانر» (isFeatured) in the dashboard
-  const featured = products.filter((p) => p.isFeatured && p.stock > 0);
-  const slides = featured.slice(0, 3);
-
-  const [index, setIndex] = useState(0);
-  useEffect(() => {
-    if (slides.length < 2) return;
-    const t = setInterval(() => setIndex((i) => (i + 1) % slides.length), 5500);
-    return () => clearInterval(t);
-  }, [slides.length]);
-
-  const go = (d: number) => setIndex((i) => (i + d + slides.length) % slides.length);
+  const isPhone = useIsPhone();
 
   const scrollToCatalog = (catId?: string) => {
     setSelectedCategory((catId as any) || 'all');
     document.getElementById('appliances-catalog-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
+  const openLink = (link: string) => {
+    if (link.startsWith('product:')) {
+      const p = products.find((x) => String(x.id) === link.slice(8));
+      if (p) setSelectedProduct(p);
+    } else if (link.startsWith('category:')) scrollToCatalog(link.slice(9));
+    else if (link.startsWith('/')) window.location.href = link;
+    else if (link) window.open(link, '_blank', 'noopener');
+  };
 
   const tiles = categories.filter((c) => products.some((p) => p.category === c.id));
   const colsFor: Record<number, string> = { 2: 'sm:grid-cols-2', 3: 'sm:grid-cols-3', 4: 'sm:grid-cols-4', 5: 'sm:grid-cols-5', 6: 'sm:grid-cols-6' };
 
-  const sideDeals = featured.slice(3, 5);
+  // One slider: HOMEX brand slide (switchable per device) → uploaded banners → products switched on «يظهر في البانر»
+  const brandOn = (isPhone ? settings.brand_banner_mobile : settings.brand_banner_desktop) !== '0';
+  const featured = products.filter((p) => p.isFeatured && p.stock > 0).slice(0, 5);
+  const slides: Slide[] = [
+    ...(brandOn ? [{ key: 'brand', node: <BrandSlide settings={settings} onShop={() => scrollToCatalog()} /> }] : []),
+    ...banners.map((b) => ({ key: `b${b.id}`, label: b.title, onClick: b.link ? () => openLink(b.link) : undefined, node: <ImageSlide b={b} /> })),
+    ...featured.map((p, i) => ({ key: `p${p.id}`, label: p.name, node: <ProductSlide p={p} theme={SLIDE_THEMES[i % SLIDE_THEMES.length]} onOpen={() => setSelectedProduct(p)} /> })),
+  ];
 
   return (
     <div className="space-y-5 sm:space-y-6">
-      {banners.length > 0 ? (
-        <BannerSlider
-          banners={banners}
-          onOpen={(link) => {
-            if (link.startsWith('product:')) {
-              const p = products.find((x) => String(x.id) === link.slice(8));
-              if (p) setSelectedProduct(p);
-            } else if (link.startsWith('category:')) scrollToCatalog(link.slice(9));
-            else if (link.startsWith('/')) window.location.href = link;
-            else if (link) window.open(link, '_blank', 'noopener');
-          }}
-        />
-      ) : (
-      /* Offers carousel + side banners */
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className={`relative ${sideDeals.length ? 'lg:col-span-2' : 'lg:col-span-3'} rounded-2xl overflow-hidden h-[230px] min-[400px]:h-[260px] sm:h-[340px]`}>
-          {slides.length === 0 && (
-            // Brand banner — shown until the store has discounted products to feature
-            <div className="absolute inset-0 bg-gradient-to-l from-[#131518] via-[#1c1f24] to-[#3a414c] text-white flex items-center">
-              <div className="absolute -left-24 -bottom-24 w-80 h-80 rounded-full bg-gold/20" aria-hidden="true" />
-              <div className="absolute left-24 -top-16 w-40 h-40 rounded-full bg-gold/10" aria-hidden="true" />
-              <div className="relative p-6 sm:p-12 space-y-3 sm:space-y-5 max-w-2xl">
-                <img src={settings.logo || '/logo.webp'} alt={settings.store_name} className="h-8 sm:h-12 w-auto" />
-                <h2 className="text-2xl sm:text-4xl font-extrabold leading-snug">
-                  {settings.hero_title || 'أجهزة بيتك بضمان حقيقي، وسعر يريحك'}
-                </h2>
-                <p className="text-sm sm:text-lg text-white/80">
-                  {settings.hero_subtitle || 'شحن لكل محافظات مصر، وضمان ومراكز صيانة معتمدة'}
-                </p>
-                <button onClick={() => scrollToCatalog()} className="btn-gold h-11 sm:h-12 px-6 sm:px-8 rounded-xl text-sm sm:text-base font-extrabold shadow-lg">
-                  تسوق دلوقتي
-                </button>
-              </div>
-            </div>
-          )}
-          {slides.map((p, i) => {
-            const th = SLIDE_THEMES[i % SLIDE_THEMES.length];
-            const hasDisc = !!p.originalPrice && p.originalPrice > p.price;
-            const pct = hasDisc ? Math.round(((p.originalPrice! - p.price) / p.originalPrice!) * 100) : 0;
-            return (
-              <div
-                key={p.id}
-                className={`absolute inset-0 bg-gradient-to-l ${th.bg} transition-opacity duration-700 ${
-                  i === index ? 'opacity-100 z-10' : 'opacity-0 z-0'
-                }`}
-                aria-hidden={i !== index}
-              >
-                <div className="h-full grid grid-cols-[1.15fr_1fr] items-center">
-                  <div className="p-4 min-[360px]:p-5 sm:p-10 sm:pr-16 text-white space-y-2 sm:space-y-4">
-                    <span className={`inline-block text-xs sm:text-sm font-extrabold px-3 py-1 rounded-full ${th.tag}`}>
-                      {hasDisc ? `خصم ${pct}%` : p.isNewArrival ? 'وصل حديثاً' : 'الأكثر طلباً'}
-                    </span>
-                    <h2 className="text-base min-[360px]:text-lg min-[400px]:text-xl sm:text-3xl font-extrabold leading-snug line-clamp-2 sm:line-clamp-3">{p.name}</h2>
-                    <div className="flex items-baseline gap-2 flex-wrap">
-                      <span className={`price text-xl min-[360px]:text-2xl sm:text-4xl font-black ${th.accent}`}>
-                        {p.price.toLocaleString('en-US')} <span className="text-base sm:text-lg">ج.م</span>
-                      </span>
-                      {hasDisc && (
-                        <span className="price text-sm sm:text-base text-white/70 line-through">
-                          {p.originalPrice!.toLocaleString('en-US')}
-                        </span>
-                      )}
-                    </div>
-                    <button
-                      onClick={() => setSelectedProduct(p)}
-                      className={`${th.cta} h-9 min-[360px]:h-10 sm:h-12 px-4 min-[360px]:px-5 sm:px-8 rounded-xl text-sm sm:text-base font-extrabold shadow-lg`}
-                      tabIndex={i === index ? 0 : -1}
-                    >
-                      اطلب دلوقتي
-                    </button>
-                  </div>
-                  <div className="h-full p-3 sm:p-6 flex items-center">
-                    <img
-                      src={thumb(p.image)}
-                      alt=""
-                      loading={i === 0 ? 'eager' : 'lazy'}
-                      decoding="async"
-                      className="w-full h-full max-h-[85%] object-cover rounded-2xl shadow-2xl ring-4 ring-white/15"
-                    />
-                  </div>
-                </div>
-              </div>
-            );
-          })}
+      {slides.length > 0 && <Slider slides={slides} />}
 
-          {slides.length > 1 && (
-            <>
-              <button
-                onClick={() => go(-1)}
-                className="hidden sm:flex absolute right-3 top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-full bg-white/90 text-ink items-center justify-center shadow"
-                aria-label="العرض السابق"
-              >
-                <ChevronRight className="w-5 h-5" />
-              </button>
-              <button
-                onClick={() => go(1)}
-                className="hidden sm:flex absolute left-3 top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-full bg-white/90 text-ink items-center justify-center shadow"
-                aria-label="العرض التالي"
-              >
-                <ChevronLeft className="w-5 h-5" />
-              </button>
-              <div className="absolute bottom-3 inset-x-0 z-20 flex justify-center gap-1.5">
-                {slides.map((_, i) => (
-                  <button
-                    key={i}
-                    onClick={() => setIndex(i)}
-                    className={`h-2 rounded-full transition-all ${i === index ? 'w-6 bg-white' : 'w-2 bg-white/60'}`}
-                    aria-label={`العرض ${i + 1}`}
-                  />
-                ))}
-              </div>
-            </>
-          )}
-        </div>
-
-        {/* Side banners (desktop) */}
-        {sideDeals.length > 0 && (
-        <div className="hidden lg:grid grid-rows-2 gap-4">
-          {sideDeals.map((p, i) => (
-            <button
-              key={p.id}
-              onClick={() => setSelectedProduct(p)}
-              className={`relative rounded-2xl overflow-hidden text-right ${i === 0 ? 'bg-gold' : 'bg-ink'}`}
-            >
-              <img src={thumb(p.image)} alt="" loading="lazy" decoding="async" className="absolute left-0 top-0 h-full w-1/2 object-cover" />
-              <div className={`relative w-1/2 mr-0 p-5 h-full flex flex-col justify-center text-white`}>
-                <span className="text-xs font-bold opacity-80">{p.originalPrice && p.originalPrice > p.price ? `خصم ${Math.round(((p.originalPrice - p.price) / p.originalPrice) * 100)}%` : 'اختيارنا ليك'}</span>
-                <span className="font-extrabold leading-snug line-clamp-2 mt-1">{p.name}</span>
-                <span className="price font-black text-xl mt-2">{p.price.toLocaleString('en-US')} ج.م</span>
-              </div>
-            </button>
-          ))}
-        </div>
-        )}
-      </div>
-      )}
 
       {/* Service strip */}
       <div className="grid grid-cols-2 lg:grid-cols-4 bg-white rounded-2xl border border-line divide-line [&>*]:border-line">
@@ -237,24 +107,39 @@ export const HeroBanner: React.FC = () => {
   );
 };
 
-/** Owner-uploaded slider: separate artwork for phones (3:2) and desktop (3:1), swipe + autoplay. */
-const BannerSlider: React.FC<{ banners: HomeBanner[]; onOpen: (link: string) => void }> = ({ banners, onOpen }) => {
+/** true on phones (< 640px), follows rotation/resizing */
+function useIsPhone() {
+  const q = '(max-width: 639px)';
+  const [m, setM] = useState(() => typeof window !== 'undefined' && window.matchMedia(q).matches);
+  useEffect(() => {
+    const mq = window.matchMedia(q);
+    const on = () => setM(mq.matches);
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  }, []);
+  return m;
+}
+
+type Slide = { key: string; node: React.ReactNode; onClick?: () => void; label?: string };
+
+/** Slider frame: 3:2 on phones, 3:1 on tablets/desktop (matches the banner artwork sizes). Swipe + autoplay. */
+const Slider: React.FC<{ slides: Slide[] }> = ({ slides }) => {
   const [i, setI] = useState(0);
   const [paused, setPaused] = useState(false);
   const touch = useRef<number | null>(null);
-  const n = banners.length;
+  const n = slides.length;
   const go = (d: number) => setI((x) => (x + d + n) % n);
 
   useEffect(() => {
     if (n < 2 || paused) return;
-    const t = setInterval(() => setI((x) => (x + 1) % n), 5000);
+    const t = setInterval(() => setI((x) => (x + 1) % n), 5500);
     return () => clearInterval(t);
   }, [n, paused]);
   useEffect(() => { if (i >= n) setI(0); }, [n]);
 
   return (
     <div
-      className="relative rounded-2xl overflow-hidden bg-shelf aspect-[3/2] sm:aspect-[3/1] select-none"
+      className="relative rounded-2xl overflow-hidden bg-ink aspect-[3/2] sm:aspect-[3/1] select-none"
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
       onTouchStart={(e) => { touch.current = e.touches[0].clientX; setPaused(true); }}
@@ -269,47 +154,92 @@ const BannerSlider: React.FC<{ banners: HomeBanner[]; onOpen: (link: string) => 
       aria-roledescription="carousel"
     >
       <div className="flex h-full transition-transform duration-500 ease-out" style={{ transform: `translateX(${i * 100}%)` }}>
-        {banners.map((b, k) => (
-          <button
-            key={b.id}
-            type="button"
-            onClick={() => b.link && onOpen(b.link)}
-            className={`relative w-full h-full shrink-0 ${b.link ? 'cursor-pointer' : 'cursor-default'}`}
-            aria-label={b.title || `بانر ${k + 1}`}
+        {slides.map((s, k) => (
+          <div
+            key={s.key}
+            className={`relative w-full h-full shrink-0 ${s.onClick ? 'cursor-pointer' : ''}`}
+            onClick={s.onClick}
+            role={s.onClick ? 'link' : undefined}
+            aria-label={s.label}
             aria-hidden={k !== i}
-            tabIndex={k === i ? 0 : -1}
+            inert={k !== i ? true : undefined}
           >
-            <picture>
-              {b.imageMobile && <source media="(max-width: 639px)" srcSet={b.imageMobile} />}
-              <img
-                src={b.image}
-                alt={b.title}
-                loading={k === 0 ? 'eager' : 'lazy'}
-                fetchPriority={k === 0 ? 'high' : 'auto'}
-                decoding="async"
-                draggable={false}
-                className="absolute inset-0 w-full h-full object-cover"
-              />
-            </picture>
-          </button>
+            {s.node}
+          </div>
         ))}
       </div>
 
       {n > 1 && (
         <>
-          <button onClick={() => go(-1)} className="hidden sm:flex absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/90 text-ink items-center justify-center shadow" aria-label="البانر السابق">
+          <button onClick={() => go(-1)} className="hidden sm:flex absolute right-3 top-1/2 -translate-y-1/2 z-10 w-10 h-10 rounded-full bg-white/90 text-ink items-center justify-center shadow" aria-label="السابق">
             <ChevronRight className="w-5 h-5" />
           </button>
-          <button onClick={() => go(1)} className="hidden sm:flex absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/90 text-ink items-center justify-center shadow" aria-label="البانر التالي">
+          <button onClick={() => go(1)} className="hidden sm:flex absolute left-3 top-1/2 -translate-y-1/2 z-10 w-10 h-10 rounded-full bg-white/90 text-ink items-center justify-center shadow" aria-label="التالي">
             <ChevronLeft className="w-5 h-5" />
           </button>
-          <div className="absolute bottom-2.5 inset-x-0 flex justify-center gap-1.5">
-            {banners.map((_, k) => (
-              <button key={k} onClick={() => setI(k)} className={`h-2 rounded-full transition-all shadow ${k === i ? 'w-6 bg-white' : 'w-2 bg-white/60'}`} aria-label={`بانر ${k + 1}`} />
+          <div className="absolute bottom-2.5 inset-x-0 z-10 flex justify-center gap-1.5">
+            {slides.map((s, k) => (
+              <button key={s.key} onClick={() => setI(k)} className={`h-2 rounded-full transition-all shadow ${k === i ? 'w-6 bg-white' : 'w-2 bg-white/60'}`} aria-label={`شريحة ${k + 1}`} />
             ))}
           </div>
         </>
       )}
+    </div>
+  );
+};
+
+const BrandSlide: React.FC<{ settings: any; onShop: () => void }> = ({ settings, onShop }) => (
+  <div className="absolute inset-0 bg-gradient-to-l from-[#131518] via-[#1c1f24] to-[#3a414c] text-white flex items-center">
+    <div className="absolute -left-24 -bottom-24 w-64 h-64 sm:w-80 sm:h-80 rounded-full bg-gold/20" aria-hidden="true" />
+    <div className="absolute left-16 sm:left-24 -top-16 w-32 h-32 sm:w-40 sm:h-40 rounded-full bg-gold/10" aria-hidden="true" />
+    <ApplianceArt className="absolute left-1 sm:left-6 lg:left-12 bottom-8 sm:bottom-5 w-[44%] sm:w-[46%] lg:w-[42%] max-h-[78%] sm:max-h-[86%]" />
+    <div className="relative px-4 min-[400px]:px-5 sm:px-12 space-y-2 min-[400px]:space-y-2.5 sm:space-y-5 w-[58%] sm:w-[54%] lg:max-w-2xl">
+      <img src={settings.logo || '/logo.webp'} alt={settings.store_name} className="h-6 min-[400px]:h-7 sm:h-10 lg:h-12 w-auto" />
+      <h2 className="text-base min-[400px]:text-xl sm:text-3xl lg:text-4xl font-extrabold leading-snug">
+        {settings.brand_title || 'أجهزة بيتك بضمان حقيقي، وسعر يريحك'}
+      </h2>
+      <p className="text-[11px] min-[400px]:text-sm sm:text-base lg:text-lg text-white/80 leading-relaxed">
+        {settings.brand_subtitle || 'شحن لكل محافظات مصر، وضمان ومراكز صيانة معتمدة'}
+      </p>
+      <button onClick={onShop} className="btn-gold h-8 min-[400px]:h-9 sm:h-12 px-4 min-[400px]:px-5 sm:px-8 rounded-xl text-sm sm:text-base font-extrabold shadow-lg">
+        تسوق دلوقتي
+      </button>
+    </div>
+  </div>
+);
+
+const ImageSlide: React.FC<{ b: HomeBanner }> = ({ b }) => (
+  <picture>
+    {b.imageMobile && <source media="(max-width: 639px)" srcSet={b.imageMobile} />}
+    <img src={b.image} alt={b.title} loading="lazy" decoding="async" draggable={false} className="absolute inset-0 w-full h-full object-cover" />
+  </picture>
+);
+
+const ProductSlide: React.FC<{ p: any; theme: (typeof SLIDE_THEMES)[number]; onOpen: () => void }> = ({ p, theme: th, onOpen }) => {
+  const hasDisc = !!p.originalPrice && p.originalPrice > p.price;
+  const pct = hasDisc ? Math.round(((p.originalPrice - p.price) / p.originalPrice) * 100) : 0;
+  return (
+    <div className={`absolute inset-0 bg-gradient-to-l ${th.bg}`}>
+      <div className="h-full grid grid-cols-[1.15fr_1fr] items-center">
+        <div className="p-4 min-[360px]:p-5 sm:p-10 sm:pr-16 text-white space-y-2 sm:space-y-4">
+          <span className={`inline-block text-xs sm:text-sm font-extrabold px-3 py-1 rounded-full ${th.tag}`}>
+            {hasDisc ? `خصم ${pct}%` : p.isNewArrival ? 'وصل حديثاً' : 'الأكثر طلباً'}
+          </span>
+          <h2 className="text-base min-[360px]:text-lg min-[400px]:text-xl sm:text-3xl font-extrabold leading-snug line-clamp-2 sm:line-clamp-3">{p.name}</h2>
+          <div className="flex items-baseline gap-2 flex-wrap">
+            <span className={`price text-xl min-[360px]:text-2xl sm:text-4xl font-black ${th.accent}`}>
+              {p.price.toLocaleString('en-US')} <span className="text-base sm:text-lg">ج.م</span>
+            </span>
+            {hasDisc && <span className="price text-sm sm:text-base text-white/70 line-through">{p.originalPrice.toLocaleString('en-US')}</span>}
+          </div>
+          <button onClick={onOpen} className={`${th.cta} h-9 min-[360px]:h-10 sm:h-12 px-4 min-[360px]:px-5 sm:px-8 rounded-xl text-sm sm:text-base font-extrabold shadow-lg`}>
+            اطلب دلوقتي
+          </button>
+        </div>
+        <div className="h-full p-3 sm:p-6 flex items-center justify-center">
+          <img src={thumb(p.image)} alt="" loading="lazy" decoding="async" className="h-[85%] aspect-square max-w-full object-cover rounded-2xl shadow-2xl ring-4 ring-white/15" />
+        </div>
+      </div>
     </div>
   );
 };

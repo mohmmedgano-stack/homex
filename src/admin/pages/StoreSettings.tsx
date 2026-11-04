@@ -210,7 +210,13 @@ export const StoreSettingsPage: React.FC<{ admin: Admin }> = ({ admin }) => {
 
         <Card title="كلام الصفحة الرئيسية">
           <div className="space-y-4">
-            <Field label="عنوان رئيسي" hint="اختياري، بيظهر فوق الأقسام">
+            <Field label="عنوان بانر HOMEX" hint="الجملة الكبيرة في البانر الأساسي">
+              <Input value={s.brand_title || ''} onChange={(e) => set('brand_title', e.target.value)} placeholder="أجهزة بيتك بضمان حقيقي، وسعر يريحك" />
+            </Field>
+            <Field label="الجملة الصغيرة في بانر HOMEX">
+              <Input value={s.brand_subtitle || ''} onChange={(e) => set('brand_subtitle', e.target.value)} placeholder="شحن لكل محافظات مصر، وضمان ومراكز صيانة معتمدة" />
+            </Field>
+            <Field label="عنوان قسم الأقسام" hint="اختياري، بيظهر فوق مربعات الأقسام">
               <Input value={s.hero_title} onChange={(e) => set('hero_title', e.target.value)} placeholder="كل أساسيات بيتك عندنا أسهل" />
             </Field>
             <Field label="جملة تحت العنوان" hint="اختياري">

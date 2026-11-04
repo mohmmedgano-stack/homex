@@ -355,6 +355,7 @@ const PUBLIC_SETTINGS = [
     'shipping_fee' => '60', 'free_shipping_over' => '0',
     'pay_cod' => '1', 'pay_vodafone' => '', 'pay_instapay' => '',
     'hero_title' => '', 'hero_subtitle' => '',
+    'brand_banner_desktop' => '1', 'brand_banner_mobile' => '1', 'brand_title' => '', 'brand_subtitle' => '',
     // Policy pages (empty = the default text below)
     'page_about' => '', 'page_shipping' => '', 'page_returns' => '', 'page_privacy' => '', 'page_terms' => '',
     // Tracking

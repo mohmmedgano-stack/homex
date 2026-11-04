@@ -48,6 +48,8 @@ export const Banners: React.FC = () => {
         <Button onClick={() => setEdit({ ...blank })}><Plus className="w-4 h-4" /> بانر جديد</Button>
       </div>
 
+      <BrandBannerSwitch />
+
       <SizeGuide />
 
       <Card>
@@ -56,7 +58,7 @@ export const Banners: React.FC = () => {
         ) : list.length === 0 ? (
           <Empty
             title="مفيش بانرات لسه"
-            text="لحد ما تضيف بانر، الموقع بيعرض المنتجات اللي مفعّل عليها «يظهر في البانر الرئيسي»، ولو مفيش بيعرض بانر HOMEX."
+            text="البانرات اللي هترفعها هتظهر في السلايدر بعد بانر HOMEX، وبعدها المنتجات اللي مفعّل عليها «يظهر في البانر الرئيسي»."
             action={<Button onClick={() => setEdit({ ...blank })}><Plus className="w-4 h-4" /> ضيف أول بانر</Button>}
           />
         ) : (
@@ -88,6 +90,49 @@ export const Banners: React.FC = () => {
 
       {edit && <BannerEditor initial={edit} onClose={() => setEdit(null)} onSaved={(l) => { setList(l); setEdit(null); }} />}
     </div>
+  );
+};
+
+/** The built-in HOMEX banner (logo + headline + «تسوق دلوقتي») — on/off separately for desktop and phones. */
+const BrandBannerSwitch: React.FC = () => {
+  const toast = useToast();
+  const [s, setS] = useState<{ desktop: boolean; mobile: boolean } | null>(null);
+  useEffect(() => {
+    api.get('admin/settings')
+      .then((d: any) => setS({ desktop: d.brand_banner_desktop !== '0', mobile: d.brand_banner_mobile !== '0' }))
+      .catch(() => setS({ desktop: true, mobile: true }));
+  }, []);
+  const save = async (k: 'desktop' | 'mobile', v: boolean) => {
+    setS((x) => (x ? { ...x, [k]: v } : x));
+    try {
+      await api.post('admin/settings', { [`brand_banner_${k}`]: v ? '1' : '0' });
+      toast(`بانر HOMEX ${v ? 'ظاهر' : 'مخفي'} على ${k === 'desktop' ? 'الكمبيوتر' : 'الموبايل'}`);
+    } catch (e: any) {
+      setS((x) => (x ? { ...x, [k]: !v } : x));
+      toast(e.message, 'err');
+    }
+  };
+  return (
+    <Card>
+      <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+        <div className="w-full sm:w-56 aspect-[3/1] rounded-lg bg-gradient-to-l from-[#131518] via-[#1c1f24] to-[#3a414c] p-3 flex flex-col justify-center gap-1.5 shrink-0" aria-hidden="true">
+          <img src="/logo.webp" alt="" className="h-3.5 w-auto self-start" />
+          <span className="block h-1.5 w-3/4 rounded bg-white/80" />
+          <span className="block h-1 w-1/2 rounded bg-white/40" />
+          <span className="block h-3 w-12 rounded bg-gold" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="font-extrabold text-ink">بانر HOMEX الأساسي</p>
+          <p className="text-xs text-steel mt-0.5 mb-3">بيظهر أول شريحة في السلايدر. الكلام بتاعه بيتغير من «إعدادات المتجر» ← كلام الصفحة الرئيسية.</p>
+          {!s ? <Spinner /> : (
+            <div className="flex flex-wrap gap-x-8 gap-y-3">
+              <Toggle checked={s.desktop} onChange={(v) => save('desktop', v)} label="يظهر على الكمبيوتر" />
+              <Toggle checked={s.mobile} onChange={(v) => save('mobile', v)} label="يظهر على الموبايل" />
+            </div>
+          )}
+        </div>
+      </div>
+    </Card>
   );
 };
 
