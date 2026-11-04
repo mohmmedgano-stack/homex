@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { api, ApiError } from '../lib/api';
-import { ToastProvider, Button, Field, Input, Spinner } from './ui';
-import { LayoutDashboard, Package, ShoppingBag, Calculator, Settings, Users, LogOut, Menu, X, ExternalLink, Store, Images, FileText } from 'lucide-react';
+import { ToastProvider, Button, Field, Input, Spinner, useToast } from './ui';
+import { useOrderAlerts } from './useOrderAlerts';
+import { ActivityLog } from './pages/ActivityLog';
+import { LayoutDashboard, Package, ShoppingBag, Calculator, Settings, Users, LogOut, Menu, X, ExternalLink, Store, Images, FileText, Bell, BellOff, History } from 'lucide-react';
 import { Overview } from './pages/Overview';
 import { Products } from './pages/Products';
 import { Orders } from './pages/Orders';
@@ -21,11 +23,12 @@ export interface Admin {
 
 type Page = 'overview' | 'products' | 'orders' | 'banners' | 'pages' | 'dealers' | 'accounting' | 'settings' | 'team';
 
-type SettingsTab = 'general' | 'pages' | 'team';
+type SettingsTab = 'general' | 'pages' | 'team' | 'activity';
 const SETTINGS_TABS: { id: SettingsTab; label: string; short: string; Icon: React.FC<any> }[] = [
   { id: 'general', label: 'الإعدادات العامة', short: 'عام', Icon: Settings },
   { id: 'pages', label: 'صفحات الموقع', short: 'الصفحات', Icon: FileText },
   { id: 'team', label: 'المستخدمين والباسورد', short: 'المستخدمين', Icon: Users },
+  { id: 'activity', label: 'سجل النشاطات', short: 'السجل', Icon: History },
 ];
 
 const NAV: { id: Page; label: string; Icon: React.FC<any>; owner?: boolean }[] = [
@@ -139,6 +142,24 @@ const Shell: React.FC<{ admin: Admin; onLogout: () => void }> = ({ admin, onLogo
   const initial = location.hash.slice(1);
   const [page, setPage] = useState<Page>(() => (['pages', 'team'].includes(initial) ? 'settings' : (initial as Page)) || 'overview');
   const [settingsTab, setSettingsTab] = useState<SettingsTab>(() => (initial === 'pages' || initial === 'team' ? initial : 'general'));
+  const [activityUser, setActivityUser] = useState<number | null>(null);
+  const isOwner = admin.role === 'owner';
+  const toast = useToast();
+  const alerts = useOrderAlerts((o, added) => {
+    toast(o ? `🛒 طلب جديد ${o.code} من ${o.name} — ${Math.round(o.total).toLocaleString('en-US')} ج.م` : `🛒 وصلك ${added} طلب جديد`);
+    window.dispatchEvent(new CustomEvent('homex:new-order'));
+  });
+  const bell = (
+    <button
+      onClick={() => (alerts.perm === 'default' ? alerts.askPermission() : alerts.setSound(!alerts.sound))}
+      className="relative text-white/80 hover:text-white p-1.5 rounded-lg hover:bg-white/10"
+      title={alerts.perm === 'default' ? 'فعّل إشعارات الطلبات الجديدة' : alerts.sound ? 'صوت الطلبات شغال — اضغط عشان تكتمه' : 'صوت الطلبات مكتوم — اضغط عشان تشغله'}
+      aria-label="إشعارات الطلبات"
+    >
+      {alerts.sound ? <Bell className="w-5 h-5" /> : <BellOff className="w-5 h-5" />}
+      {alerts.perm === 'default' && <span className="absolute top-1 left-1 w-2 h-2 rounded-full bg-gold" />}
+    </button>
+  );
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -165,6 +186,9 @@ const Shell: React.FC<{ admin: Admin; onLogout: () => void }> = ({ admin, onLogo
         >
           <Icon className="w-5 h-5" />
           {label}
+          {id === 'orders' && alerts.pending > 0 && (
+            <span className="mr-auto min-w-6 h-6 px-1.5 rounded-full bg-sale text-white text-xs font-black flex items-center justify-center price">{alerts.pending}</span>
+          )}
         </button>
       ))}
     </nav>
@@ -188,8 +212,9 @@ const Shell: React.FC<{ admin: Admin; onLogout: () => void }> = ({ admin, onLogo
     <div className="min-h-screen lg:pr-64">
       {/* Desktop sidebar */}
       <aside className="hidden lg:flex fixed top-0 right-0 bottom-0 w-64 bg-ink flex-col">
-        <div className="h-16 flex items-center px-5 border-b border-white/10">
+        <div className="h-16 flex items-center justify-between px-5 border-b border-white/10">
           <img src="/logo.png" alt="HOMEX" className="h-8 w-auto" />
+          {bell}
         </div>
         {nav}
         {sidebarFooter}
@@ -201,7 +226,10 @@ const Shell: React.FC<{ admin: Admin; onLogout: () => void }> = ({ admin, onLogo
           <Menu className="w-6 h-6" />
         </button>
         <span className="text-white font-extrabold">{NAV.find((n) => n.id === page)?.label}</span>
-        <img src="/logo.png" alt="HOMEX" className="h-6 w-auto" />
+        <div className="flex items-center gap-1">
+          {bell}
+          <img src="/logo.png" alt="HOMEX" className="h-6 w-auto" />
+        </div>
       </header>
       {open && (
         <div className="lg:hidden fixed inset-0 z-40">
@@ -221,7 +249,7 @@ const Shell: React.FC<{ admin: Admin; onLogout: () => void }> = ({ admin, onLogo
 
       <main className="p-3 sm:p-6 max-w-6xl mx-auto">
         {page === 'overview' && <Overview go={setPage} />}
-        {page === 'orders' && <Orders />}
+        {page === 'orders' && <Orders isOwner={isOwner} />}
         {page === 'products' && <Products />}
         {page === 'banners' && <Banners />}
         {page === 'dealers' && <Dealers />}
@@ -229,7 +257,7 @@ const Shell: React.FC<{ admin: Admin; onLogout: () => void }> = ({ admin, onLogo
         {page === 'settings' && (
           <div className="space-y-4">
             <div className="flex gap-1 p-1 bg-white border border-line rounded-xl overflow-x-auto no-scrollbar">
-              {SETTINGS_TABS.map((t) => (
+              {SETTINGS_TABS.filter((t) => t.id !== 'activity' || isOwner).map((t) => (
                 <button
                   key={t.id}
                   onClick={() => setSettingsTab(t.id)}
@@ -244,7 +272,8 @@ const Shell: React.FC<{ admin: Admin; onLogout: () => void }> = ({ admin, onLogo
             </div>
             {settingsTab === 'general' && <StoreSettingsPage admin={admin} />}
             {settingsTab === 'pages' && <SitePages />}
-            {settingsTab === 'team' && <Team admin={admin} />}
+            {settingsTab === 'team' && <Team admin={admin} onShowActivity={(id) => { setActivityUser(id); setSettingsTab('activity'); }} />}
+            {settingsTab === 'activity' && isOwner && <ActivityLog initialAdmin={activityUser} />}
           </div>
         )}
       </main>

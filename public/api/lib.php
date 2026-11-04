@@ -141,6 +141,19 @@ function migrate(PDO $db): void {
     CREATE TABLE IF NOT EXISTS login_attempts (ip TEXT NOT NULL, at INTEGER NOT NULL);
     CREATE INDEX IF NOT EXISTS idx_orders_created ON orders(created_at);
     CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(date);
+    CREATE TABLE IF NOT EXISTS activity (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        admin_id INTEGER NOT NULL,
+        admin_name TEXT NOT NULL,
+        action TEXT NOT NULL,
+        summary TEXT NOT NULL,
+        entity TEXT NOT NULL DEFAULT '',
+        entity_id TEXT NOT NULL DEFAULT '',
+        ip TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_activity_admin ON activity(admin_id, id);
+    CREATE INDEX IF NOT EXISTS idx_activity_entity ON activity(entity, entity_id);
     CREATE TABLE IF NOT EXISTS pages (
         slug TEXT PRIMARY KEY,
         title TEXT NOT NULL,
@@ -164,6 +177,11 @@ function migrate(PDO $db): void {
     $cols = array_column($db->query('PRAGMA table_info(orders)')->fetchAll(), 'name');
     if (!in_array('payment_status', $cols, true)) $db->exec("ALTER TABLE orders ADD COLUMN payment_status TEXT NOT NULL DEFAULT 'unpaid'");
     if (!in_array('payment_ref', $cols, true)) $db->exec("ALTER TABLE orders ADD COLUMN payment_ref TEXT NOT NULL DEFAULT ''");
+    $pcols = array_column($db->query('PRAGMA table_info(products)')->fetchAll(), 'name');
+    if (!in_array('created_by', $pcols, true)) $db->exec("ALTER TABLE products ADD COLUMN created_by TEXT NOT NULL DEFAULT ''");
+    if (!in_array('updated_by', $pcols, true)) $db->exec("ALTER TABLE products ADD COLUMN updated_by TEXT NOT NULL DEFAULT ''");
+    $ecols = array_column($db->query('PRAGMA table_info(expenses)')->fetchAll(), 'name');
+    if (!in_array('created_by', $ecols, true)) $db->exec("ALTER TABLE expenses ADD COLUMN created_by TEXT NOT NULL DEFAULT ''");
     $ccols = array_column($db->query('PRAGMA table_info(categories)')->fetchAll(), 'name');
     if (!in_array('image', $ccols, true)) $db->exec("ALTER TABLE categories ADD COLUMN image TEXT NOT NULL DEFAULT ''");
 
@@ -202,6 +220,11 @@ function session_boot(): void {
    ============================================================ */
 
 function ok($data): void {
+    if (!empty($GLOBALS['activity_ctx'])) {
+        $ctx = $GLOBALS['activity_ctx'];
+        $GLOBALS['activity_ctx'] = null;
+        try { activity_after($ctx, $data); } catch (Throwable $e) { error_log('[homex] activity: ' . $e->getMessage()); }
+    }
     header('Content-Type: application/json; charset=utf-8');
     header('Cache-Control: no-store');
     echo json_encode(['ok' => true, 'data' => $data], JSON_UNESCAPED_UNICODE);
@@ -218,9 +241,11 @@ function fail(string $msg, int $code = 400): void {
 /** JSON body. State-changing requests must carry our header (blocks cross-site form posts). */
 function body(): array {
     if (($_SERVER['HTTP_X_HOMEX'] ?? '') !== '1') throw new ApiError('طلب غير صالح', 403);
+    static $cached = null;
+    if ($cached !== null) return $cached;
     $raw = file_get_contents('php://input') ?: '';
     $data = json_decode($raw, true);
-    return is_array($data) ? $data : [];
+    return $cached = (is_array($data) ? $data : []);
 }
 
 function str($v, int $max = 2000): string { return mb_substr(trim((string)($v ?? '')), 0, $max); }
@@ -398,9 +423,10 @@ const PAYMENT_SETTINGS = [
     'paymob_public_key' => '', 'paymob_secret_key' => '', 'paymob_integration_id' => '', 'paymob_hmac' => '',
     'kashier_mid' => '', 'kashier_api_key' => '',
     'notify_email' => '',        // where new-order alerts go (dashboard only)
+    'wa_notify_phone' => '', 'wa_notify_apikey' => '',   // WhatsApp alert for new orders (CallMeBot)
     'fawry_merchant_code' => '', 'fawry_secure_key' => '',
 ];
-const SECRET_SETTINGS = ['paymob_secret_key', 'paymob_hmac', 'kashier_api_key', 'fawry_secure_key'];
+const SECRET_SETTINGS = ['paymob_secret_key', 'paymob_hmac', 'kashier_api_key', 'fawry_secure_key', 'wa_notify_apikey'];
 
 function payment_settings(): array {
     $out = PAYMENT_SETTINGS;
@@ -524,6 +550,10 @@ function save_settings(array $b): array {
         // A masked secret coming back unchanged means "keep the saved one"
         if (in_array($k, SECRET_SETTINGS, true) && str_starts_with($v, '••••')) continue;
         if ($k === 'notify_email' && $v !== '' && !filter_var($v, FILTER_VALIDATE_EMAIL)) throw new ApiError('إيميل الإشعارات مش صحيح');
+        if ($k === 'wa_notify_phone' && $v !== '') {
+            $v = wa_intl($v);
+            if (!preg_match('/^\d{10,15}$/', $v)) throw new ApiError('رقم واتساب الإشعارات مش صحيح');
+        }
         if ($k === 'paymob_integration_id' && $v !== '' && !ctype_digit($v)) throw new ApiError('رقم الـ Integration ID في Paymob لازم يكون أرقام بس');
         if ($k === 'pay_card_provider' && !in_array($v, ['', 'paymob', 'kashier', 'fawry'], true)) $v = '';
         $st->execute([$k, mb_substr($v, 0, 1000)]);
@@ -642,6 +672,12 @@ function product_out(array $p, bool $admin = false): array {
         'createdAt' => $p['created_at'],
     ];
     if ($admin) { $out['cost'] = (float)$p['cost']; $out['active'] = (bool)$p['active']; }
+    // Who added / last edited — visible to the owner only
+    if ($admin && (current_admin()['role'] ?? '') === 'owner') {
+        $out['createdBy'] = $p['created_by'] ?? '';
+        $out['updatedBy'] = $p['updated_by'] ?? '';
+        $out['updatedAt'] = $p['updated_at'] ?? '';
+    }
     return $out;
 }
 
@@ -736,11 +772,14 @@ function save_product(array $b): array {
         min(5, max(0, num($b['rating'] ?? 0))), max(0, (int)($b['reviewsCount'] ?? 0)),
     ];
     $id = (int)($b['id'] ?? 0);
+    $by = current_admin()['name'] ?? '';
+    $vals[] = $by;
     if ($id) {
         $vals[] = $id;
-        db()->prepare("UPDATE products SET name=?, category_id=?, brand=?, price=?, original_price=?, cost=?, stock=?, image=?, gallery=?, description=?, features=?, specs=?, warranty=?, wattage=?, capacity=?, is_featured=?, is_new=?, active=?, rating=?, reviews_count=?, updated_at=datetime('now') WHERE id=?")->execute($vals);
+        db()->prepare("UPDATE products SET name=?, category_id=?, brand=?, price=?, original_price=?, cost=?, stock=?, image=?, gallery=?, description=?, features=?, specs=?, warranty=?, wattage=?, capacity=?, is_featured=?, is_new=?, active=?, rating=?, reviews_count=?, updated_by=?, updated_at=datetime('now') WHERE id=?")->execute($vals);
     } else {
-        db()->prepare('INSERT INTO products (name, category_id, brand, price, original_price, cost, stock, image, gallery, description, features, specs, warranty, wattage, capacity, is_featured, is_new, active, rating, reviews_count) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')->execute($vals);
+        $vals[] = $by;
+        db()->prepare('INSERT INTO products (name, category_id, brand, price, original_price, cost, stock, image, gallery, description, features, specs, warranty, wattage, capacity, is_featured, is_new, active, rating, reviews_count, created_by, updated_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')->execute($vals);
     }
     return admin_products();
 }
@@ -937,7 +976,9 @@ function expenses(?string $from, ?string $to): array {
     [$from, $to] = date_range($from, $to);
     $st = db()->prepare('SELECT * FROM expenses WHERE date BETWEEN ? AND ? ORDER BY date DESC, id DESC');
     $st->execute([$from, $to]);
-    return $st->fetchAll();
+    $rows = $st->fetchAll();
+    if ((current_admin()['role'] ?? '') !== 'owner') foreach ($rows as &$x) unset($x['created_by']);
+    return $rows;
 }
 
 function save_expense(array $b): array {
@@ -947,7 +988,7 @@ function save_expense(array $b): array {
     $cat = str($b['category'] ?? '', 60) ?: 'أخرى';
     $id = (int)($b['id'] ?? 0);
     if ($id) db()->prepare('UPDATE expenses SET date=?, category=?, amount=?, note=? WHERE id=?')->execute([$date, $cat, $amount, str($b['note'] ?? '', 300), $id]);
-    else db()->prepare('INSERT INTO expenses (date, category, amount, note) VALUES (?,?,?,?)')->execute([$date, $cat, $amount, str($b['note'] ?? '', 300)]);
+    else db()->prepare('INSERT INTO expenses (date, category, amount, note, created_by) VALUES (?,?,?,?,?)')->execute([$date, $cat, $amount, str($b['note'] ?? '', 300), current_admin()['name'] ?? '']);
     return ['saved' => true];
 }
 
@@ -1366,12 +1407,46 @@ function order_with_items(string $code): ?array {
 }
 
 /** Emails the store owner about a new order. Never blocks or breaks the order if mail fails. */
+function wa_intl(string $n): string {
+    $d = preg_replace('/\D/', '', $n);
+    if (str_starts_with($d, '00')) $d = substr($d, 2);
+    elseif (str_starts_with($d, '0')) $d = '2' . $d;   // Egyptian 01xxxxxxxxx
+    return $d;
+}
+
+/** Sends a WhatsApp message to the owner's number through CallMeBot. Returns '' on success, or the error. */
+function wa_send(string $text): string {
+    $p = payment_settings();
+    $phone = wa_intl($p['wa_notify_phone']); $key = trim($p['wa_notify_apikey']);
+    if ($phone === '' || $key === '') return 'رقم الواتساب أو كود التفعيل مش متسجلين';
+    $url = 'https://api.callmebot.com/whatsapp.php?' . http_build_query(['phone' => '+' . $phone, 'text' => $text, 'apikey' => $key]);
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 20, CURLOPT_CONNECTTIMEOUT => 8, CURLOPT_USERAGENT => 'homex-store']);
+    $res = (string)curl_exec($ch);
+    $code = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+    $err = curl_error($ch);
+    curl_close($ch);
+    if ($err !== '') return 'مقدرناش نوصل لخدمة الواتساب: ' . $err;
+    if ($code >= 400 || stripos($res, 'APIKey is invalid') !== false || stripos($res, 'error') !== false && stripos($res, 'queued') === false) {
+        return 'خدمة الواتساب رفضت الرسالة — اتأكد من الرقم وكود التفعيل';
+    }
+    return '';
+}
+
+function wa_test(): array {
+    $err = wa_send('✅ تجربة إشعارات ' . (get_setting('store_name', 'HOMEX') ?: 'HOMEX') . ': لما ييجي طلب جديد هتوصلك رسالة زي دي.');
+    if ($err !== '') throw new ApiError($err);
+    return ['sent' => true];
+}
+
 function notify_new_order(string $code): void {
     try {
-        $to = payment_settings()['notify_email'];
-        if ($to === '' || !function_exists('mail')) return;
         $o = order_with_items($code);
         if (!$o) return;
+        $p = payment_settings();
+        $to = $p['notify_email'];
+        $wa = $p['wa_notify_phone'] !== '' && $p['wa_notify_apikey'] !== '';
+        if (($to === '' || !function_exists('mail')) && !$wa) return;
         $store = get_setting('store_name', 'HOMEX') ?: 'HOMEX';
         $pay = ['cod' => 'الدفع عند الاستلام', 'card' => 'فيزا (مدفوع)', 'vodafone' => 'فودافون كاش', 'instapay' => 'إنستاباي'][$o['payment_method']] ?? $o['payment_method'];
         $lines = array_map(fn($i) => "- {$i['name']} × {$i['qty']} = " . number_format($i['price'] * $i['qty']) . ' ج.م', $o['items']);
@@ -1385,10 +1460,32 @@ function notify_new_order(string $code): void {
         $host = parse_url($base, PHP_URL_HOST) ?: 'home-x.online';
         $subject = '=?UTF-8?B?' . base64_encode("طلب جديد {$o['code']} - " . number_format((float)$o['total']) . " ج.م") . '?=';
         $from = '=?UTF-8?B?' . base64_encode($store) . "?= <no-reply@$host>";
-        @mail($to, $subject, $body, "From: $from\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: 8bit");
+        $waText = "🛒 *طلب جديد {$o['code']}* — $store\n\n" . $body;
+
+        // Send after the customer already got their answer, so a slow mail/WhatsApp service never delays checkout
+        register_shutdown_function(function () use ($to, $subject, $body, $from, $wa, $waText) {
+            if (function_exists('litespeed_finish_request')) @litespeed_finish_request();
+            elseif (function_exists('fastcgi_finish_request')) @fastcgi_finish_request();
+            try {
+                if ($to !== '' && function_exists('mail')) @mail($to, $subject, $body, "From: $from\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: 8bit");
+                if ($wa) { $e = wa_send($waText); if ($e !== '') error_log('[homex wa] ' . $e); }
+            } catch (Throwable $e) {
+                error_log('[homex notify] ' . $e->getMessage());
+            }
+        });
     } catch (Throwable $e) {
         error_log('[homex notify] ' . $e->getMessage());
     }
+}
+
+/** Newest order id + how many are waiting for confirmation — the dashboard polls this for the new-order alert. */
+function orders_pulse(): array {
+    // Unpaid card checkouts don't count until the payment succeeds
+    $real = "status != 'awaiting_payment'";
+    $last = db()->query("SELECT id, code, customer_name, total, city FROM orders WHERE status = 'pending' ORDER BY updated_at DESC, id DESC LIMIT 1")->fetch() ?: null;
+    $count = (int)db()->query("SELECT COUNT(*) FROM orders WHERE $real")->fetchColumn();
+    $pending = (int)db()->query("SELECT COUNT(*) FROM orders WHERE status = 'pending'")->fetchColumn();
+    return ['count' => $count, 'pending' => $pending, 'last' => $last ? ['id' => (int)$last['id'], 'code' => $last['code'], 'name' => $last['customer_name'], 'total' => (float)$last['total'], 'city' => $last['city']] : null];
 }
 
 /** CSV (opens in Excel with Arabic) of orders, filtered like the orders page. */
@@ -1425,4 +1522,214 @@ function export_orders(array $q): void {
     }
     fclose($out);
     exit;
+}
+
+
+/* ============================================================
+   Activity log — who did what in the dashboard (owner-only view)
+   ============================================================ */
+
+const ACTIVITY_STATUS = [
+    'awaiting_payment' => 'مستني الدفع', 'pending' => 'جديد', 'confirmed' => 'اتأكد', 'shipped' => 'اتشحن',
+    'delivered' => 'اتسلّم', 'cancelled' => 'اتلغى', 'returned' => 'مرتجع',
+];
+
+const ACTIVITY_SETTING_LABELS = [
+    'store_name' => 'اسم المتجر', 'logo' => 'اللوجو', 'top_bar_text' => 'شريط الإعلان', 'phone' => 'التليفون', 'whatsapp' => 'الواتساب',
+    'email' => 'الإيميل', 'address' => 'العنوان', 'facebook' => 'فيسبوك', 'instagram' => 'إنستجرام', 'tiktok' => 'تيك توك',
+    'shipping_fee' => 'مصاريف الشحن', 'free_shipping_over' => 'الشحن المجاني', 'pay_cod' => 'الدفع عند الاستلام',
+    'hero_title' => 'عنوان الأقسام', 'hero_subtitle' => 'جملة الأقسام', 'brand_title' => 'عنوان بانر HOMEX', 'brand_subtitle' => 'جملة بانر HOMEX',
+    'brand_banner_desktop' => 'بانر HOMEX على الكمبيوتر', 'brand_banner_mobile' => 'بانر HOMEX على الموبايل', 'footer_pages_title' => 'عنوان عمود الفوتر',
+    'meta_pixel_id' => 'بيكسل فيسبوك', 'tiktok_pixel_id' => 'بيكسل تيك توك', 'ga4_id' => 'جوجل أناليتكس',
+    'pay_card_provider' => 'شركة الدفع بالكارت', 'pay_card_test' => 'وضع التجربة للدفع', 'notify_email' => 'إيميل تنبيه الطلبات',
+];
+
+function log_activity(?array $a, string $action, string $summary, string $entity = '', string $eid = ''): void {
+    if (!$a) return;
+    $at = (new DateTime('now', new DateTimeZone('Africa/Cairo')))->format('Y-m-d H:i:s');
+    db()->prepare('INSERT INTO activity (admin_id, admin_name, action, summary, entity, entity_id, ip, created_at) VALUES (?,?,?,?,?,?,?,?)')
+        ->execute([(int)$a['id'], (string)$a['name'], $action, mb_substr($summary, 0, 600), $entity, $eid, (string)($_SERVER['REMOTE_ADDR'] ?? ''), $at]);
+}
+
+function act_row(string $sql, array $args) {
+    $st = db()->prepare($sql);
+    $st->execute($args);
+    return $st->fetch() ?: null;
+}
+
+/** Called by the router before an admin action runs: remembers who is acting and what the record looked like before. */
+function activity_begin(string $route): void {
+    $logged = ['POST login', 'POST logout', 'POST password'];
+    if (!str_contains($route, ' admin/') && !in_array($route, $logged, true)) return;
+    if (str_starts_with($route, 'GET ') && $route !== 'GET admin/orders-export') return;
+    if (in_array($route, ['POST admin/upload'], true)) return;
+
+    $a = current_admin();
+    $b = str_starts_with($route, 'POST ') ? body() : $_GET;
+    $before = null;
+    switch ($route) {
+        case 'POST admin/product':
+        case 'POST admin/product-delete':
+            $before = act_row('SELECT * FROM products WHERE id = ?', [(int)($b['id'] ?? 0)]); break;
+        case 'POST admin/category':
+        case 'POST admin/category-delete':
+            $before = act_row('SELECT * FROM categories WHERE id = ?', [(string)($b['id'] ?? '')]); break;
+        case 'POST admin/dealer':
+        case 'POST admin/dealer-delete':
+            $before = act_row('SELECT * FROM dealers WHERE id = ?', [(int)($b['id'] ?? 0)]); break;
+        case 'POST admin/order-status':
+            $before = act_row('SELECT id, code, status, customer_name FROM orders WHERE id = ?', [(int)($b['id'] ?? 0)]); break;
+        case 'POST admin/expense':
+        case 'POST admin/expense-delete':
+            $before = act_row('SELECT * FROM expenses WHERE id = ?', [(int)($b['id'] ?? 0)]); break;
+        case 'POST admin/admin':
+        case 'POST admin/admin-delete':
+            $before = act_row('SELECT id, name, username, role, active FROM admins WHERE id = ?', [(int)($b['id'] ?? 0)]); break;
+        case 'POST admin/banner':
+        case 'POST admin/banner-delete':
+            $before = act_row('SELECT * FROM banners WHERE id = ?', [(int)($b['id'] ?? 0)]); break;
+        case 'POST admin/page':
+        case 'POST admin/page-delete':
+            $before = act_row('SELECT * FROM pages WHERE slug = ?', [(string)($b['slug'] ?? '')]); break;
+        case 'POST admin/settings':
+            $before = all_settings(); break;
+        case 'GET admin/orders-export':
+            log_activity($a, 'orders.export', 'صدّر الطلبات Excel' . (!empty($b['status']) ? ' (' . (ACTIVITY_STATUS[$b['status']] ?? $b['status']) . ')' : ''), 'order');
+            return;
+    }
+    $GLOBALS['activity_ctx'] = ['route' => $route, 'admin' => $a, 'body' => $b, 'before' => $before];
+}
+
+function fmt_money($v): string { return number_format((float)$v, 0, '.', ',') . ' ج.م'; }
+
+function activity_after(array $ctx, $result): void {
+    $r = $ctx['route']; $b = $ctx['body']; $old = $ctx['before'];
+    $a = $ctx['admin'] ?: current_admin();
+    $name = fn($v) => '«' . mb_substr(trim((string)$v), 0, 80) . '»';
+    switch ($r) {
+        case 'POST login': log_activity(current_admin(), 'auth.login', 'سجّل دخول'); return;
+        case 'POST logout': log_activity($a, 'auth.logout', 'سجّل خروج'); return;
+        case 'POST password': log_activity($a, 'auth.password', 'غيّر الباسورد بتاعه'); return;
+
+        case 'POST admin/product':
+            if ($old) {
+                $ch = [];
+                $pairs = ['price' => ['السعر', 'price', true], 'cost' => ['التكلفة', 'cost', true], 'stock' => ['المخزن', 'stock', false]];
+                foreach ($pairs as $col => [$lbl, $key, $money]) {
+                    $nv = $col === 'stock' ? (int)($b[$key] ?? 0) : num($b[$key] ?? 0);
+                    if ((float)$old[$col] != (float)$nv) $ch[] = $lbl . ' ' . ($money ? fmt_money($old[$col]) : (int)$old[$col]) . ' ← ' . ($money ? fmt_money($nv) : $nv);
+                }
+                if (trim((string)$old['name']) !== str($b['name'] ?? '', 200)) $ch[] = 'الاسم كان ' . $name($old['name']);
+                if ((string)$old['category_id'] !== (string)($b['category'] ?? '')) $ch[] = 'نقله لقسم تاني';
+                $act = array_key_exists('active', $b) ? (!empty($b['active']) ? 1 : 0) : 1;
+                if ((int)$old['active'] !== $act) $ch[] = $act ? 'أظهره في المتجر' : 'خفاه من المتجر';
+                if ((int)$old['is_featured'] !== (!empty($b['isFeatured']) ? 1 : 0)) $ch[] = !empty($b['isFeatured']) ? 'حطه في البانر' : 'شاله من البانر';
+                log_activity($a, 'product.update', 'عدّل المنتج ' . $name($b['name'] ?? '') . ($ch ? ' — ' . implode('، ', $ch) : ''), 'product', (string)$old['id']);
+            } else {
+                $nid = (string)db()->query('SELECT MAX(id) FROM products')->fetchColumn();
+                log_activity($a, 'product.create', 'ضاف منتج جديد ' . $name($b['name'] ?? '') . ' بسعر ' . fmt_money($b['price'] ?? 0) . '، مخزن ' . (int)($b['stock'] ?? 0), 'product', $nid);
+            }
+            return;
+        case 'POST admin/product-delete':
+            if ($old) log_activity($a, 'product.delete', 'مسح المنتج ' . $name($old['name']), 'product', (string)$old['id']);
+            return;
+
+        case 'POST admin/category':
+            log_activity($a, $old ? 'category.update' : 'category.create', $old
+                ? 'عدّل القسم ' . $name($b['name'] ?? '') . (trim((string)$old['name']) !== trim((string)($b['name'] ?? '')) ? ' (كان ' . $name($old['name']) . ')' : '') . (((string)$old['image']) !== (string)($b['image'] ?? '') ? ' وغيّر صورته' : '')
+                : 'ضاف قسم جديد ' . $name($b['name'] ?? ''), 'category', (string)($b['id'] ?? ''));
+            return;
+        case 'POST admin/category-delete':
+            if ($old) log_activity($a, 'category.delete', 'مسح القسم ' . $name($old['name']), 'category', (string)$old['id']);
+            return;
+        case 'POST admin/categories-order': log_activity($a, 'category.order', 'غيّر ترتيب الأقسام', 'category'); return;
+
+        case 'POST admin/dealer':
+            log_activity($a, $old ? 'dealer.update' : 'dealer.create', ($old ? 'عدّل بيانات التاجر ' : 'ضاف تاجر جديد ') . $name($b['name'] ?? '') . ' — ' . str($b['governorate'] ?? '', 40), 'dealer', (string)($old['id'] ?? ''));
+            return;
+        case 'POST admin/dealer-delete':
+            if ($old) log_activity($a, 'dealer.delete', 'مسح التاجر ' . $name($old['name']), 'dealer', (string)$old['id']);
+            return;
+
+        case 'POST admin/order-status':
+            if ($old) {
+                $to = (string)($b['status'] ?? '');
+                log_activity($a, 'order.status', 'غيّر حالة الطلب ' . $old['code'] . ' (' . $old['customer_name'] . ') من «' . (ACTIVITY_STATUS[$old['status']] ?? $old['status']) . '» لـ «' . (ACTIVITY_STATUS[$to] ?? $to) . '»', 'order', (string)$old['id']);
+            }
+            return;
+
+        case 'POST admin/expense':
+            log_activity($a, $old ? 'expense.update' : 'expense.create', ($old ? 'عدّل مصروف ' : 'سجّل مصروف ') . $name(str($b['category'] ?? '', 60) ?: 'أخرى') . ' بمبلغ ' . fmt_money($b['amount'] ?? 0) . ($old && (float)$old['amount'] != num($b['amount'] ?? 0) ? ' (كان ' . fmt_money($old['amount']) . ')' : ''), 'expense', (string)($old['id'] ?? ''));
+            return;
+        case 'POST admin/expense-delete':
+            if ($old) log_activity($a, 'expense.delete', 'مسح مصروف ' . $name($old['category']) . ' بمبلغ ' . fmt_money($old['amount']) . ' بتاريخ ' . $old['date'], 'expense', (string)$old['id']);
+            return;
+
+        case 'POST admin/settings':
+            $after = all_settings(); $ch = [];
+            foreach ($b as $k => $_) {
+                if (!is_string($k) || !array_key_exists($k, $after) || !is_array($old) || ($old[$k] ?? null) === $after[$k]) continue;
+                if (str_starts_with($k, 'page_') || str_ends_with($k, '_ready')) continue;
+                $ch[] = ACTIVITY_SETTING_LABELS[$k] ?? (in_array($k, SECRET_SETTINGS, true) ? 'مفاتيح شركة الدفع' : $k);
+            }
+            $ch = array_values(array_unique($ch));
+            if ($ch) log_activity($a, 'settings.update', 'عدّل إعدادات المتجر: ' . implode('، ', array_slice($ch, 0, 8)) . (count($ch) > 8 ? ' و' . (count($ch) - 8) . ' تانيين' : ''), 'settings');
+            return;
+
+        case 'POST admin/admin':
+            $role = (($b['role'] ?? 'staff') === 'owner') ? 'مالك' : 'موظف';
+            if ($old) {
+                $ch = [];
+                if ($old['role'] !== ((($b['role'] ?? 'staff') === 'owner') ? 'owner' : 'staff')) $ch[] = 'الصلاحية بقت ' . $role;
+                if ((int)$old['active'] !== (!empty($b['active']) ? 1 : 0)) $ch[] = !empty($b['active']) ? 'فعّل الحساب' : 'وقّف الحساب';
+                if ((string)($b['password'] ?? '') !== '') $ch[] = 'غيّر الباسورد';
+                log_activity($a, 'user.update', 'عدّل حساب ' . $name($b['name'] ?? '') . ($ch ? ' — ' . implode('، ', $ch) : ''), 'user', (string)$old['id']);
+            } else {
+                log_activity($a, 'user.create', 'عمل حساب جديد ' . $name($b['name'] ?? '') . ' (' . $role . ')', 'user');
+            }
+            return;
+        case 'POST admin/admin-delete':
+            if ($old) log_activity($a, 'user.delete', 'مسح حساب ' . $name($old['name']), 'user', (string)$old['id']);
+            return;
+
+        case 'POST admin/banner':
+            $label = trim((string)($b['title'] ?? '')) !== '' ? $name($b['title']) : '';
+            if ($old && count($b) && array_key_exists('active', $b) && (int)$old['active'] !== (!empty($b['active']) ? 1 : 0) && $old['image'] === ($b['image'] ?? '')) {
+                log_activity($a, 'banner.update', (!empty($b['active']) ? 'أظهر البانر ' : 'خفى البانر ') . $label, 'banner', (string)$old['id']);
+            } else {
+                log_activity($a, $old ? 'banner.update' : 'banner.create', ($old ? 'عدّل البانر ' : 'ضاف بانر جديد ') . $label, 'banner', (string)($old['id'] ?? ''));
+            }
+            return;
+        case 'POST admin/banner-delete':
+            if ($old) log_activity($a, 'banner.delete', 'مسح البانر ' . ($old['title'] !== '' ? $name($old['title']) : ''), 'banner', (string)$old['id']);
+            return;
+        case 'POST admin/banners-order': log_activity($a, 'banner.order', 'غيّر ترتيب البانرات', 'banner'); return;
+
+        case 'POST admin/page':
+            if ($old && (int)$old['in_footer'] !== (!array_key_exists('inFooter', $b) || !empty($b['inFooter']) ? 1 : 0) && $old['content'] === str($b['content'] ?? '', 30000)) {
+                log_activity($a, 'page.update', (!empty($b['inFooter']) ? 'أظهر صفحة ' : 'خفى صفحة ') . $name($b['title'] ?? '') . ' في الفوتر', 'page', (string)$old['slug']);
+            } else {
+                log_activity($a, $old ? 'page.update' : 'page.create', ($old ? 'عدّل صفحة ' : 'ضاف صفحة جديدة ') . $name($b['title'] ?? ''), 'page', (string)($old['slug'] ?? ($b['slug'] ?? '')));
+            }
+            return;
+        case 'POST admin/page-delete':
+            if ($old) log_activity($a, 'page.delete', 'مسح صفحة ' . $name($old['title']), 'page', (string)$old['slug']);
+            return;
+        case 'POST admin/pages-order': log_activity($a, 'page.order', 'غيّر ترتيب صفحات الفوتر', 'page'); return;
+    }
+}
+
+function activity_list(array $q): array {
+    $where = []; $args = [];
+    if (!empty($q['admin'])) { $where[] = 'admin_id = ?'; $args[] = (int)$q['admin']; }
+    if (!empty($q['entity'])) { $where[] = 'entity = ?'; $args[] = str($q['entity'], 20); }
+    if (isset($q['entity_id']) && $q['entity_id'] !== '') { $where[] = 'entity_id = ?'; $args[] = str($q['entity_id'], 40); }
+    if (!empty($q['before'])) { $where[] = 'id < ?'; $args[] = (int)$q['before']; }
+    if (!empty($q['q'])) { $where[] = 'summary LIKE ?'; $args[] = '%' . str($q['q'], 80) . '%'; }
+    $limit = min(100, max(10, (int)($q['limit'] ?? 50)));
+    $st = db()->prepare('SELECT id, admin_id, admin_name, action, summary, entity, entity_id, created_at FROM activity' . ($where ? ' WHERE ' . implode(' AND ', $where) : '') . " ORDER BY id DESC LIMIT $limit");
+    $st->execute($args);
+    $rows = $st->fetchAll();
+    $counts = db()->query("SELECT admin_id, COUNT(*) AS n, MAX(created_at) AS last FROM activity GROUP BY admin_id")->fetchAll();
+    return ['items' => $rows, 'more' => count($rows) === $limit, 'perAdmin' => $counts];
 }

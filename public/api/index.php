@@ -10,6 +10,7 @@ $r = $_GET['r'] ?? '';
 $m = $_SERVER['REQUEST_METHOD'];
 
 try {
+    try { activity_begin("$m $r"); } catch (ApiError $e) { throw $e; } catch (Throwable $e) { error_log("[homex] activity: " . $e->getMessage()); }
     switch ("$m $r") {
         /* ---------- public ---------- */
         case 'GET settings':   ok(public_settings()); break;
@@ -41,6 +42,10 @@ try {
         case 'POST admin/category':    need(); ok(save_category(body())); break;
         case 'POST admin/categories-order': need(); ok(reorder_categories(body())); break;
         case 'POST admin/category-delete': need(); ok(delete_category((string)(body()['id'] ?? ''))); break;
+
+        case 'GET admin/orders-pulse': need(); ok(orders_pulse()); break;
+        case 'POST admin/wa-test':     need('owner'); ok(wa_test()); break;
+        case 'GET admin/activity':     need('owner'); ok(activity_list($_GET)); break;
 
         /* ---------- admin: site pages ---------- */
         case 'GET admin/pages':        need(); ok(site_pages(true, public_settings()['store_name'])); break;

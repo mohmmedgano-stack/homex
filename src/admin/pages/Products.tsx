@@ -98,6 +98,13 @@ export const Products: React.FC = () => {
                       <span className={profit > 0 ? 'text-save font-bold' : 'text-sale font-bold'}>ربح {money(profit)}</span>
                       <span className={p.stock <= 5 ? 'text-sale font-bold' : 'text-steel'}>مخزن {p.stock}</span>
                     </p>
+                    {(p.createdBy || p.updatedBy) && (
+                      <p className="text-[11px] text-steel mt-1">
+                        {p.createdBy && <>ضافه <b className="text-ink">{p.createdBy}</b></>}
+                        {p.updatedBy && p.updatedBy !== p.createdBy && <>{p.createdBy ? ' · ' : ''}آخر تعديل <b className="text-ink">{p.updatedBy}</b></>}
+                        {p.updatedBy && p.updatedBy === p.createdBy && p.updatedAt && p.updatedAt !== p.createdAt && <> · وعدّله</>}
+                      </p>
+                    )}
                   </div>
                   <Button variant="ghost" className="shrink-0 px-3" onClick={() => setEdit({ ...blank, ...p, originalPrice: p.originalPrice ?? '' })} aria-label="تعديل">
                     <Pencil className="w-4 h-4" /> <span className="hidden sm:inline">تعديل</span>

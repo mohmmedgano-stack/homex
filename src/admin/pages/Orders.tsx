@@ -6,7 +6,7 @@ import { Phone, MessageCircle, Search, Download } from 'lucide-react';
 const PAY: Record<string, string> = { cod: 'الدفع عند الاستلام', vodafone: 'فودافون كاش', instapay: 'إنستاباي', card: 'فيزا / ماستركارد' };
 const FLOW = ['pending', 'confirmed', 'shipped', 'delivered'];
 
-export const Orders: React.FC = () => {
+export const Orders: React.FC<{ isOwner?: boolean }> = ({ isOwner }) => {
   const toast = useToast();
   const [data, setData] = useState<{ orders: any[]; counts: Record<string, number> } | null>(null);
   const [status, setStatus] = useState('');
@@ -19,6 +19,19 @@ export const Orders: React.FC = () => {
     const t = setTimeout(load, q ? 300 : 0);
     return () => clearTimeout(t);
   }, [status, q]);
+  // a new order just arrived (dashboard alert) → refresh the list
+  useEffect(() => {
+    const on = () => load();
+    window.addEventListener('homex:new-order', on);
+    return () => window.removeEventListener('homex:new-order', on);
+  }, [status, q]);
+
+  const [history, setHistory] = useState<any[] | null>(null);
+  useEffect(() => {
+    setHistory(null);
+    if (!open || !isOwner) return;
+    api.get('admin/activity', { entity: 'order', entity_id: String(open.id), limit: '20' }).then((d) => setHistory(d.items)).catch(() => setHistory([]));
+  }, [open?.id, open?.status]);
 
   const setOrderStatus = async (o: any, s: string) => {
     setBusy(true);
@@ -178,6 +191,24 @@ export const Orders: React.FC = () => {
               )}
               <p className="text-xs text-steel mt-2">الإلغاء أو المرتجع بيرجّع الكمية للمخزن تلقائياً. الطلب بيتحسب في المبيعات لما يبقى «اتسلّم».</p>
             </div>
+
+            {isOwner && (
+              <div>
+                <p className="font-extrabold text-ink mb-2">مين اتعامل مع الطلب</p>
+                {!history ? <Spinner /> : history.length === 0 ? (
+                  <p className="text-sm text-steel">لسه محدش غيّر حالة الطلب ده.</p>
+                ) : (
+                  <ul className="space-y-1.5 text-sm">
+                    {history.map((h) => (
+                      <li key={h.id} className="flex flex-wrap gap-x-2">
+                        <span className="price text-steel text-xs pt-0.5">{h.created_at.slice(5, 16)}</span>
+                        <span><b>{h.admin_name}</b> {h.summary.replace(/^غيّر حالة الطلب \S+ \([^)]*\) /, 'غيّر الحالة ')}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
           </div>
         )}
       </Modal>

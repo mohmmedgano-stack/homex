@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '../../lib/api';
 import { Card, Spinner, Input, Field, Button, Toggle, Select, Modal, useToast } from '../ui';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, History } from 'lucide-react';
 import type { Admin } from '../AdminApp';
 
-export const Team: React.FC<{ admin: Admin }> = ({ admin }) => {
+export const Team: React.FC<{ admin: Admin; onShowActivity?: (id: number) => void }> = ({ admin, onShowActivity }) => {
   const toast = useToast();
   const owner = admin.role === 'owner';
   const [pw, setPw] = useState({ current: '', next: '', confirm: '' });
@@ -96,6 +96,11 @@ export const Team: React.FC<{ admin: Admin }> = ({ admin }) => {
                       {u.username} {u.last_login ? `· آخر دخول ${u.last_login.slice(0, 16)}` : ''}
                     </span>
                   </button>
+                  {onShowActivity && (
+                    <Button variant="ghost" className="shrink-0 h-9 px-3 text-xs" onClick={() => onShowActivity(Number(u.id))}>
+                      <History className="w-4 h-4" /> <span className="hidden sm:inline">سجل النشاط</span>
+                    </Button>
+                  )}
                   {u.id !== admin.id && (
                     <button onClick={() => delUser(u)} className="p-2 text-steel hover:text-sale" aria-label={`مسح ${u.name}`}><Trash2 className="w-4 h-4" /></button>
                   )}

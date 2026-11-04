@@ -95,6 +95,7 @@ export const StoreSettingsPage: React.FC<{ admin: Admin }> = ({ admin }) => {
             <Field label="إيميل إشعارات الطلبات" hint="كل طلب جديد بيوصلك عليه إيميل فيه كل التفاصيل. مش بيظهر للعملاء">
               <Input value={s.notify_email || ''} onChange={(e) => set('notify_email', e.target.value)} dir="ltr" type="email" placeholder="you@gmail.com" />
             </Field>
+            <WhatsAppAlerts s={s} set={set} />
             <Field label="الإيميل">
               <Input value={s.email} onChange={(e) => set('email', e.target.value)} dir="ltr" type="email" />
             </Field>
@@ -234,3 +235,48 @@ const Gateway: React.FC<{ name: string; ready: boolean; active: boolean; where: 
     </div>
   </details>
 );
+
+/** New-order alerts on the owner's WhatsApp through CallMeBot (free, one-time activation from the owner's phone). */
+const WhatsAppAlerts: React.FC<{ s: any; set: (k: string, v: string) => void }> = ({ s, set }) => {
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  const [help, setHelp] = useState(false);
+  const test = async () => {
+    setBusy(true);
+    try {
+      await api.post('admin/settings', { wa_notify_phone: s.wa_notify_phone || '', wa_notify_apikey: s.wa_notify_apikey || '' });
+      await api.post('admin/wa-test', {});
+      toast('اتبعتت رسالة تجربة على الواتساب، شوف موبايلك');
+    } catch (e: any) { toast(e.message, 'err'); }
+    setBusy(false);
+  };
+  return (
+    <div className="sm:col-span-2 rounded-xl border border-[#25D366]/40 bg-[#25D366]/5 p-4 space-y-3">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="font-extrabold text-ink">إشعار الطلبات الجديدة على الواتساب</p>
+          <p className="text-xs text-steel mt-0.5">كل طلب جديد بيوصلك رسالة واتساب فيها اسم العميل والموبايل والعنوان والمنتجات والإجمالي.</p>
+        </div>
+        <button type="button" onClick={() => setHelp(!help)} className="text-xs font-bold text-gold-deep underline shrink-0">{help ? 'إخفاء الخطوات' : 'إزاي أفعّله؟'}</button>
+      </div>
+      {help && (
+        <ol className="text-sm text-ink bg-white rounded-lg border border-line p-3 space-y-1.5 list-decimal pr-5">
+          <li>افتح صفحة الخدمة من <a href="https://www.callmebot.com/blog/free-api-whatsapp-messages/" target="_blank" rel="noreferrer" className="text-gold-deep font-bold underline">هنا</a> وسجّل رقم CallMeBot المكتوب فيها في الأسماء على الموبايل اللي عايز الإشعارات توصله.</li>
+          <li>ابعتله على الواتساب الرسالة دي بالظبط: <b dir="ltr">I allow callmebot to send me messages</b></li>
+          <li>هيرد عليك في خلال دقيقتين برسالة فيها <b>APIKey</b> (رقم).</li>
+          <li>اكتب رقمك والـ APIKey هنا، واضغط «ابعت رسالة تجربة»، وبعدها «حفظ الإعدادات».</li>
+        </ol>
+      )}
+      <div className="grid sm:grid-cols-2 gap-3">
+        <Field label="رقم الواتساب اللي هتوصله الإشعارات">
+          <Input dir="ltr" inputMode="tel" value={s.wa_notify_phone || ''} onChange={(e) => set('wa_notify_phone', e.target.value)} placeholder="01012345678" />
+        </Field>
+        <Field label="كود التفعيل (APIKey)">
+          <Input dir="ltr" value={s.wa_notify_apikey || ''} onChange={(e) => set('wa_notify_apikey', e.target.value.trim())} placeholder="123456" autoComplete="off" />
+        </Field>
+      </div>
+      <Button type="button" variant="ghost" loading={busy} onClick={test} disabled={!s.wa_notify_phone || !s.wa_notify_apikey}>ابعت رسالة تجربة</Button>
+      <p className="text-[11px] text-steel">الخدمة دي مجانية (CallMeBot) ومناسبة لرقمك الشخصي. الرسالة ممكن تتأخر دقيقة. وكمان لوحة التحكم نفسها بتعمل صوت وإشعار أول ما الطلب يوصل وهي مفتوحة.</p>
+    </div>
+  );
+};
