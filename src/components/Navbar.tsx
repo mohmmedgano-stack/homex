@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useStore } from '../context/StoreContext';
-import { ShoppingCart, Heart, Scale, Search, ShieldCheck, X, Menu, Phone, Truck, ChevronDown, LayoutGrid } from 'lucide-react';
+import { ShoppingCart, Heart, ArrowLeftRight, Search, ShieldCheck, X, Menu, Phone, Truck, ChevronDown, LayoutGrid } from 'lucide-react';
 
 export const Navbar: React.FC = () => {
   const {
@@ -138,7 +138,7 @@ export const Navbar: React.FC = () => {
           <div className="flex items-center gap-1 sm:gap-4 mr-auto md:mr-0">
             <button onClick={() => setCompareOpen(true)} className="hidden lg:flex flex-col items-center text-white hover:text-gold-hi" aria-label="المقارنة">
               <span className="relative">
-                <Scale className="w-6 h-6" />
+                <ArrowLeftRight className="w-6 h-6" />
                 {compareList.length > 0 && <span className={counter}>{compareList.length}</span>}
               </span>
               <span className="text-[11px] font-bold mt-0.5">المقارنة</span>

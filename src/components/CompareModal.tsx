@@ -1,6 +1,6 @@
 import React from 'react';
 import { useStore } from '../context/StoreContext';
-import { X, Scale, Trash2, ShoppingBag, Star, Zap, ShieldCheck } from 'lucide-react';
+import { X, ArrowLeftRight, Trash2, ShoppingBag, Star, Zap, ShieldCheck } from 'lucide-react';
 
 export const CompareModal: React.FC = () => {
   const { 
@@ -25,7 +25,7 @@ export const CompareModal: React.FC = () => {
         <div className="flex items-center justify-between border-b border-slate-200 pb-4 mb-6">
           <div className="flex items-center gap-2.5">
             <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center">
-              <Scale className="w-5 h-5" />
+              <ArrowLeftRight className="w-5 h-5" />
             </div>
             <div>
               <h2 className="text-lg sm:text-xl font-bold text-slate-900">
@@ -55,7 +55,7 @@ export const CompareModal: React.FC = () => {
 
         {compareList.length === 0 ? (
           <div className="text-center py-12 space-y-3">
-            <Scale className="w-12 h-12 text-slate-300 mx-auto" />
+            <ArrowLeftRight className="w-12 h-12 text-slate-300 mx-auto" />
             <h3 className="text-base font-bold text-slate-700">لم تختر أي منتجات للمقارنة بعد</h3>
             <p className="text-xs text-slate-500 max-w-sm mx-auto">
               اضغط على أيقونة الميزان في بطاقة أي منتج لإضافته إلى جدول المقارنة الفنية.

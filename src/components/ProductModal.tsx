@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { thumb } from '../lib/api';
 import { useStore } from '../context/StoreContext';
-import { X, ShoppingBag, Heart, Scale, ShieldCheck, Truck, RotateCcw, Zap, Plus, Minus, Share2, CheckCircle2 } from 'lucide-react';
+import { X, ShoppingBag, Heart, ArrowLeftRight, ShieldCheck, Truck, RotateCcw, Zap, Plus, Minus, Share2, CheckCircle2 } from 'lucide-react';
 
 /**
  * Product details — full-screen sheet on phones (sticky buy bar at the bottom),
@@ -78,7 +78,7 @@ export const ProductModal: React.FC = () => {
               <Share2 className="w-4 h-4" />
             </button>
             <button onClick={() => toggleCompare(product)} className={`${iconBtn} ${inCompare ? '!border-gold !text-gold-deep' : ''}`} aria-label="قارن">
-              <Scale className="w-4 h-4" />
+              <ArrowLeftRight className="w-4 h-4" />
             </button>
             <button onClick={() => toggleWishlist(product.id)} className={`${iconBtn} ${isWished ? '!border-sale !text-sale' : ''}`} aria-label="المفضلة">
               <Heart className={`w-4 h-4 ${isWished ? 'fill-current' : ''}`} />

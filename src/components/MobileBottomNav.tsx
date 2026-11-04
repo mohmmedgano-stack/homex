@@ -1,6 +1,6 @@
 import React from 'react';
 import { useStore } from '../context/StoreContext';
-import { Home, Layers, Heart, ShoppingBag, ShieldCheck, Scale } from 'lucide-react';
+import { Home, Layers, Heart, ShoppingBag, ShieldCheck, ArrowLeftRight } from 'lucide-react';
 
 export const MobileBottomNav: React.FC = () => {
   const {
@@ -94,7 +94,7 @@ export const MobileBottomNav: React.FC = () => {
             onClick={() => setCompareOpen(true)}
             className="flex flex-col items-center gap-1 py-1 px-2.5 text-slate-500 hover:text-slate-800 transition-colors relative"
           >
-            <Scale className="w-5 h-5 text-slate-600" />
+            <ArrowLeftRight className="w-5 h-5 text-slate-600" />
             {compareList.length > 0 && (
               <span className="absolute top-0 right-1.5 bg-amber-500 text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
                 {compareList.length}

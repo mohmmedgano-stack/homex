@@ -2,7 +2,7 @@ import React from 'react';
 import { thumb } from '../lib/api';
 import { Product } from '../types';
 import { useStore } from '../context/StoreContext';
-import { Heart, Star, ShoppingCart, Check, Scale } from 'lucide-react';
+import { Heart, Star, ShoppingCart, Check, ArrowLeftRight } from 'lucide-react';
 
 interface ProductCardProps {
   product: Product;
@@ -62,7 +62,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, compact }) =>
             aria-pressed={inCompare}
             aria-label="مقارنة"
           >
-            <Scale className="w-4 h-4" />
+            <ArrowLeftRight className="w-4 h-4" />
           </button>
         </div>
       </div>
