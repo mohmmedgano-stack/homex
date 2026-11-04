@@ -21,16 +21,21 @@ export interface Admin {
 
 type Page = 'overview' | 'products' | 'orders' | 'banners' | 'pages' | 'dealers' | 'accounting' | 'settings' | 'team';
 
+type SettingsTab = 'general' | 'pages' | 'team';
+const SETTINGS_TABS: { id: SettingsTab; label: string; short: string; Icon: React.FC<any> }[] = [
+  { id: 'general', label: 'الإعدادات العامة', short: 'عام', Icon: Settings },
+  { id: 'pages', label: 'صفحات الموقع', short: 'الصفحات', Icon: FileText },
+  { id: 'team', label: 'المستخدمين والباسورد', short: 'المستخدمين', Icon: Users },
+];
+
 const NAV: { id: Page; label: string; Icon: React.FC<any>; owner?: boolean }[] = [
   { id: 'overview', label: 'الرئيسية', Icon: LayoutDashboard },
   { id: 'orders', label: 'الطلبات', Icon: ShoppingBag },
   { id: 'products', label: 'المنتجات والأقسام', Icon: Package },
   { id: 'banners', label: 'البانرات', Icon: Images },
-  { id: 'pages', label: 'صفحات الموقع', Icon: FileText },
   { id: 'dealers', label: 'التجار المعتمدين', Icon: Store },
   { id: 'accounting', label: 'الحسابات', Icon: Calculator },
   { id: 'settings', label: 'إعدادات المتجر', Icon: Settings },
-  { id: 'team', label: 'المستخدمين والباسورد', Icon: Users },
 ];
 
 export const AdminApp: React.FC = () => (
@@ -130,7 +135,10 @@ const Login: React.FC<{ setup: boolean; onDone: (d: any) => void }> = ({ setup, 
 };
 
 const Shell: React.FC<{ admin: Admin; onLogout: () => void }> = ({ admin, onLogout }) => {
-  const [page, setPage] = useState<Page>(() => (location.hash.slice(1) as Page) || 'overview');
+  // «صفحات الموقع» and «المستخدمين والباسورد» live as tabs inside «إعدادات المتجر»
+  const initial = location.hash.slice(1);
+  const [page, setPage] = useState<Page>(() => (['pages', 'team'].includes(initial) ? 'settings' : (initial as Page)) || 'overview');
+  const [settingsTab, setSettingsTab] = useState<SettingsTab>(() => (initial === 'pages' || initial === 'team' ? initial : 'general'));
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -216,11 +224,29 @@ const Shell: React.FC<{ admin: Admin; onLogout: () => void }> = ({ admin, onLogo
         {page === 'orders' && <Orders />}
         {page === 'products' && <Products />}
         {page === 'banners' && <Banners />}
-        {page === 'pages' && <SitePages />}
         {page === 'dealers' && <Dealers />}
         {page === 'accounting' && <Accounting />}
-        {page === 'settings' && <StoreSettingsPage admin={admin} />}
-        {page === 'team' && <Team admin={admin} />}
+        {page === 'settings' && (
+          <div className="space-y-4">
+            <div className="flex gap-1 p-1 bg-white border border-line rounded-xl overflow-x-auto no-scrollbar">
+              {SETTINGS_TABS.map((t) => (
+                <button
+                  key={t.id}
+                  onClick={() => setSettingsTab(t.id)}
+                  className={`flex-1 min-w-max h-10 px-2.5 sm:px-4 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-colors ${
+                    settingsTab === t.id ? 'bg-ink text-white' : 'text-steel hover:text-ink hover:bg-shelf'
+                  }`}
+                  aria-pressed={settingsTab === t.id}
+                >
+                  <t.Icon className="w-4 h-4 shrink-0" /> <span className="sm:hidden">{t.short}</span><span className="hidden sm:inline">{t.label}</span>
+                </button>
+              ))}
+            </div>
+            {settingsTab === 'general' && <StoreSettingsPage admin={admin} />}
+            {settingsTab === 'pages' && <SitePages />}
+            {settingsTab === 'team' && <Team admin={admin} />}
+          </div>
+        )}
       </main>
     </div>
   );
