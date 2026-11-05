@@ -2187,3 +2187,32 @@ function stock_moves_list(array $q): array {
     $st->execute($args);
     return ['moves' => $st->fetchAll(), 'reasons' => STOCK_REASONS];
 }
+
+
+/** Find cashier invoices by number, customer name or phone (any date) — for reprinting. */
+function pos_search(array $q): array {
+    $t = str($q['q'] ?? '', 60);
+    $sql = "SELECT id, code, customer_name, phone, payment_method, channel, total, status, created_by, created_at FROM orders WHERE source = 'pos'";
+    $args = [];
+    if ($t !== '') { $sql .= ' AND (code LIKE ? OR customer_name LIKE ? OR phone LIKE ?)'; $like = "%$t%"; $args = [$like, $like, $like]; }
+    $st = db()->prepare($sql . ' ORDER BY id DESC LIMIT 40');
+    $st->execute($args);
+    $rows = $st->fetchAll();
+    foreach ($rows as &$r) $r['created_at'] = utc_to_cairo($r['created_at']);
+    return ['sales' => $rows, 'payments' => POS_PAYMENTS, 'channels' => POS_CHANNELS];
+}
+
+/** Gives products without a barcode an in-store EAN-13 (prefix 2 = for internal use), so labels can be printed. */
+function auto_skus(array $b): array {
+    $ids = array_map('intval', (array)($b['ids'] ?? []));
+    $st = db()->prepare("UPDATE products SET sku = ? WHERE id = ? AND sku = ''");
+    foreach ($ids as $id) {
+        $base = '20' . str_pad((string)$id, 10, '0', STR_PAD_LEFT);   // 12 digits
+        $sum = 0;
+        for ($i = 0; $i < 12; $i++) $sum += (int)$base[$i] * ($i % 2 ? 3 : 1);
+        $code = $base . ((10 - $sum % 10) % 10);
+        if (act_row('SELECT id FROM products WHERE sku = ? AND id <> ?', [$code, $id])) continue;
+        $st->execute([$code, $id]);
+    }
+    return admin_products();
+}

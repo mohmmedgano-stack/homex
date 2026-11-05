@@ -54,6 +54,8 @@ try {
         case 'POST admin/pos-sale':     need(); ok(pos_sale(body())); break;
         case 'GET admin/pos-day':       need(); ok(pos_day($_GET)); break;
         case 'GET admin/pos-receipt':   need(); ok(pos_receipt((string)($_GET['code'] ?? ''))); break;
+        case 'GET admin/pos-search':   need(); ok(pos_search($_GET)); break;
+        case 'POST admin/auto-skus':   need(); ok(auto_skus(body())); break;
         case 'POST admin/pos-return':   need(); ok(pos_void(body())); break;
         case 'POST admin/stock-adjust': need(); ok(stock_adjust(body())); break;
         case 'GET admin/stock-moves':   need(); ok(stock_moves_list($_GET)); break;

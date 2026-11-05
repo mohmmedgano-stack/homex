@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { api, money, thumb } from '../../lib/api';
+import JsBarcode from 'jsbarcode';
 import { Card, Spinner, Empty, Input, Select, Field, Modal, Button, useToast } from '../ui';
 import {
   Search, Plus, Minus, Trash2, ScanBarcode, Printer, ShoppingCart, PackagePlus, PackageMinus, ClipboardList, History,
-  Boxes, AlertTriangle, RotateCcw, Receipt, X,
+  Boxes, AlertTriangle, RotateCcw, Receipt, X, Tags, FileText,
 } from 'lucide-react';
 
 type Product = { id: string; name: string; price: number; cost: number; stock: number; image: string; sku?: string; active?: boolean; category: string };
@@ -57,6 +58,8 @@ const Cashier: React.FC<{ products: Product[]; onSold: () => void }> = ({ produc
   const [receipt, setReceipt] = useState<Receipt | null>(null);
   const [day, setDay] = useState<any>(null);
   const [showDay, setShowDay] = useState(false);
+  const [printInv, setPrintInv] = useState(false);
+  const [printLabels, setPrintLabels] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
 
   const loadDay = () => api.get('admin/pos-day').then(setDay).catch(() => {});
@@ -121,8 +124,19 @@ const Cashier: React.FC<{ products: Product[]; onSold: () => void }> = ({ produc
     try { setDay(await api.post('admin/pos-return', { id: s.id })); onSold(); toast('الفاتورة اترجعت والكمية رجعت المخزن'); } catch (e: any) { toast(e.message, 'err'); }
   };
 
+  const quote = () => printReceipt({
+    id: 0, code: '', createdAt: new Date().toLocaleString('en-GB', { timeZone: 'Africa/Cairo' }).slice(0, 17), cashier: '', customerName: cust.name, customerPhone: cust.phone, note: '',
+    paymentLabel: '', channelLabel: '', discount: disc, subtotal: sub, total, status: '', items: lines.map((l) => ({ name: l.name, qty: l.qty, price: l.price })),
+  }, true);
+
   return (
     <>
+      {/* Print tools */}
+      <div className="flex flex-wrap gap-2">
+        <Button variant="ghost" className="h-10" onClick={() => setPrintInv(true)}><Printer className="w-4 h-4" /> طباعة فاتورة</Button>
+        <Button variant="ghost" className="h-10" onClick={() => setPrintLabels(true)}><Tags className="w-4 h-4" /> طباعة أكواد (باركود)</Button>
+      </div>
+
       {/* Today */}
       {day && (
         <button onClick={() => setShowDay(true)} className="w-full bg-ink text-white rounded-xl p-3 sm:p-4 flex flex-wrap items-center gap-x-6 gap-y-1 text-right">
@@ -260,6 +274,8 @@ const Cashier: React.FC<{ products: Product[]; onSold: () => void }> = ({ produc
         </div>
       )}
 
+      {printInv && <InvoicePrintModal hasCart={lines.length > 0} onQuote={quote} onClose={() => setPrintInv(false)} />}
+      {printLabels && <LabelsModal products={products} onClose={() => setPrintLabels(false)} onChanged={onSold} />}
       {receipt && <ReceiptModal r={receipt} onClose={() => { setReceipt(null); setTimeout(() => searchRef.current?.focus(), 50); }} />}
 
       <Modal open={showDay} onClose={() => setShowDay(false)} title={`فواتير الكاشير — ${day?.date || ''}`} wide>
@@ -288,8 +304,8 @@ const Cashier: React.FC<{ products: Product[]; onSold: () => void }> = ({ produc
   );
 };
 
-const ReceiptModal: React.FC<{ r: Receipt; onClose: () => void }> = ({ r, onClose }) => {
-  const print = () => {
+/** 80mm thermal receipt in a print window. `quote` prints the cart before selling (عرض سعر). */
+export function printReceipt(r: Receipt, quote = false) {
     const w = window.open('', '_blank', 'width=380,height=640');
     if (!w) return;
     const rows = r.items.map((i) => `<tr><td>${esc(i.name)}<br><small>${i.qty} × ${fmt(i.price)}</small></td><td class="l">${fmt(i.price * i.qty)}</td></tr>`).join('');
@@ -299,17 +315,20 @@ const ReceiptModal: React.FC<{ r: Receipt; onClose: () => void }> = ({ r, onClos
       table{width:100%;border-collapse:collapse;margin:8px 0} td{padding:4px 0;border-bottom:1px dashed #999;vertical-align:top} .l{text-align:left;white-space:nowrap}
       .t td{border:0;padding:2px 0} .big td{font-size:16px;font-weight:bold;border-top:1px solid #000;padding-top:6px}
     </style></head><body>
-      <h1>HOMEX</h1><div class="c muted">فاتورة بيع</div>
-      <div class="muted" style="margin-top:6px">رقم: ${esc(r.code)}<br>التاريخ: ${esc(r.createdAt)}<br>الكاشير: ${esc(r.cashier)}${r.customerName ? `<br>العميل: ${esc(r.customerName)}` : ''}${r.customerPhone ? ` — ${esc(r.customerPhone)}` : ''}</div>
+      <h1>HOMEX</h1><div class="c muted">${quote ? 'عرض سعر — مش فاتورة' : 'فاتورة بيع'}</div>
+      <div class="muted" style="margin-top:6px">${r.code ? `رقم: ${esc(r.code)}<br>` : ''}التاريخ: ${esc(r.createdAt)}${r.cashier ? `<br>الكاشير: ${esc(r.cashier)}` : ''}${r.customerName ? `<br>العميل: ${esc(r.customerName)}` : ''}${r.customerPhone ? ` — ${esc(r.customerPhone)}` : ''}</div>
       <table>${rows}</table>
       <table class="t"><tr><td>الإجمالي</td><td class="l">${fmt(r.subtotal)}</td></tr>
       ${r.discount > 0 ? `<tr><td>خصم</td><td class="l">- ${fmt(r.discount)}</td></tr>` : ''}
-      <tr class="big"><td>المطلوب</td><td class="l">${fmt(r.total)}</td></tr><tr><td>الدفع</td><td class="l">${esc(r.paymentLabel)}</td></tr></table>
+      <tr class="big"><td>المطلوب</td><td class="l">${fmt(r.total)}</td></tr>${r.paymentLabel ? `<tr><td>الدفع</td><td class="l">${esc(r.paymentLabel)}</td></tr>` : ''}</table>
       <div class="c muted" style="margin-top:10px">شكراً لتعاملك مع HOMEX<br>home-x.online</div>
       <script>window.onload=function(){window.print();setTimeout(function(){window.close()},300)}<\/script>
     </body></html>`);
     w.document.close();
-  };
+}
+
+const ReceiptModal: React.FC<{ r: Receipt; onClose: () => void }> = ({ r, onClose }) => {
+  const print = () => printReceipt(r);
   return (
     <Modal open onClose={onClose} title="تم البيع ✅"
       footer={<div className="flex gap-2 justify-end"><Button variant="ghost" onClick={print}><Printer className="w-4 h-4" /> طباعة الفاتورة</Button><Button onClick={onClose}>فاتورة جديدة</Button></div>}>
@@ -472,6 +491,184 @@ const MovesModal: React.FC<{ p: Product; onClose: () => void }> = ({ p, onClose 
           ))}
         </ul>
       )}
+    </Modal>
+  );
+};
+
+/* ============================ Reprint invoices ============================ */
+
+const InvoicePrintModal: React.FC<{ hasCart: boolean; onQuote: () => void; onClose: () => void }> = ({ hasCart, onQuote, onClose }) => {
+  const toast = useToast();
+  const [q, setQ] = useState('');
+  const [d, setD] = useState<any>(null);
+  useEffect(() => {
+    const t = setTimeout(() => api.get('admin/pos-search', { q }).then(setD).catch((e) => toast(e.message, 'err')), q ? 300 : 0);
+    return () => clearTimeout(t);
+  }, [q]);
+  const print = async (code: string) => {
+    try { printReceipt(await api.get('admin/pos-receipt', { code })); } catch (e: any) { toast(e.message, 'err'); }
+  };
+  return (
+    <Modal open onClose={onClose} title="طباعة فاتورة" wide>
+      <div className="space-y-3">
+        {hasCart && (
+          <button onClick={onQuote} className="w-full rounded-xl border-2 border-dashed border-gold bg-gold/5 p-3 text-right flex items-center gap-3">
+            <FileText className="w-5 h-5 text-gold-deep shrink-0" />
+            <span><b className="text-ink text-sm">اطبع الفاتورة اللي مفتوحة دلوقتي كـ«عرض سعر»</b><span className="block text-xs text-steel">من غير ما تتباع أو تتخصم من المخزن</span></span>
+          </button>
+        )}
+        <label className="relative block">
+          <Search className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-steel" />
+          <Input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="رقم الفاتورة أو اسم العميل أو موبايله" className="pr-9" />
+        </label>
+        {!d ? <Spinner /> : d.sales.length === 0 ? <Empty title="مفيش فواتير بالبحث ده" /> : (
+          <ul className="divide-y divide-line max-h-[55vh] overflow-y-auto">
+            {d.sales.map((s: any) => {
+              const back = s.status === 'returned' || s.status === 'cancelled';
+              return (
+                <li key={s.id} className="py-2.5 flex items-center gap-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="font-bold text-sm text-ink"><span dir="ltr" className="price">{s.code}</span> · {s.customer_name}{back ? <span className="text-sale text-xs"> · اترجعت</span> : ''}</p>
+                    <p className="text-xs text-steel price"><bdi dir="ltr">{s.created_at}</bdi> · {d.payments?.[s.payment_method]} · {s.created_by}</p>
+                  </div>
+                  <span className="price font-black text-ink shrink-0">{money(s.total)}</span>
+                  <Button variant="ghost" className="h-9 px-3 shrink-0" onClick={() => print(s.code)}><Printer className="w-4 h-4" /> طباعة</Button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+    </Modal>
+  );
+};
+
+/* ============================ Barcode labels ============================ */
+
+const LABEL_SIZES: Record<string, { label: string; w: number; h: number; sheet?: boolean }> = {
+  '40x25': { label: 'استيكر 40×25 مم (طابعة استيكر)', w: 40, h: 25 },
+  '50x30': { label: 'استيكر 50×30 مم (طابعة استيكر)', w: 50, h: 30 },
+  'a4': { label: 'ورق A4 استيكر (24 في الصفحة)', w: 70, h: 37, sheet: true },
+};
+
+const isEan13 = (c: string) => {
+  if (!/^\d{13}$/.test(c)) return false;
+  const sum = c.slice(0, 12).split('').reduce((a, d, i) => a + Number(d) * (i % 2 ? 3 : 1), 0);
+  return (10 - (sum % 10)) % 10 === Number(c[12]);
+};
+
+const barcodeSvg = (code: string, h: number) => {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  try {
+    JsBarcode(svg, code, { format: isEan13(code) ? 'EAN13' : 'CODE128', height: h, width: 1.6, margin: 0, marginLeft: isEan13(code) ? 12 : 0, fontSize: 12, textMargin: 1, displayValue: true, font: 'Arial' });
+  } catch {
+    JsBarcode(svg, code, { format: 'CODE128', height: h, width: 1.4, margin: 0, fontSize: 11, displayValue: true });
+  }
+  svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+  return svg.outerHTML;
+};
+
+const LabelsModal: React.FC<{ products: Product[]; onClose: () => void; onChanged: () => void }> = ({ products, onClose, onChanged }) => {
+  const toast = useToast();
+  const [q, setQ] = useState('');
+  const [sel, setSel] = useState<Record<string, number>>({});
+  const [size, setSize] = useState(() => { try { return localStorage.getItem('homex_label_size') || '40x25'; } catch { return '40x25'; } });
+  const [showPrice, setShowPrice] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [list, setList] = useState(products);
+  useEffect(() => setList(products), [products]);
+
+  const rows = list.filter((p) => !q || p.name.includes(q) || (p.sku || '').includes(q));
+  const chosen = list.filter((p) => sel[p.id] > 0);
+  const missing = chosen.filter((p) => !p.sku);
+  const total = chosen.reduce((a, p) => a + sel[p.id], 0);
+  const setN = (id: string, n: number) => setSel((x) => ({ ...x, [id]: Math.max(0, Math.min(999, n)) }));
+
+  const makeCodes = async () => {
+    setBusy(true);
+    try {
+      const l = await api.post('admin/auto-skus', { ids: missing.map((p) => Number(p.id)) });
+      setList(l); onChanged();
+      toast('اتعمل كود لكل المنتجات اللي مكانش ليها');
+    } catch (e: any) { toast(e.message, 'err'); }
+    setBusy(false);
+  };
+
+  const print = () => {
+    if (!chosen.length) return toast('اختار المنتجات اللي عايز تطبع لها أكواد', 'err');
+    if (missing.length) return toast('في منتجات مالهاش كود — دوس «اعمل كود تلقائي» الأول', 'err');
+    try { localStorage.setItem('homex_label_size', size); } catch { /* ignore */ }
+    const S = LABEL_SIZES[size];
+    const labels: string[] = [];
+    chosen.forEach((p) => {
+      const svg = barcodeSvg(p.sku!, S.sheet ? 48 : S.h >= 30 ? 40 : 30);
+      for (let k = 0; k < sel[p.id]; k++) {
+        labels.push(`<div class="lb"><div class="n">${esc(p.name)}</div><div class="b">${svg}</div>${showPrice ? `<div class="p">${fmt(p.price)}</div>` : ''}</div>`);
+      }
+    });
+    const w = window.open('', '_blank', 'width=600,height=700');
+    if (!w) return toast('المتصفح منع نافذة الطباعة — اسمح بالـ popups للموقع', 'err');
+    const page = S.sheet
+      ? `@page{size:A4;margin:8mm 5mm} body{display:grid;grid-template-columns:repeat(3,${S.w}mm);grid-auto-rows:${S.h}mm;justify-content:center}`
+      : `@page{size:${S.w}mm ${S.h}mm;margin:0} .lb{page-break-after:always;break-after:page}`;
+    w.document.write(`<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>أكواد المنتجات</title><style>
+      *{box-sizing:border-box} body{margin:0;font-family:Tahoma,Arial,sans-serif;color:#000} ${page}
+      .lb{width:${S.w}mm;height:${S.h}mm;padding:1.2mm 1.5mm;display:flex;flex-direction:column;align-items:center;justify-content:space-between;overflow:hidden;text-align:center}
+      .n{font-size:${S.w >= 50 ? 9.5 : 8}pt;font-weight:bold;line-height:1.15;max-height:2.3em;overflow:hidden;width:100%}
+      .b{flex:1;min-height:0;width:100%;display:flex;align-items:center;justify-content:center} .b svg{max-width:100%;max-height:100%;height:auto}
+      .p{font-size:${S.w >= 50 ? 11 : 9.5}pt;font-weight:bold;direction:rtl}
+    </style></head><body>${labels.join('')}<script>window.onload=function(){setTimeout(function(){window.print()},200)}<\/script></body></html>`);
+    w.document.close();
+  };
+
+  return (
+    <Modal open onClose={onClose} title="طباعة أكواد (باركود)" wide
+      footer={<div className="flex flex-wrap gap-2 items-center justify-between w-full">
+        <span className="text-sm text-steel price">{total} استيكر</span>
+        <div className="flex gap-2"><Button variant="ghost" onClick={onClose}>إلغاء</Button><Button onClick={print} disabled={!total}><Printer className="w-4 h-4" /> اطبع</Button></div>
+      </div>}>
+      <div className="space-y-3">
+        <div className="grid sm:grid-cols-2 gap-3">
+          <Field label="مقاس الاستيكر">
+            <Select value={size} onChange={(e) => setSize(e.target.value)}>
+              {Object.entries(LABEL_SIZES).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+            </Select>
+          </Field>
+          <label className="flex items-center gap-2 text-sm font-bold text-ink sm:mt-7">
+            <input type="checkbox" checked={showPrice} onChange={(e) => setShowPrice(e.target.checked)} className="w-4 h-4 accent-[#f47a20]" /> اطبع السعر على الاستيكر
+          </label>
+        </div>
+        <label className="relative block">
+          <Search className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-steel" />
+          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="دوّر على منتج" className="pr-9" />
+        </label>
+        {missing.length > 0 && (
+          <div className="rounded-xl bg-gold/10 border border-gold/40 p-3 flex flex-wrap items-center gap-3 text-sm">
+            <span className="flex-1 min-w-[180px]">{missing.length} من المنتجات اللي اخترتها مالهاش باركود. السيستم يقدر يعمل لها كود داخلي ويحفظه عليها.</span>
+            <Button className="h-9" loading={busy} onClick={makeCodes}>اعمل كود تلقائي</Button>
+          </div>
+        )}
+        <ul className="divide-y divide-line max-h-[48vh] overflow-y-auto">
+          {rows.map((p) => {
+            const n = sel[p.id] || 0;
+            return (
+              <li key={p.id} className="py-2 flex items-center gap-3">
+                <input type="checkbox" checked={n > 0} onChange={(e) => setN(p.id, e.target.checked ? Math.max(1, p.stock) : 0)} className="w-4 h-4 accent-[#f47a20] shrink-0" aria-label={p.name} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-bold text-ink line-clamp-1">{p.name}</p>
+                  <p className="text-xs text-steel price">{p.sku ? <span dir="ltr">{p.sku}</span> : <span className="text-sale">مالوش كود</span>} · {money(p.price)} · مخزن {p.stock}</p>
+                </div>
+                <div className="flex items-center border border-line rounded-lg h-9 shrink-0">
+                  <button onClick={() => setN(p.id, n + 1)} className="w-8 h-full flex items-center justify-center" aria-label="زوّد"><Plus className="w-3.5 h-3.5" /></button>
+                  <input value={n} onChange={(e) => setN(p.id, parseInt(e.target.value.replace(/\D/g, '')) || 0)} inputMode="numeric" className="w-10 text-center price font-bold bg-transparent outline-none" aria-label="عدد الاستيكرات" />
+                  <button onClick={() => setN(p.id, n - 1)} disabled={n <= 0} className="w-8 h-full flex items-center justify-center disabled:opacity-30" aria-label="قلّل"><Minus className="w-3.5 h-3.5" /></button>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+        <p className="text-xs text-steel">بيتطبع لكل منتج عدد استيكرات زي ما تختار (أول ما تعلّم عليه بيحط عدد القطع اللي في المخزن). على طابعة الاستيكر اختار من نافذة الطباعة نفس المقاس ومن غير هوامش.</p>
+      </div>
     </Modal>
   );
 };
