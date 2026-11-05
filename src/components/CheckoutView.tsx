@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { OrderPage } from './OrderPage';
 import { useStore } from '../context/StoreContext';
 import { CustomerDetails, Order } from '../types';
 import { EGYPT_GOVERNORATES, isEgyptMobile, isTripleName, normalizePhone } from '../data/governorates';
@@ -33,6 +34,7 @@ export const CheckoutView: React.FC = () => {
     name: '',
     phone: '',
     altPhone: '',
+    email: '',
     city: '',
     address: '',
     notes: '',
@@ -71,6 +73,11 @@ export const CheckoutView: React.FC = () => {
       showToast('رقم الموبايل الإضافي مش صحيح، صحّحه أو سيبه فاضي', 'error');
       return;
     }
+    if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(form.email.trim())) {
+      showToast('الإيميل مكتوب غلط', 'error');
+      return;
+    }
+
     if (form.address.trim().length < 10) {
       showToast('اكتب العنوان بالتفصيل: المنطقة والشارع ورقم العمارة والدور', 'error');
       return;
@@ -89,6 +96,7 @@ export const CheckoutView: React.FC = () => {
 
     submitOrder({ ...form, name: form.name.trim().replace(/\s+/g, ' '), phone: normalizePhone(form.phone), altPhone: form.altPhone ? normalizePhone(form.altPhone) : '' }).then((order) => {
       setCompletedOrder(order);
+      try { history.replaceState(null, '', `/o/${order.id}?t=${(order as any).token || ''}`); } catch { /* ignore */ }
       setIsSubmitting(false);
 
       // Trigger celebration confetti
@@ -120,100 +128,9 @@ export const CheckoutView: React.FC = () => {
     window.open(url, '_blank');
   };
 
-  // SUCCESS SCREEN
+  // SUCCESS → Shopify-style order page (same page the confirmation email links to)
   if (completedOrder) {
-    return (
-      <div className="max-w-3xl mx-auto py-10 px-4 sm:px-6 text-right">
-        <div className="bg-white rounded-3xl border border-slate-200/90 p-6 sm:p-10 shadow-xl space-y-6">
-          
-          <div className="w-18 h-18 rounded-3xl bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto shadow-inner">
-            <CheckCircle2 className="w-10 h-10" />
-          </div>
-
-          <div className="text-center space-y-2">
-            <span className="bg-emerald-100 text-emerald-800 text-xs font-bold px-3 py-1 rounded-full">
-              تم استلام طلبك بنجاح
-            </span>
-            <h1 className="text-2xl sm:text-3xl font-black text-slate-900">
-              شكراً لتسوقك معنا، {completedOrder.customer.name}!
-            </h1>
-            <p className="text-sm text-slate-500">
-              رقم تتبع طلبك: <strong className="font-mono text-amber-600 font-bold text-base">#{completedOrder.id}</strong>
-            </p>
-            <p className="text-xs text-slate-600">
-              سيقوم أحد مسؤولي خدمة العملاء بالتواصل معك هاتفياً على الرقم ({completedOrder.customer.phone}) لتأكيد موعد التسليم.
-            </p>
-          </div>
-
-          {/* Receipt details */}
-          <div className="bg-slate-50 rounded-2xl p-5 border border-slate-200 space-y-4 text-xs">
-            <h2 className="font-bold text-sm text-slate-800 border-b border-slate-200 pb-2">
-              تفاصيل الفاتورة والمنتجات المطلوبة:
-            </h2>
-            <div className="space-y-2">
-              {completedOrder.items.map((item, idx) => (
-                <div key={idx} className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <img src={item.productImage} alt="" className="w-10 h-10 rounded-lg object-cover" />
-                    <span>{item.productName} × {item.quantity}</span>
-                  </div>
-                  <span className="font-mono font-bold text-slate-800">
-                    {(item.price * item.quantity).toLocaleString()} ج.م
-                  </span>
-                </div>
-              ))}
-            </div>
-
-            <div className="pt-3 border-t border-slate-200 space-y-1">
-              <div className="flex justify-between text-slate-600">
-                <span>المجموع الفرعي:</span>
-                <span className="font-mono">{completedOrder.subtotal.toLocaleString()} ج.م</span>
-              </div>
-              <div className="flex justify-between text-slate-600">
-                <span>الشحن:</span>
-                <span className="font-mono">{completedOrder.shippingFee === 0 ? 'مجاناً' : `${completedOrder.shippingFee} ج.م`}</span>
-              </div>
-              <div className="flex justify-between text-sm font-black text-slate-900 pt-1 border-t border-slate-200">
-                <span>المبلغ المستحق:</span>
-                <span className="font-mono text-amber-600">{completedOrder.total.toLocaleString()} ج.م</span>
-              </div>
-            </div>
-
-            <div className="text-[11px] text-slate-500 pt-2 border-t border-slate-200">
-              <strong>عنوان التوصيل:</strong> {completedOrder.customer.city}، {completedOrder.customer.address}
-            </div>
-          </div>
-
-          {/* Action Buttons */}
-          <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
-            <button
-              onClick={() => handleWhatsAppShare(completedOrder)}
-              className="px-5 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs flex items-center gap-2 transition-all shadow-md"
-            >
-              <Share2 className="w-4 h-4" />
-              <span>متابعة الطلب عبر واتساب</span>
-            </button>
-
-            <button
-              onClick={handlePrint}
-              className="px-5 py-3 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-bold rounded-xl text-xs flex items-center gap-2"
-            >
-              <Printer className="w-4 h-4" />
-              <span>طباعة الفاتورة</span>
-            </button>
-
-            <button
-              onClick={() => setCurrentView('store')}
-              className="px-5 py-3 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl text-xs flex items-center gap-2"
-            >
-              <Home className="w-4 h-4" />
-              <span>العودة للمتجر</span>
-            </button>
-          </div>
-
-        </div>
-      </div>
-    );
+    return <OrderPage code={completedOrder.id} t={(completedOrder as any).token || ''} fresh />;
   }
 
   // CHECKOUT FORM
@@ -305,6 +222,23 @@ export const CheckoutView: React.FC = () => {
                     className="w-full bg-slate-50 text-slate-900 text-sm rounded-xl px-4 py-3 border border-slate-200 focus:outline-hidden focus:border-amber-500 focus:bg-white font-mono"
                   />
                 </div>
+              </div>
+
+              {/* Email (optional) — for the order confirmation */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                  الإيميل <span className="text-slate-400 font-normal">(اختياري — هيوصلك عليه تأكيد الطلب وتفاصيله)</span>
+                </label>
+                <input
+                  type="email"
+                  inputMode="email"
+                  autoComplete="email"
+                  dir="ltr"
+                  placeholder="name@gmail.com"
+                  value={form.email || ''}
+                  onChange={(e) => setForm({ ...form, email: e.target.value.trim() })}
+                  className="w-full bg-slate-50 text-slate-900 text-sm rounded-xl px-4 py-3 border border-slate-200 focus:outline-hidden focus:border-amber-500 focus:bg-white text-left"
+                />
               </div>
 
               {/* Governorate / City */}

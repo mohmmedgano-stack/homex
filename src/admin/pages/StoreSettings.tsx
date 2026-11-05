@@ -204,6 +204,7 @@ export const StoreSettingsPage: React.FC<{ admin: Admin }> = ({ admin }) => {
             </Field>
           </div>
         </Card>
+        <CustomerMessages s={s} set={set} />
       </fieldset>
 
       {owner && (
@@ -278,5 +279,106 @@ const WhatsAppAlerts: React.FC<{ s: any; set: (k: string, v: string) => void }> 
       <Button type="button" variant="ghost" loading={busy} onClick={test} disabled={!s.wa_notify_phone || !s.wa_notify_apikey}>ابعت رسالة تجربة</Button>
       <p className="text-[11px] text-steel">الخدمة دي مجانية (CallMeBot) ومناسبة لرقمك الشخصي. الرسالة ممكن تتأخر دقيقة. وكمان لوحة التحكم نفسها بتعمل صوت وإشعار أول ما الطلب يوصل وهي مفتوحة.</p>
     </div>
+  );
+};
+
+/** What the customer receives right after ordering: confirmation email + WhatsApp (Business Cloud API). */
+const CustomerMessages: React.FC<{ s: any; set: (k: string, v: string) => void }> = ({ s, set }) => {
+  const toast = useToast();
+  const [busy, setBusy] = useState('');
+  const [testEmail, setTestEmail] = useState('');
+  const [testPhone, setTestPhone] = useState('');
+  const [waHelp, setWaHelp] = useState(false);
+  const persist = (keys: string[]) => api.post('admin/settings', Object.fromEntries(keys.map((k) => [k, s[k] ?? ''])));
+
+  const sendEmail = async () => {
+    setBusy('email');
+    try {
+      await persist(['customer_email_on', 'smtp_host', 'smtp_port', 'smtp_user', 'smtp_pass']);
+      await api.post('admin/email-test', { to: testEmail });
+      toast('اتبعت إيميل تجربة، شوف صندوق الوارد (أو الـ Spam)');
+    } catch (e: any) { toast(e.message, 'err'); }
+    setBusy('');
+  };
+  const sendWa = async () => {
+    setBusy('wa');
+    try {
+      await persist(['wa_cloud_on', 'wa_cloud_phone_id', 'wa_cloud_token', 'wa_cloud_template', 'wa_cloud_lang']);
+      await api.post('admin/wa-cloud-test', { to: testPhone });
+      toast('اتبعتت رسالة واتساب تجربة');
+    } catch (e: any) { toast(e.message, 'err'); }
+    setBusy('');
+  };
+
+  return (
+    <Card title="رسائل تأكيد الطلب للعميل">
+      <p className="text-sm text-steel -mt-1 mb-4">أول ما العميل يطلب، بيوصله إيميل وواتساب فيهم رقم الطلب والمنتجات والإجمالي ولينك «عرض الطلب» يتابع منه حالة طلبه.</p>
+
+      {/* Email */}
+      <div className="rounded-xl border border-line p-4 space-y-3">
+        <Toggle checked={s.customer_email_on !== '0'} onChange={(v) => set('customer_email_on', v ? '1' : '0')} label="ابعت إيميل تأكيد للعميل (لو كتب إيميله)" />
+        <p className="text-xs text-steel leading-relaxed">
+          عشان الإيميل يوصل الـ Inbox مش الـ Spam: من Hostinger اعمل صندوق بريد زي <b dir="ltr">orders@home-x.online</b> (Emails ← Email Accounts)، واكتب بياناته هنا.
+          لو سبتها فاضية بيتبعت من السيرفر مباشرة، بس ممكن يروح Spam.
+        </p>
+        <div className="grid sm:grid-cols-2 gap-3">
+          <Field label="الإيميل اللي هيتبعت منه">
+            <Input dir="ltr" value={s.smtp_user || ''} onChange={(e) => set('smtp_user', e.target.value.trim())} placeholder="orders@home-x.online" autoComplete="off" />
+          </Field>
+          <Field label="باسورد صندوق البريد">
+            <Input dir="ltr" type="password" value={s.smtp_pass || ''} onChange={(e) => set('smtp_pass', e.target.value)} autoComplete="new-password" />
+          </Field>
+          <Field label="سيرفر البريد (SMTP)">
+            <Input dir="ltr" value={s.smtp_host || ''} onChange={(e) => set('smtp_host', e.target.value.trim())} placeholder="smtp.hostinger.com" />
+          </Field>
+          <Field label="البورت">
+            <Input dir="ltr" inputMode="numeric" value={s.smtp_port || '465'} onChange={(e) => set('smtp_port', e.target.value.replace(/\D/g, ''))} placeholder="465" />
+          </Field>
+        </div>
+        <div className="flex flex-col sm:flex-row gap-2">
+          <Input dir="ltr" type="email" value={testEmail} onChange={(e) => setTestEmail(e.target.value.trim())} placeholder="ابعت تجربة على: you@gmail.com" />
+          <Button type="button" variant="ghost" className="shrink-0" loading={busy === 'email'} disabled={!testEmail} onClick={sendEmail}>ابعت إيميل تجربة</Button>
+        </div>
+      </div>
+
+      {/* WhatsApp Cloud API */}
+      <div className="rounded-xl border border-[#25D366]/40 bg-[#25D366]/5 p-4 space-y-3 mt-4">
+        <div className="flex items-start justify-between gap-3">
+          <Toggle checked={s.wa_cloud_on === '1'} onChange={(v) => set('wa_cloud_on', v ? '1' : '0')} label="ابعت رسالة واتساب تأكيد للعميل" />
+          <button type="button" onClick={() => setWaHelp(!waHelp)} className="text-xs font-bold text-gold-deep underline shrink-0">{waHelp ? 'إخفاء الخطوات' : 'إزاي أجهّزه؟'}</button>
+        </div>
+        <p className="text-xs text-steel">بيستخدم واتساب بيزنس الرسمي من Meta (WhatsApp Cloud API) عشان يبعت لأي رقم عميل تلقائي. أول 1000 محادثة خدمة في الشهر مجانية، وبعدها Meta بتحاسب على الرسالة.</p>
+        {waHelp && (
+          <ol className="text-sm text-ink bg-white rounded-lg border border-line p-3 space-y-1.5 list-decimal pr-5 leading-relaxed">
+            <li>من <a className="text-gold-deep font-bold underline" href="https://developers.facebook.com/apps" target="_blank" rel="noreferrer">developers.facebook.com</a> اعمل App نوعه Business وضيف له منتج WhatsApp، واربطه ببيزنس مانجر HOMEX.</li>
+            <li>ضيف رقم واتساب البيزنس (رقم مش متسجل على واتساب عادي) وخد الـ <b>Phone number ID</b>.</li>
+            <li>من Business Settings ← System users اعمل يوزر وطلّع له <b>Access token دائم</b> بصلاحية whatsapp_business_messaging.</li>
+            <li>
+              من WhatsApp Manager ← Message templates اعمل تمبلت اسمه <b dir="ltr">order_confirmation</b>، النوع Utility، اللغة Arabic، والنص:
+              <span className="block bg-shelf rounded p-2 mt-1 text-[13px]">أهلاً {'{{1}}'} 👋 طلبك رقم {'{{2}}'} وصلنا بإجمالي {'{{3}}'}. هنكلمك قريب نأكد معاك ميعاد التوصيل. تقدر تتابع طلبك من هنا: {'{{4}}'}</span>
+            </li>
+            <li>بعد ما Meta توافق على التمبلت، اكتب البيانات هنا وابعت رسالة تجربة لرقمك.</li>
+          </ol>
+        )}
+        <div className="grid sm:grid-cols-2 gap-3">
+          <Field label="Phone number ID">
+            <Input dir="ltr" value={s.wa_cloud_phone_id || ''} onChange={(e) => set('wa_cloud_phone_id', e.target.value.trim())} placeholder="1234567890" autoComplete="off" />
+          </Field>
+          <Field label="Access token">
+            <Input dir="ltr" type="password" value={s.wa_cloud_token || ''} onChange={(e) => set('wa_cloud_token', e.target.value.trim())} autoComplete="new-password" />
+          </Field>
+          <Field label="اسم التمبلت">
+            <Input dir="ltr" value={s.wa_cloud_template || ''} onChange={(e) => set('wa_cloud_template', e.target.value.trim())} placeholder="order_confirmation" />
+          </Field>
+          <Field label="لغة التمبلت">
+            <Input dir="ltr" value={s.wa_cloud_lang || ''} onChange={(e) => set('wa_cloud_lang', e.target.value.trim())} placeholder="ar" />
+          </Field>
+        </div>
+        <div className="flex flex-col sm:flex-row gap-2">
+          <Input dir="ltr" inputMode="tel" value={testPhone} onChange={(e) => setTestPhone(e.target.value)} placeholder="ابعت تجربة على: 010xxxxxxxx" />
+          <Button type="button" variant="ghost" className="shrink-0" loading={busy === 'wa'} disabled={!testPhone || !s.wa_cloud_phone_id} onClick={sendWa}>ابعت واتساب تجربة</Button>
+        </div>
+      </div>
+    </Card>
   );
 };

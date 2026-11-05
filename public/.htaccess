@@ -17,6 +17,7 @@ DirectoryIndex index.html index.php
 
   # Store pages rendered by the app
   RewriteRule ^p/[a-z0-9-]+/?$ index.html [L]
+  RewriteRule ^o/[A-Za-z0-9-]+/?$ index.html [L]
 </IfModule>
 
 <IfModule mod_headers.c>

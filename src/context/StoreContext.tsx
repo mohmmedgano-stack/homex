@@ -516,7 +516,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       window.location.href = res.payUrl;
       return new Promise<Order>(() => {});
     }
-    const order: Order = {
+    const order: Order & { token?: string } = {
+      token: res.token,
       id: res.code,
       customer,
       items: cart.map((i) => ({ productId: i.product.id, productName: i.product.name, productImage: i.product.image, price: i.product.price, quantity: i.quantity })),

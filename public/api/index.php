@@ -18,6 +18,7 @@ try {
         case 'POST order':     ok(create_order(body())); break;
         case 'GET img':        serve_image($_GET['f'] ?? ''); break;
         case 'GET dealers':    ok(dealers_public()); break;
+        case 'GET order-view': ok(order_view((string)($_GET['code'] ?? ''), (string)($_GET['t'] ?? ''))); break;
         case 'POST paymob-callback': ok(paymob_callback()); break;
         case 'GET paymob-return': paymob_return(); break;
         case 'GET kashier-return': kashier_return(); break;
@@ -45,6 +46,8 @@ try {
 
         case 'GET admin/orders-pulse': need(); ok(orders_pulse()); break;
         case 'POST admin/wa-test':     need('owner'); ok(wa_test()); break;
+        case 'POST admin/email-test':  need('owner'); ok(test_email(body())); break;
+        case 'POST admin/wa-cloud-test': need('owner'); ok(test_wa_cloud(body())); break;
         case 'GET admin/activity':     need('owner'); ok(activity_list($_GET)); break;
 
         /* ---------- admin: site pages ---------- */

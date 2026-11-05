@@ -177,6 +177,8 @@ function migrate(PDO $db): void {
     $cols = array_column($db->query('PRAGMA table_info(orders)')->fetchAll(), 'name');
     if (!in_array('payment_status', $cols, true)) $db->exec("ALTER TABLE orders ADD COLUMN payment_status TEXT NOT NULL DEFAULT 'unpaid'");
     if (!in_array('payment_ref', $cols, true)) $db->exec("ALTER TABLE orders ADD COLUMN payment_ref TEXT NOT NULL DEFAULT ''");
+    if (!in_array('email', $cols, true)) $db->exec("ALTER TABLE orders ADD COLUMN email TEXT NOT NULL DEFAULT ''");
+    if (!in_array('token', $cols, true)) $db->exec("ALTER TABLE orders ADD COLUMN token TEXT NOT NULL DEFAULT ''");
     $pcols = array_column($db->query('PRAGMA table_info(products)')->fetchAll(), 'name');
     if (!in_array('created_by', $pcols, true)) $db->exec("ALTER TABLE products ADD COLUMN created_by TEXT NOT NULL DEFAULT ''");
     if (!in_array('updated_by', $pcols, true)) $db->exec("ALTER TABLE products ADD COLUMN updated_by TEXT NOT NULL DEFAULT ''");
@@ -424,9 +426,13 @@ const PAYMENT_SETTINGS = [
     'kashier_mid' => '', 'kashier_api_key' => '',
     'notify_email' => '',        // where new-order alerts go (dashboard only)
     'wa_notify_phone' => '', 'wa_notify_apikey' => '',   // WhatsApp alert for new orders (CallMeBot)
+    // Customer messages after ordering
+    'customer_email_on' => '1',
+    'smtp_host' => '', 'smtp_port' => '465', 'smtp_user' => '', 'smtp_pass' => '',
+    'wa_cloud_on' => '0', 'wa_cloud_phone_id' => '', 'wa_cloud_token' => '', 'wa_cloud_template' => 'order_confirmation', 'wa_cloud_lang' => 'ar',
     'fawry_merchant_code' => '', 'fawry_secure_key' => '',
 ];
-const SECRET_SETTINGS = ['paymob_secret_key', 'paymob_hmac', 'kashier_api_key', 'fawry_secure_key', 'wa_notify_apikey'];
+const SECRET_SETTINGS = ['paymob_secret_key', 'paymob_hmac', 'kashier_api_key', 'fawry_secure_key', 'wa_notify_apikey', 'smtp_pass', 'wa_cloud_token'];
 
 function payment_settings(): array {
     $out = PAYMENT_SETTINGS;
@@ -851,6 +857,8 @@ function create_order(array $b): array {
     $alt = trim((string)($c['altPhone'] ?? '')) === '' ? '' : egypt_mobile((string)$c['altPhone']);
     $address = str($c['address'] ?? '', 500);
     $city = str($c['city'] ?? '', 60);
+    $email = strtolower(str($c['email'] ?? '', 120));
+    if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) throw new ApiError('الإيميل مكتوب غلط');
     $words = array_filter(explode(' ', $name), fn($w) => mb_strlen($w) >= 2);
     if (count($words) < 3) throw new ApiError('اكتب الاسم ثلاثي');
     if ($phone === null) throw new ApiError('رقم الموبايل لازم يكون رقم مصري صحيح من 11 رقم');
@@ -886,8 +894,9 @@ function create_order(array $b): array {
         if ($pm === 'card' && !card_ready()) throw new ApiError('الدفع بالفيزا مش متاح دلوقتي، اختار طريقة دفع تانية');
         if ($pm === 'cod' && get_setting('pay_cod', '1') === '0') throw new ApiError('اختار طريقة دفع تانية');
         $code = 'HX' . date('ymd') . strtoupper(substr(bin2hex(random_bytes(3)), 0, 4));
-        $db->prepare('INSERT INTO orders (code, customer_name, phone, alt_phone, city, address, notes, payment_method, subtotal, shipping_fee, total, cost_total, status) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)')
-            ->execute([$code, $name, $phone, $alt, $city, $address, str($c['notes'] ?? '', 500), $pm, $sub, $fee, $total, $cost, $pm === 'card' ? 'awaiting_payment' : 'pending']);
+        $token = bin2hex(random_bytes(8));
+        $db->prepare('INSERT INTO orders (code, customer_name, phone, alt_phone, city, address, notes, payment_method, subtotal, shipping_fee, total, cost_total, status, email, token) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
+            ->execute([$code, $name, $phone, $alt, $city, $address, str($c['notes'] ?? '', 500), $pm, $sub, $fee, $total, $cost, $pm === 'card' ? 'awaiting_payment' : 'pending', $email, $token]);
         $oid = (int)$db->lastInsertId();
         $ins = $db->prepare('INSERT INTO order_items (order_id, product_id, name, image, price, cost, qty) VALUES (?,?,?,?,?,?,?)');
         $dec = $db->prepare('UPDATE products SET stock = stock - ? WHERE id = ?');
@@ -900,8 +909,8 @@ function create_order(array $b): array {
         $db->rollBack();
         throw $e;
     }
-    $res = ['code' => $code, 'subtotal' => $sub, 'shippingFee' => $fee, 'total' => $total];
-    if ($pm !== 'card') notify_new_order($code);
+    $res = ['code' => $code, 'token' => $token, 'subtotal' => $sub, 'shippingFee' => $fee, 'total' => $total];
+    if ($pm !== 'card') { notify_new_order($code); notify_customer($code); }
     if ($pm === 'card') {
         try {
             $args = [$oid, $code, $name, $phone, $city, $address, $lines, $fee, $total];
@@ -1195,6 +1204,7 @@ function card_settle(string $code, string $gatewayOrder, bool $success, int $amo
     if ($success && $amountCents === (int)round($o['total'] * 100)) {
         db()->prepare("UPDATE orders SET payment_status = 'paid', payment_ref = ?, status = 'pending', updated_at = datetime('now') WHERE id = ?")->execute(["txn:$txn", $o['id']]);
         notify_new_order($o['code']);
+        notify_customer($o['code']);
     } elseif ($o['status'] === 'awaiting_payment') {
         db()->prepare("UPDATE orders SET payment_status = 'failed' WHERE id = ?")->execute([$o['id']]);
         set_order_status(['id' => (int)$o['id'], 'status' => 'cancelled']);
@@ -1261,6 +1271,11 @@ function back_to_store(bool $paid, ?string $code): void {
         $st = db()->prepare("SELECT payment_status FROM orders WHERE code = ?");
         $st->execute([$code]);
         $really = $st->fetchColumn() === 'paid';
+    }
+    if ($really && $code) {
+        $o = order_with_items($code);
+        header('Location: ' . order_link($o, false) . '&pay=success', true, 302);
+        exit;
     }
     header('Location: /?pay=' . ($really ? 'success' : 'failed') . ($code ? '&order=' . rawurlencode($code) : ''), true, 302);
     exit;
@@ -1446,7 +1461,7 @@ function notify_new_order(string $code): void {
         $p = payment_settings();
         $to = $p['notify_email'];
         $wa = $p['wa_notify_phone'] !== '' && $p['wa_notify_apikey'] !== '';
-        if (($to === '' || !function_exists('mail')) && !$wa) return;
+        if ($to === '' && !$wa) return;
         $store = get_setting('store_name', 'HOMEX') ?: 'HOMEX';
         $pay = ['cod' => 'الدفع عند الاستلام', 'card' => 'فيزا (مدفوع)', 'vodafone' => 'فودافون كاش', 'instapay' => 'إنستاباي'][$o['payment_method']] ?? $o['payment_method'];
         $lines = array_map(fn($i) => "- {$i['name']} × {$i['qty']} = " . number_format($i['price'] * $i['qty']) . ' ج.م', $o['items']);
@@ -1457,17 +1472,15 @@ function notify_new_order(string $code): void {
             . "\nالمنتجات:\n" . implode("\n", $lines) . "\n\n"
             . 'الشحن: ' . number_format((float)$o['shipping_fee']) . " ج.م\nالإجمالي: " . number_format((float)$o['total']) . " ج.م\nالدفع: $pay\n\n"
             . "افتح الطلب: $base/admin/#orders\n";
-        $host = parse_url($base, PHP_URL_HOST) ?: 'home-x.online';
-        $subject = '=?UTF-8?B?' . base64_encode("طلب جديد {$o['code']} - " . number_format((float)$o['total']) . " ج.م") . '?=';
-        $from = '=?UTF-8?B?' . base64_encode($store) . "?= <no-reply@$host>";
         $waText = "🛒 *طلب جديد {$o['code']}* — $store\n\n" . $body;
 
         // Send after the customer already got their answer, so a slow mail/WhatsApp service never delays checkout
-        register_shutdown_function(function () use ($to, $subject, $body, $from, $wa, $waText) {
+        $ocode = $o['code'] . ' - ' . number_format((float)$o['total']) . ' ج.م';
+        register_shutdown_function(function () use ($to, $ocode, $body, $wa, $waText) {
             if (function_exists('litespeed_finish_request')) @litespeed_finish_request();
             elseif (function_exists('fastcgi_finish_request')) @fastcgi_finish_request();
             try {
-                if ($to !== '' && function_exists('mail')) @mail($to, $subject, $body, "From: $from\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: 8bit");
+                if ($to !== '') { $e = send_mail($to, "طلب جديد $ocode", '<div dir="rtl" style="font-family:Tahoma,Arial,sans-serif;font-size:15px;line-height:1.8;text-align:right">' . nl2br(htmlspecialchars($body, ENT_QUOTES, 'UTF-8')) . '</div>', $body); if ($e !== '') error_log('[homex mail owner] ' . $e); }
                 if ($wa) { $e = wa_send($waText); if ($e !== '') error_log('[homex wa] ' . $e); }
             } catch (Throwable $e) {
                 error_log('[homex notify] ' . $e->getMessage());
@@ -1732,4 +1745,239 @@ function activity_list(array $q): array {
     $rows = $st->fetchAll();
     $counts = db()->query("SELECT admin_id, COUNT(*) AS n, MAX(created_at) AS last FROM activity GROUP BY admin_id")->fetchAll();
     return ['items' => $rows, 'more' => count($rows) === $limit, 'perAdmin' => $counts];
+}
+
+
+/* ============================================================
+   Customer side: order page link, confirmation email (SMTP), WhatsApp (Cloud API)
+   ============================================================ */
+
+function order_token(array $o): string {
+    if (($o['token'] ?? '') !== '') return $o['token'];
+    if (empty($o['id'])) return 'test';
+    $t = bin2hex(random_bytes(8));
+    db()->prepare('UPDATE orders SET token = ? WHERE id = ?')->execute([$t, $o['id']]);
+    return $t;
+}
+
+function order_link(array $o, bool $absolute = true): string {
+    return ($absolute ? site_base() : '') . '/o/' . rawurlencode($o['code']) . '?t=' . order_token($o);
+}
+
+/** Public order page data — needs the secret token from the confirmation link. */
+function order_view(string $code, string $t): array {
+    $o = order_with_items(str($code, 30));
+    if (!$o || $t === '' || !hash_equals(order_token($o), $t)) throw new ApiError('الطلب مش موجود', 404);
+    return [
+        'code' => $o['code'], 'status' => $o['status'], 'createdAt' => $o['created_at'],
+        'name' => $o['customer_name'], 'phone' => $o['phone'], 'altPhone' => $o['alt_phone'], 'email' => $o['email'] ?? '',
+        'city' => $o['city'], 'address' => $o['address'], 'notes' => $o['notes'],
+        'paymentMethod' => $o['payment_method'], 'paid' => ($o['payment_status'] ?? '') === 'paid',
+        'subtotal' => (float)$o['subtotal'], 'shippingFee' => (float)$o['shipping_fee'], 'total' => (float)$o['total'],
+        'items' => array_map(fn($i) => ['name' => $i['name'], 'image' => $i['image'], 'price' => (float)$i['price'], 'qty' => (int)$i['qty']], $o['items']),
+    ];
+}
+
+/* ---------- email ---------- */
+
+function abs_url(string $u): string {
+    if ($u === '') return '';
+    if (str_starts_with($u, 'http')) return $u;
+    return site_base() . $u;
+}
+
+function mail_from(): array {
+    $p = payment_settings();
+    $host = parse_url(site_base(), PHP_URL_HOST) ?: 'home-x.online';
+    $addr = $p['smtp_user'] !== '' && filter_var($p['smtp_user'], FILTER_VALIDATE_EMAIL) ? $p['smtp_user'] : "no-reply@$host";
+    return [$addr, get_setting('store_name', 'HOMEX') ?: 'HOMEX'];
+}
+
+/** Sends an email through the store's mailbox (SMTP) when it's set up, otherwise PHP mail(). Returns '' or the error. */
+function send_mail(string $to, string $subject, string $html, string $text, string $replyTo = ''): string {
+    $p = payment_settings();
+    [$fromAddr, $fromName] = mail_from();
+    $b = 'b' . bin2hex(random_bytes(8));
+    $enc = fn($s) => '=?UTF-8?B?' . base64_encode($s) . '?=';
+    $headers = [
+        'From: ' . $enc($fromName) . " <$fromAddr>",
+        'MIME-Version: 1.0',
+        "Content-Type: multipart/alternative; boundary=\"$b\"",
+    ];
+    if ($replyTo !== '') $headers[] = "Reply-To: $replyTo";
+    $body = "--$b\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n" . chunk_split(base64_encode($text))
+        . "--$b\r\nContent-Type: text/html; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n" . chunk_split(base64_encode($html)) . "--$b--\r\n";
+
+    if ($p['smtp_host'] !== '' && $p['smtp_user'] !== '' && $p['smtp_pass'] !== '') {
+        return smtp_send($p['smtp_host'], (int)($p['smtp_port'] ?: 465), $p['smtp_user'], $p['smtp_pass'], $fromAddr, $to,
+            array_merge(["To: $to", 'Subject: ' . $enc($subject), 'Date: ' . date('r'), 'Message-ID: <' . bin2hex(random_bytes(10)) . '@' . (explode('@', $fromAddr)[1] ?? 'home-x.online') . '>'], $headers), $body);
+    }
+    if (!function_exists('mail')) return 'خدمة الإيميل مش متاحة على السيرفر';
+    return @mail($to, $enc($subject), $body, implode("\r\n", $headers)) ? '' : 'السيرفر رفض يبعت الإيميل';
+}
+
+function smtp_send(string $host, int $port, string $user, string $pass, string $from, string $to, array $headers, string $body): string {
+    $ssl = $port === 465;
+    $ctx = stream_context_create(['ssl' => ['verify_peer' => true, 'verify_peer_name' => true]]);
+    $fp = @stream_socket_client(($ssl ? 'ssl://' : 'tcp://') . "$host:$port", $errno, $errstr, 15, STREAM_CLIENT_CONNECT, $ctx);
+    if (!$fp) return "مقدرناش نتصل بسيرفر الإيميل ($errstr)";
+    stream_set_timeout($fp, 15);
+    $read = function () use ($fp) { $out = ''; while (($l = fgets($fp, 515)) !== false) { $out .= $l; if (strlen($l) < 4 || $l[3] === ' ') break; } return $out; };
+    $cmd = function (string $c, array $ok) use ($fp, $read) { fwrite($fp, $c . "\r\n"); $r = $read(); if (!in_array((int)substr($r, 0, 3), $ok, true)) throw new RuntimeException(trim($r)); return $r; };
+    try {
+        $r = $read(); if ((int)substr($r, 0, 3) !== 220) throw new RuntimeException(trim($r));
+        $me = parse_url(site_base(), PHP_URL_HOST) ?: 'localhost';
+        $cmd("EHLO $me", [250]);
+        if (!$ssl) {
+            $cmd('STARTTLS', [220]);
+            if (!stream_socket_enable_crypto($fp, true, STREAM_CRYPTO_METHOD_TLS_CLIENT)) throw new RuntimeException('TLS failed');
+            $cmd("EHLO $me", [250]);
+        }
+        $cmd('AUTH LOGIN', [334]);
+        $cmd(base64_encode($user), [334]);
+        try { $cmd(base64_encode($pass), [235]); } catch (RuntimeException $e) { throw new RuntimeException('AUTH: الإيميل أو الباسورد بتاع صندوق البريد غلط'); }
+        $cmd("MAIL FROM:<$from>", [250]);
+        $cmd("RCPT TO:<$to>", [250, 251]);
+        $cmd('DATA', [354]);
+        $data = implode("\r\n", $headers) . "\r\n\r\n" . preg_replace('/^\./m', '..', $body);
+        $cmd($data . "\r\n.", [250]);
+        $cmd('QUIT', [221]);
+        fclose($fp);
+        return '';
+    } catch (Throwable $e) {
+        @fclose($fp);
+        $m = $e->getMessage();
+        return str_starts_with($m, 'AUTH:') ? substr($m, 6) : 'سيرفر الإيميل رفض الرسالة: ' . mb_substr($m, 0, 120);
+    }
+}
+
+function money_ar($v): string { return number_format((float)$v, 0, '.', ',') . ' ج.م'; }
+
+function order_email_html(array $o): array {
+    $store = get_setting('store_name', 'HOMEX') ?: 'HOMEX';
+    $logo = get_setting('logo', '') ?: '/logo.png';
+    $link = order_link($o);
+    $pay = ['cod' => 'الدفع عند الاستلام', 'card' => 'فيزا / ماستركارد' . (($o['payment_status'] ?? '') === 'paid' ? ' (مدفوع)' : '')][$o['payment_method']] ?? $o['payment_method'];
+    $first = explode(' ', trim($o['customer_name']))[0] ?? '';
+    $h = fn($v) => htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
+    $rows = '';
+    foreach ($o['items'] as $i) {
+        $img = $i['image'] !== '' ? abs_url($i['image'] . (str_starts_with($i['image'], '/api/?r=img') ? '&s=1' : '')) : '';
+        $rows .= '<tr><td style="padding:12px 0;border-bottom:1px solid #eceef1;width:64px">'
+            . ($img ? '<img src="' . $h($img) . '" width="56" height="56" style="border-radius:8px;object-fit:cover;display:block;border:1px solid #eceef1" alt="">' : '')
+            . '</td><td style="padding:12px 12px;border-bottom:1px solid #eceef1;font-size:15px;color:#1c1f24"><b>' . $h($i['name']) . '</b><br><span style="color:#6b7280;font-size:13px">الكمية: ' . (int)$i['qty'] . '</span></td>'
+            . '<td style="padding:12px 0;border-bottom:1px solid #eceef1;font-size:15px;color:#1c1f24;white-space:nowrap;text-align:left"><b>' . money_ar($i['price'] * $i['qty']) . '</b></td></tr>';
+    }
+    $paidLine = ($o['payment_status'] ?? '') === 'paid'
+        ? '<tr><td style="color:#0e9f6e;padding:4px 0">اتدفع</td><td style="color:#0e9f6e;text-align:left;padding:4px 0">' . money_ar($o['total']) . '</td></tr>'
+        : '<tr><td style="color:#6b7280;padding:4px 0">هتدفع عند الاستلام</td><td style="color:#6b7280;text-align:left;padding:4px 0">' . money_ar($o['total']) . '</td></tr>';
+    $contact = array_filter([get_setting('phone', ''), get_setting('whatsapp', '') ? 'واتساب ' . get_setting('whatsapp', '') : '']);
+    $html = '<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>'
+        . '<body style="margin:0;background:#f3f4f6;font-family:Tahoma,Arial,sans-serif;direction:rtl;text-align:right">'
+        . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:24px 12px"><tr><td align="center">'
+        . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:14px;overflow:hidden">'
+        . '<tr><td style="background:#1c1f24;padding:22px 28px"><table width="100%" role="presentation"><tr><td><img src="' . $h(abs_url($logo)) . '" height="34" alt="' . $h($store) . '" style="display:block;height:34px"></td>'
+        . '<td style="text-align:left;color:#9ca3af;font-size:13px">طلب رقم<br><b style="color:#fff;font-size:15px">' . $h($o['code']) . '</b></td></tr></table></td></tr>'
+        . '<tr><td style="padding:28px">'
+        . '<h1 style="margin:0 0 8px;font-size:22px;color:#1c1f24">شكراً يا ' . $h($first) . '، طلبك وصلنا ✅</h1>'
+        . '<p style="margin:0 0 20px;color:#4b5563;font-size:15px;line-height:1.8">بنجهّز طلبك دلوقتي، وفريقنا هيكلمك على <b dir="ltr">' . $h($o['phone']) . '</b> يأكد معاك قبل الشحن.</p>'
+        . '<a href="' . $h($link) . '" style="display:inline-block;background:#f47a20;color:#fff;text-decoration:none;font-weight:bold;padding:13px 26px;border-radius:10px;font-size:15px">عرض الطلب</a>'
+        . '<h2 style="margin:30px 0 4px;font-size:17px;color:#1c1f24">ملخص الطلب</h2>'
+        . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0">' . $rows . '</table>'
+        . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:12px;font-size:15px;color:#1c1f24">'
+        . '<tr><td style="color:#6b7280;padding:4px 0">المنتجات</td><td style="text-align:left;padding:4px 0">' . money_ar($o['subtotal']) . '</td></tr>'
+        . '<tr><td style="color:#6b7280;padding:4px 0">الشحن</td><td style="text-align:left;padding:4px 0">' . money_ar($o['shipping_fee']) . '</td></tr>'
+        . '<tr><td style="padding:10px 0;border-top:1px solid #eceef1;font-size:17px"><b>الإجمالي</b></td><td style="padding:10px 0;border-top:1px solid #eceef1;text-align:left;font-size:19px"><b>' . money_ar($o['total']) . '</b></td></tr>'
+        . $paidLine . '</table>'
+        . '<h2 style="margin:28px 0 10px;font-size:17px;color:#1c1f24">بيانات التوصيل</h2>'
+        . '<p style="margin:0;color:#374151;font-size:15px;line-height:1.9">' . $h($o['customer_name']) . '<br>' . $h($o['address']) . '<br>' . $h($o['city']) . '، مصر<br><span dir="ltr">' . $h($o['phone']) . '</span></p>'
+        . '<h2 style="margin:22px 0 6px;font-size:17px;color:#1c1f24">طريقة الدفع</h2><p style="margin:0;color:#374151;font-size:15px">' . $h($pay) . '</p>'
+        . '</td></tr>'
+        . '<tr><td style="background:#f9fafb;padding:18px 28px;color:#6b7280;font-size:13px;line-height:1.8;border-top:1px solid #eceef1">'
+        . 'عندك سؤال عن طلبك؟ رد على الإيميل ده' . ($contact ? ' أو كلمنا: <span dir="ltr">' . $h(implode(' · ', $contact)) . '</span>' : '') . '<br>'
+        . '<a href="' . $h(site_base()) . '" style="color:#c4580a">' . $h($store) . '</a></td></tr>'
+        . '</table></td></tr></table></body></html>';
+    $text = "شكراً يا {$first}، طلبك {$o['code']} وصلنا.\n\n" . implode("\n", array_map(fn($i) => "- {$i['name']} × {$i['qty']}", $o['items']))
+        . "\n\nالإجمالي: " . money_ar($o['total']) . "\nالدفع: $pay\nالعنوان: {$o['address']}، {$o['city']}\n\nتابع طلبك: $link\n";
+    return [$html, $text];
+}
+
+/* ---------- WhatsApp Business (Cloud API) ---------- */
+
+function wa_cloud_send(string $toPhone, array $params, ?array $cfg = null): string {
+    $p = $cfg ?? payment_settings();
+    if ($p['wa_cloud_phone_id'] === '' || $p['wa_cloud_token'] === '') return 'بيانات واتساب بيزنس ناقصة';
+    $to = wa_intl($toPhone);
+    $payload = [
+        'messaging_product' => 'whatsapp', 'to' => $to, 'type' => 'template',
+        'template' => [
+            'name' => $p['wa_cloud_template'] ?: 'order_confirmation',
+            'language' => ['code' => $p['wa_cloud_lang'] ?: 'ar'],
+            'components' => [['type' => 'body', 'parameters' => array_map(fn($v) => ['type' => 'text', 'text' => mb_substr((string)$v, 0, 300)], $params)]],
+        ],
+    ];
+    $ch = curl_init('https://graph.facebook.com/v21.0/' . rawurlencode($p['wa_cloud_phone_id']) . '/messages');
+    curl_setopt_array($ch, [
+        CURLOPT_POST => true, CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 20,
+        CURLOPT_HTTPHEADER => ['Authorization: Bearer ' . $p['wa_cloud_token'], 'Content-Type: application/json'],
+        CURLOPT_POSTFIELDS => json_encode($payload, JSON_UNESCAPED_UNICODE),
+    ]);
+    $res = json_decode((string)curl_exec($ch), true);
+    $code = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+    $err = curl_error($ch);
+    curl_close($ch);
+    if ($err !== '') return 'مقدرناش نوصل لواتساب: ' . $err;
+    if ($code >= 400 || !empty($res['error'])) return 'واتساب رفض الرسالة: ' . mb_substr((string)($res['error']['error_data']['details'] ?? $res['error']['message'] ?? "HTTP $code"), 0, 200);
+    return '';
+}
+
+function wa_order_params(array $o): array {
+    $first = explode(' ', trim($o['customer_name']))[0] ?? '';
+    return [$first, $o['code'], money_ar($o['total']), order_link($o)];
+}
+
+/** Confirmation to the customer (email + WhatsApp). Runs after the response is sent; failures are only logged. */
+function notify_customer(string $code): void {
+    register_shutdown_function(function () use ($code) {
+        if (function_exists('litespeed_finish_request')) @litespeed_finish_request();
+        elseif (function_exists('fastcgi_finish_request')) @fastcgi_finish_request();
+        try {
+            $o = order_with_items($code);
+            if (!$o) return;
+            $p = payment_settings();
+            if (($o['email'] ?? '') !== '' && $p['customer_email_on'] !== '0') {
+                [$html, $text] = order_email_html($o);
+                $e = send_mail($o['email'], 'تم استلام طلبك ' . $o['code'] . ' — ' . (get_setting('store_name', 'HOMEX') ?: 'HOMEX'), $html, $text, $p['notify_email'] ?: get_setting('email', ''));
+                if ($e !== '') error_log("[homex mail] {$o['code']}: $e");
+            }
+            if ($p['wa_cloud_on'] === '1') {
+                $e = wa_cloud_send($o['phone'], wa_order_params($o));
+                if ($e !== '') error_log("[homex wa-cloud] {$o['code']}: $e");
+            }
+        } catch (Throwable $e) {
+            error_log('[homex notify-customer] ' . $e->getMessage());
+        }
+    });
+}
+
+/* ---------- dashboard test buttons ---------- */
+
+function test_email(array $b): array {
+    $to = strtolower(str($b['to'] ?? '', 120));
+    if (!filter_var($to, FILTER_VALIDATE_EMAIL)) throw new ApiError('اكتب إيميل صحيح للتجربة');
+    $demo = ['code' => 'HX-TEST', 'token' => 'test', 'customer_name' => 'عميل تجربة', 'phone' => '01000000000', 'city' => 'القاهرة', 'address' => 'عنوان تجربة',
+        'payment_method' => 'cod', 'payment_status' => 'unpaid', 'subtotal' => 1250, 'shipping_fee' => 60, 'total' => 1310,
+        'items' => [['name' => 'غلاية كهربائية (تجربة)', 'image' => '', 'price' => 1250, 'qty' => 1]], 'id' => 0];
+    [$html, $text] = order_email_html($demo);
+    $e = send_mail($to, 'تجربة إيميل تأكيد الطلب — ' . (get_setting('store_name', 'HOMEX') ?: 'HOMEX'), $html, $text);
+    if ($e !== '') throw new ApiError($e);
+    return ['sent' => true];
+}
+
+function test_wa_cloud(array $b): array {
+    $to = (string)($b['to'] ?? '');
+    if (!preg_match('/^\d{10,15}$/', wa_intl($to))) throw new ApiError('اكتب رقم موبايل صحيح للتجربة');
+    $e = wa_cloud_send($to, ['عميل', 'HX-TEST', money_ar(1310), site_base()]);
+    if ($e !== '') throw new ApiError($e);
+    return ['sent' => true];
 }

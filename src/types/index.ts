@@ -92,6 +92,7 @@ export interface CustomerDetails {
   name: string;
   phone: string;
   altPhone?: string;
+  email?: string;
   city: string;
   address: string;
   notes?: string;
