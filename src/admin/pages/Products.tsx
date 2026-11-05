@@ -4,7 +4,7 @@ import { Card, Spinner, Empty, Input, Textarea, Select, Field, Modal, Button, To
 import { Plus, Search, ImagePlus, Trash2, Star, X, Pencil, ChevronUp, ChevronDown, FolderCog } from 'lucide-react';
 
 const blank = {
-  id: '', name: '', category: '', brand: '', price: '', originalPrice: '', cost: '', stock: '',
+  id: '', name: '', category: '', brand: '', price: '', originalPrice: '', cost: '', stock: '', sku: '',
   image: '', gallery: [] as string[], description: '', features: [] as string[], specs: [] as { label: string; value: string }[],
   warranty: '', wattage: '', capacity: '', isFeatured: false, isNewArrival: true, active: true, rating: '', reviewsCount: '',
 };
@@ -271,6 +271,9 @@ const ProductEditor: React.FC<{ initial: any; cats: any[]; onClose: () => void; 
             </Field>
             <Field label="الكمية في المخزن">
               <Input type="number" inputMode="numeric" min="0" value={p.stock} onChange={(e) => set('stock', e.target.value)} />
+            </Field>
+            <Field label="الباركود / كود المنتج" hint="اختياري — عشان تبيعه بالقارئ في الكاشير">
+              <Input dir="ltr" value={p.sku || ''} onChange={(e) => set('sku', e.target.value.trim())} placeholder="6221234567890" />
             </Field>
           </div>
           {price > 0 && (

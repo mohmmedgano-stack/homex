@@ -3,7 +3,7 @@ import { api, money } from '../../lib/api';
 import { Card, Spinner, StatusBadge, STATUS, Empty, Input, Modal, Button, useToast } from '../ui';
 import { Phone, MessageCircle, Search, Download } from 'lucide-react';
 
-const PAY: Record<string, string> = { cod: 'الدفع عند الاستلام', vodafone: 'فودافون كاش', instapay: 'إنستاباي', card: 'فيزا / ماستركارد' };
+const PAY: Record<string, string> = { cod: 'الدفع عند الاستلام', vodafone: 'فودافون كاش', instapay: 'إنستاباي', card: 'فيزا / ماستركارد', cash: 'كاش', wallet: 'محفظة', credit: 'آجل' };
 const FLOW = ['pending', 'confirmed', 'shipped', 'delivered'];
 
 export const Orders: React.FC<{ isOwner?: boolean }> = ({ isOwner }) => {
@@ -11,14 +11,15 @@ export const Orders: React.FC<{ isOwner?: boolean }> = ({ isOwner }) => {
   const [data, setData] = useState<{ orders: any[]; counts: Record<string, number> } | null>(null);
   const [status, setStatus] = useState('');
   const [q, setQ] = useState('');
+  const [source, setSource] = useState('');
   const [open, setOpen] = useState<any>(null);
   const [busy, setBusy] = useState(false);
 
-  const load = () => api.get('admin/orders', { status, q }).then(setData).catch((e) => toast(e.message, 'err'));
+  const load = () => api.get('admin/orders', { status, q, source }).then(setData).catch((e) => toast(e.message, 'err'));
   useEffect(() => {
     const t = setTimeout(load, q ? 300 : 0);
     return () => clearTimeout(t);
-  }, [status, q]);
+  }, [status, q, source]);
   // a new order just arrived (dashboard alert) → refresh the list
   useEffect(() => {
     const on = () => load();
@@ -74,6 +75,12 @@ export const Orders: React.FC<{ isOwner?: boolean }> = ({ isOwner }) => {
         ))}
       </div>
 
+      <div className="flex gap-2">
+        {[['', 'كل المصادر'], ['web', 'طلبات الموقع'], ['pos', 'مبيعات الكاشير']].map(([id, label]) => (
+          <button key={id} onClick={() => setSource(id)} className={`h-8 px-3 rounded-full text-xs font-bold border ${source === id ? 'bg-gold text-white border-gold' : 'bg-white text-steel border-line'}`}>{label}</button>
+        ))}
+      </div>
+
       <label className="relative block">
         <Search className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-steel" />
         <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="ابحث برقم الطلب أو اسم العميل أو الموبايل" className="pr-9" />
@@ -93,6 +100,7 @@ export const Orders: React.FC<{ isOwner?: boolean }> = ({ isOwner }) => {
                     <span className="flex items-center gap-2">
                       <span className="font-bold text-ink truncate">{o.customer_name}</span>
                       <StatusBadge s={o.status} />
+                      {o.source === 'pos' && <span className="text-xs font-bold px-1.5 py-0.5 rounded bg-ink text-white">كاشير</span>}
                       {o.payment_method === 'card' && o.payment_status === 'paid' && <span className="text-xs font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800">مدفوع</span>}
                     </span>
                     <span className="block text-xs text-steel mt-0.5 price">

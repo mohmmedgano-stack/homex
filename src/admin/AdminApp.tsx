@@ -3,7 +3,7 @@ import { api, ApiError } from '../lib/api';
 import { ToastProvider, Button, Field, Input, Spinner, useToast } from './ui';
 import { useOrderAlerts } from './useOrderAlerts';
 import { ActivityLog } from './pages/ActivityLog';
-import { LayoutDashboard, Package, ShoppingBag, Calculator, Settings, Users, LogOut, Menu, X, ExternalLink, Store, Images, FileText, Bell, BellOff, History } from 'lucide-react';
+import { LayoutDashboard, Package, ShoppingBag, Calculator, Settings, Users, LogOut, Menu, X, ExternalLink, Store, Images, FileText, Bell, BellOff, History, ScanBarcode } from 'lucide-react';
 import { Overview } from './pages/Overview';
 import { Products } from './pages/Products';
 import { Orders } from './pages/Orders';
@@ -13,6 +13,7 @@ import { Team } from './pages/Team';
 import { Dealers } from './pages/Dealers';
 import { Banners } from './pages/Banners';
 import { SitePages } from './pages/SitePages';
+import { Inventory } from './pages/Inventory';
 
 export interface Admin {
   id: number;
@@ -21,7 +22,7 @@ export interface Admin {
   role: 'owner' | 'staff';
 }
 
-type Page = 'overview' | 'products' | 'orders' | 'banners' | 'pages' | 'dealers' | 'accounting' | 'settings' | 'team';
+type Page = 'overview' | 'products' | 'orders' | 'inventory' | 'banners' | 'pages' | 'dealers' | 'accounting' | 'settings' | 'team';
 
 type SettingsTab = 'general' | 'pages' | 'team' | 'activity';
 const SETTINGS_TABS: { id: SettingsTab; label: string; short: string; Icon: React.FC<any> }[] = [
@@ -35,6 +36,7 @@ const NAV: { id: Page; label: string; Icon: React.FC<any>; owner?: boolean }[] =
   { id: 'overview', label: 'الرئيسية', Icon: LayoutDashboard },
   { id: 'orders', label: 'الطلبات', Icon: ShoppingBag },
   { id: 'products', label: 'المنتجات والأقسام', Icon: Package },
+  { id: 'inventory', label: 'الكاشير والمخزن', Icon: ScanBarcode },
   { id: 'banners', label: 'البانرات', Icon: Images },
   { id: 'dealers', label: 'التجار المعتمدين', Icon: Store },
   { id: 'accounting', label: 'الحسابات', Icon: Calculator },
@@ -251,6 +253,7 @@ const Shell: React.FC<{ admin: Admin; onLogout: () => void }> = ({ admin, onLogo
         {page === 'overview' && <Overview go={setPage} />}
         {page === 'orders' && <Orders isOwner={isOwner} />}
         {page === 'products' && <Products />}
+        {page === 'inventory' && <Inventory />}
         {page === 'banners' && <Banners />}
         {page === 'dealers' && <Dealers />}
         {page === 'accounting' && <Accounting />}

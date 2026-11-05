@@ -141,6 +141,19 @@ function migrate(PDO $db): void {
     CREATE TABLE IF NOT EXISTS login_attempts (ip TEXT NOT NULL, at INTEGER NOT NULL);
     CREATE INDEX IF NOT EXISTS idx_orders_created ON orders(created_at);
     CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(date);
+    CREATE TABLE IF NOT EXISTS stock_moves (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        product_id INTEGER NOT NULL,
+        product_name TEXT NOT NULL DEFAULT '',
+        change INTEGER NOT NULL,
+        stock_after INTEGER NOT NULL DEFAULT 0,
+        reason TEXT NOT NULL,
+        note TEXT NOT NULL DEFAULT '',
+        ref TEXT NOT NULL DEFAULT '',
+        admin_name TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_moves_product ON stock_moves(product_id, id);
     CREATE TABLE IF NOT EXISTS activity (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         admin_id INTEGER NOT NULL,
@@ -179,7 +192,12 @@ function migrate(PDO $db): void {
     if (!in_array('payment_ref', $cols, true)) $db->exec("ALTER TABLE orders ADD COLUMN payment_ref TEXT NOT NULL DEFAULT ''");
     if (!in_array('email', $cols, true)) $db->exec("ALTER TABLE orders ADD COLUMN email TEXT NOT NULL DEFAULT ''");
     if (!in_array('token', $cols, true)) $db->exec("ALTER TABLE orders ADD COLUMN token TEXT NOT NULL DEFAULT ''");
+    if (!in_array('source', $cols, true)) $db->exec("ALTER TABLE orders ADD COLUMN source TEXT NOT NULL DEFAULT 'web'");
+    if (!in_array('channel', $cols, true)) $db->exec("ALTER TABLE orders ADD COLUMN channel TEXT NOT NULL DEFAULT ''");
+    if (!in_array('discount', $cols, true)) $db->exec("ALTER TABLE orders ADD COLUMN discount REAL NOT NULL DEFAULT 0");
+    if (!in_array('created_by', $cols, true)) $db->exec("ALTER TABLE orders ADD COLUMN created_by TEXT NOT NULL DEFAULT ''");
     $pcols = array_column($db->query('PRAGMA table_info(products)')->fetchAll(), 'name');
+    if (!in_array('sku', $pcols, true)) $db->exec("ALTER TABLE products ADD COLUMN sku TEXT NOT NULL DEFAULT ''");
     if (!in_array('created_by', $pcols, true)) $db->exec("ALTER TABLE products ADD COLUMN created_by TEXT NOT NULL DEFAULT ''");
     if (!in_array('updated_by', $pcols, true)) $db->exec("ALTER TABLE products ADD COLUMN updated_by TEXT NOT NULL DEFAULT ''");
     $ecols = array_column($db->query('PRAGMA table_info(expenses)')->fetchAll(), 'name');
@@ -677,7 +695,7 @@ function product_out(array $p, bool $admin = false): array {
         'reviewsCount' => (int)$p['reviews_count'],
         'createdAt' => $p['created_at'],
     ];
-    if ($admin) { $out['cost'] = (float)$p['cost']; $out['active'] = (bool)$p['active']; }
+    if ($admin) { $out['cost'] = (float)$p['cost']; $out['active'] = (bool)$p['active']; $out['sku'] = $p['sku'] ?? ''; }
     // Who added / last edited — visible to the owner only
     if ($admin && (current_admin()['role'] ?? '') === 'owner') {
         $out['createdBy'] = $p['created_by'] ?? '';
@@ -782,10 +800,20 @@ function save_product(array $b): array {
     $vals[] = $by;
     if ($id) {
         $vals[] = $id;
+        $oldStock = (int)(act_row('SELECT stock FROM products WHERE id = ?', [$id])['stock'] ?? 0);
         db()->prepare("UPDATE products SET name=?, category_id=?, brand=?, price=?, original_price=?, cost=?, stock=?, image=?, gallery=?, description=?, features=?, specs=?, warranty=?, wattage=?, capacity=?, is_featured=?, is_new=?, active=?, rating=?, reviews_count=?, updated_by=?, updated_at=datetime('now') WHERE id=?")->execute($vals);
+        $newStock = (int)($b['stock'] ?? 0);
+        if ($newStock !== $oldStock) stock_move($id, $name, $newStock - $oldStock, $newStock, 'edit', 'تعديل من شاشة المنتج');
     } else {
         $vals[] = $by;
         db()->prepare('INSERT INTO products (name, category_id, brand, price, original_price, cost, stock, image, gallery, description, features, specs, warranty, wattage, capacity, is_featured, is_new, active, rating, reviews_count, created_by, updated_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')->execute($vals);
+        $id = (int)db()->lastInsertId();
+        if ((int)($b['stock'] ?? 0) > 0) stock_move($id, $name, (int)$b['stock'], (int)$b['stock'], 'opening', 'رصيد أول المدة');
+    }
+    if (array_key_exists('sku', $b)) {
+        $sku = str((string)$b['sku'], 60);
+        if ($sku !== '' && act_row('SELECT id FROM products WHERE sku = ? AND id <> ?', [$sku, $id])) throw new ApiError("الباركود/الكود «{$sku}» متسجل على منتج تاني");
+        db()->prepare('UPDATE products SET sku = ? WHERE id = ?')->execute([$sku, $id]);
     }
     return admin_products();
 }
@@ -903,6 +931,7 @@ function create_order(array $b): array {
         foreach ($lines as [$p, $qty]) {
             $ins->execute([$oid, $p['id'], $p['name'], $p['image'], $p['price'], $p['cost'], $qty]);
             $dec->execute([$qty, $p['id']]);
+            stock_move((int)$p['id'], $p['name'], -$qty, (int)$p['stock'] - $qty, 'web_order', '', $code, 'عميل الموقع');
         }
         $db->commit();
     } catch (Throwable $e) {
@@ -932,6 +961,8 @@ function admin_orders(array $q): array {
     $where = []; $args = [];
     if (!empty($q['status']) && in_array($q['status'], ORDER_STATUSES, true)) { $where[] = 'status = ?'; $args[] = $q['status']; }
     if (!empty($q['q'])) { $where[] = '(code LIKE ? OR customer_name LIKE ? OR phone LIKE ?)'; $like = '%' . $q['q'] . '%'; array_push($args, $like, $like, $like); }
+    if (($q['source'] ?? '') === 'pos') $where[] = "source = 'pos'";
+    elseif (($q['source'] ?? '') === 'web') $where[] = "source != 'pos'";
     $sql = 'SELECT * FROM orders' . ($where ? ' WHERE ' . implode(' AND ', $where) : '') . ' ORDER BY id DESC LIMIT 500';
     $st = db()->prepare($sql);
     $st->execute($args);
@@ -964,6 +995,11 @@ function set_order_status(array $b): array {
     if ($wasOut !== $nowOut) {
         $sign = $nowOut ? '-' : '+';
         $db->prepare("UPDATE products SET stock = MAX(0, stock $sign (SELECT COALESCE(SUM(qty),0) FROM order_items WHERE order_id = ? AND product_id = products.id)) WHERE id IN (SELECT product_id FROM order_items WHERE order_id = ?)")->execute([$id, $id]);
+        $oc = (string)(act_row('SELECT code FROM orders WHERE id = ?', [$id])['code'] ?? '');
+        foreach ($db->query('SELECT oi.product_id, oi.name, SUM(oi.qty) q, p.stock FROM order_items oi LEFT JOIN products p ON p.id = oi.product_id WHERE oi.order_id = ' . $id . ' GROUP BY oi.product_id') as $m) {
+            $reason = $nowOut ? 'reopen' : ($status === 'returned' ? 'return' : 'cancel');
+            stock_move((int)$m['product_id'], (string)$m['name'], ($nowOut ? -1 : 1) * (int)$m['q'], (int)$m['stock'], $reason, '', $oc);
+        }
     }
     $db->prepare("UPDATE orders SET status = ?, updated_at = datetime('now') WHERE id = ?")->execute([$status, $id]);
     $db->commit();
@@ -1494,8 +1530,8 @@ function notify_new_order(string $code): void {
 /** Newest order id + how many are waiting for confirmation — the dashboard polls this for the new-order alert. */
 function orders_pulse(): array {
     // Unpaid card checkouts don't count until the payment succeeds
-    $real = "status != 'awaiting_payment'";
-    $last = db()->query("SELECT id, code, customer_name, total, city FROM orders WHERE status = 'pending' ORDER BY updated_at DESC, id DESC LIMIT 1")->fetch() ?: null;
+    $real = "status != 'awaiting_payment' AND source != 'pos'";
+    $last = db()->query("SELECT id, code, customer_name, total, city FROM orders WHERE status = 'pending' AND source != 'pos' ORDER BY updated_at DESC, id DESC LIMIT 1")->fetch() ?: null;
     $count = (int)db()->query("SELECT COUNT(*) FROM orders WHERE $real")->fetchColumn();
     $pending = (int)db()->query("SELECT COUNT(*) FROM orders WHERE status = 'pending'")->fetchColumn();
     return ['count' => $count, 'pending' => $pending, 'last' => $last ? ['id' => (int)$last['id'], 'code' => $last['code'], 'name' => $last['customer_name'], 'total' => (float)$last['total'], 'city' => $last['city']] : null];
@@ -1980,4 +2016,174 @@ function test_wa_cloud(array $b): array {
     $e = wa_cloud_send($to, ['عميل', 'HX-TEST', money_ar(1310), site_base()]);
     if ($e !== '') throw new ApiError($e);
     return ['sent' => true];
+}
+
+
+/* ============================================================
+   Inventory & point of sale (sales made outside the website)
+   ============================================================ */
+
+const STOCK_REASONS = [
+    'opening' => 'رصيد أول المدة', 'edit' => 'تعديل من شاشة المنتج', 'web_order' => 'طلب من الموقع', 'pos_sale' => 'بيع من الكاشير',
+    'cancel' => 'إلغاء طلب', 'return' => 'مرتجع', 'reopen' => 'إعادة فتح طلب', 'restock' => 'استلام بضاعة', 'damaged' => 'تالف / هالك',
+    'out' => 'صرف (هدية/عينة/استخدام)', 'count' => 'تسوية جرد',
+];
+const POS_PAYMENTS = ['cash' => 'كاش', 'card' => 'فيزا / ماكينة', 'wallet' => 'محفظة (فودافون كاش...)', 'instapay' => 'إنستاباي', 'credit' => 'آجل'];
+const POS_CHANNELS = ['shop' => 'المحل / المعرض', 'dealer' => 'تاجر جملة', 'facebook' => 'فيسبوك / إنستجرام', 'whatsapp' => 'واتساب', 'phone' => 'تليفون', 'other' => 'أخرى'];
+
+function cairo_now(): string { return (new DateTime('now', new DateTimeZone('Africa/Cairo')))->format('Y-m-d H:i:s'); }
+
+function stock_move(int $pid, string $name, int $change, int $after, string $reason, string $note = '', string $ref = '', ?string $by = null): void {
+    if ($change === 0) return;
+    db()->prepare('INSERT INTO stock_moves (product_id, product_name, change, stock_after, reason, note, ref, admin_name, created_at) VALUES (?,?,?,?,?,?,?,?,?)')
+        ->execute([$pid, $name, $change, max(0, $after), $reason, mb_substr($note, 0, 200), $ref, $by ?? (current_admin()['name'] ?? ''), cairo_now()]);
+}
+
+/** Cashier sale: deducts stock right away and books the sale as a delivered (paid) order, so it shows in the accounts. */
+function pos_sale(array $b): array {
+    $items = (array)($b['items'] ?? []);
+    if (!$items) throw new ApiError('ضيف منتجات للفاتورة الأول');
+    if (count($items) > 100) throw new ApiError('الفاتورة فيها منتجات كتير');
+    $pay = (string)($b['paymentMethod'] ?? 'cash');
+    if (!isset(POS_PAYMENTS[$pay])) $pay = 'cash';
+    $channel = (string)($b['channel'] ?? 'shop');
+    if (!isset(POS_CHANNELS[$channel])) $channel = 'shop';
+    $name = str($b['customerName'] ?? '', 100) ?: 'عميل ' . POS_CHANNELS[$channel];
+    $phone = preg_replace('/\D/', '', (string)($b['customerPhone'] ?? ''));
+    $phone = mb_substr($phone, 0, 15);
+    $note = str($b['note'] ?? '', 300);
+    $discount = max(0, num($b['discount'] ?? 0));
+    $by = current_admin()['name'] ?? '';
+
+    $db = db();
+    $db->beginTransaction();
+    try {
+        $sub = 0; $cost = 0; $lines = [];
+        $get = $db->prepare('SELECT * FROM products WHERE id = ?');
+        $merged = [];
+        foreach ($items as $it) {
+            $pid = (int)($it['productId'] ?? 0);
+            $qty = (int)($it['qty'] ?? 0);
+            if ($qty < 1 || $qty > 9999) throw new ApiError('الكمية لازم تكون رقم صحيح');
+            $price = isset($it['price']) ? num($it['price']) : null;
+            if ($price !== null && $price < 0) throw new ApiError('السعر مش صحيح');
+            if (isset($merged[$pid])) { $merged[$pid]['qty'] += $qty; continue; }
+            $merged[$pid] = ['qty' => $qty, 'price' => $price];
+        }
+        foreach ($merged as $pid => $m) {
+            $get->execute([$pid]);
+            $p = $get->fetch();
+            if (!$p) throw new ApiError('في منتج في الفاتورة مش موجود، حدّث الصفحة');
+            if ((int)$p['stock'] < $m['qty']) throw new ApiError("المخزن فيه {$p['stock']} بس من «{$p['name']}»");
+            $price = $m['price'] ?? (float)$p['price'];
+            $sub += $price * $m['qty'];
+            $cost += (float)$p['cost'] * $m['qty'];
+            $lines[] = [$p, $m['qty'], $price];
+        }
+        if ($discount > $sub) throw new ApiError('الخصم أكبر من قيمة الفاتورة');
+        $total = $sub - $discount;
+        $code = 'POS' . date('ymd') . strtoupper(substr(bin2hex(random_bytes(3)), 0, 4));
+        $now = gmdate('Y-m-d H:i:s');   // orders are stored in UTC like web orders
+        // subtotal is stored after discount so profit reports stay right
+        $db->prepare("INSERT INTO orders (code, customer_name, phone, alt_phone, city, address, notes, payment_method, subtotal, shipping_fee, total, cost_total, status, email, token, source, channel, discount, created_by, payment_status, created_at, updated_at)
+                      VALUES (?,?,?,?,?,?,?,?,?,0,?,?,'delivered','',?, 'pos', ?, ?, ?, ?, ?, ?)")
+            ->execute([$code, $name, $phone, '', '', '', $note, $pay, $total, $total, $cost, bin2hex(random_bytes(8)), $channel, $discount, $by, $pay === 'credit' ? 'unpaid' : 'paid', $now, $now]);
+        $oid = (int)$db->lastInsertId();
+        $ins = $db->prepare('INSERT INTO order_items (order_id, product_id, name, image, price, cost, qty) VALUES (?,?,?,?,?,?,?)');
+        $dec = $db->prepare('UPDATE products SET stock = stock - ? WHERE id = ?');
+        foreach ($lines as [$p, $qty, $price]) {
+            $ins->execute([$oid, $p['id'], $p['name'], $p['image'], $price, $p['cost'], $qty]);
+            $dec->execute([$qty, $p['id']]);
+            stock_move((int)$p['id'], $p['name'], -$qty, (int)$p['stock'] - $qty, 'pos_sale', '', $code, $by);
+        }
+        $db->commit();
+    } catch (Throwable $e) {
+        $db->rollBack();
+        throw $e;
+    }
+    log_activity(current_admin(), 'pos.sale', 'باع من الكاشير فاتورة ' . $code . ' بـ ' . fmt_money($total) . ' (' . POS_PAYMENTS[$pay] . ' — ' . POS_CHANNELS[$channel] . ') — ' . implode('، ', array_map(fn($l) => $l[0]['name'] . ' × ' . $l[1], $lines)), 'order', (string)$oid);
+    return pos_receipt($code);
+}
+
+function utc_to_cairo(string $utc): string {
+    try { return (new DateTime($utc, new DateTimeZone('UTC')))->setTimezone(new DateTimeZone('Africa/Cairo'))->format('Y-m-d H:i'); }
+    catch (Throwable $e) { return $utc; }
+}
+
+function pos_receipt(string $code): array {
+    $o = order_with_items($code);
+    if (!$o) throw new ApiError('الفاتورة مش موجودة', 404);
+    return [
+        'id' => (int)$o['id'], 'code' => $o['code'], 'createdAt' => utc_to_cairo($o['created_at']), 'cashier' => $o['created_by'] ?? '',
+        'customerName' => $o['customer_name'], 'customerPhone' => $o['phone'], 'note' => $o['notes'],
+        'paymentMethod' => $o['payment_method'], 'paymentLabel' => POS_PAYMENTS[$o['payment_method']] ?? $o['payment_method'],
+        'channel' => $o['channel'] ?? '', 'channelLabel' => POS_CHANNELS[$o['channel'] ?? ''] ?? '',
+        'discount' => (float)($o['discount'] ?? 0), 'subtotal' => (float)$o['subtotal'] + (float)($o['discount'] ?? 0), 'total' => (float)$o['total'],
+        'status' => $o['status'],
+        'items' => array_map(fn($i) => ['name' => $i['name'], 'qty' => (int)$i['qty'], 'price' => (float)$i['price']], $o['items']),
+    ];
+}
+
+/** Cashier screen footer: today's (or a given day's) sales from the cashier. */
+function pos_day(array $q): array {
+    $day = preg_match('/^\d{4}-\d{2}-\d{2}$/', (string)($q['date'] ?? '')) ? $q['date'] : substr(cairo_now(), 0, 10);
+    $tz = new DateTimeZone('Africa/Cairo');
+    $from = (new DateTime("$day 00:00:00", $tz))->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s');
+    $to = (new DateTime("$day 23:59:59", $tz))->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s');
+    $st = db()->prepare("SELECT id, code, customer_name, payment_method, channel, total, status, created_by, created_at FROM orders WHERE source = 'pos' AND created_at BETWEEN ? AND ? ORDER BY id DESC");
+    $st->execute([$from, $to]);
+    $rows = $st->fetchAll();
+    foreach ($rows as &$row) $row['created_at'] = utc_to_cairo($row['created_at']);
+    unset($row);
+    $by = []; $total = 0; $count = 0;
+    foreach ($rows as $r) {
+        if (in_array($r['status'], ['cancelled', 'returned'], true)) continue;
+        $by[$r['payment_method']] = ($by[$r['payment_method']] ?? 0) + (float)$r['total'];
+        $total += (float)$r['total']; $count++;
+    }
+    return ['date' => $day, 'count' => $count, 'total' => $total, 'byPayment' => $by, 'sales' => $rows, 'payments' => POS_PAYMENTS, 'channels' => POS_CHANNELS];
+}
+
+function pos_void(array $b): array {
+    $o = act_row("SELECT id, code, status FROM orders WHERE id = ? AND source = 'pos'", [(int)($b['id'] ?? 0)]);
+    if (!$o) throw new ApiError('الفاتورة مش موجودة', 404);
+    if (in_array($o['status'], ['cancelled', 'returned'], true)) throw new ApiError('الفاتورة دي اترجعت قبل كده');
+    set_order_status(['id' => (int)$o['id'], 'status' => 'returned']);
+    log_activity(current_admin(), 'pos.return', 'رجّع فاتورة الكاشير ' . $o['code'] . ' والكمية رجعت المخزن', 'order', (string)$o['id']);
+    return pos_day([]);
+}
+
+/** Manual stock changes: goods received, damaged, given out, or a stock-count correction. */
+function stock_adjust(array $b): array {
+    $p = act_row('SELECT id, name, stock FROM products WHERE id = ?', [(int)($b['productId'] ?? 0)]);
+    if (!$p) throw new ApiError('المنتج مش موجود', 404);
+    $mode = (string)($b['mode'] ?? '');
+    $qty = (int)($b['qty'] ?? -1);
+    if ($qty < 0 || $qty > 100000) throw new ApiError('اكتب كمية صحيحة');
+    $note = str($b['note'] ?? '', 200);
+    $old = (int)$p['stock'];
+    switch ($mode) {
+        case 'restock': if ($qty < 1) throw new ApiError('اكتب الكمية اللي وصلت'); $new = $old + $qty; break;
+        case 'damaged':
+        case 'out':
+            if ($qty < 1) throw new ApiError('اكتب الكمية');
+            if ($qty > $old) throw new ApiError("المخزن فيه $old بس");
+            $new = $old - $qty; break;
+        case 'count': $new = $qty; break;
+        default: throw new ApiError('نوع الحركة مش معروف');
+    }
+    if ($new === $old) return ['stock' => $old];
+    db()->prepare("UPDATE products SET stock = ?, updated_at = datetime('now') WHERE id = ?")->execute([$new, $p['id']]);
+    stock_move((int)$p['id'], $p['name'], $new - $old, $new, $mode, $note);
+    log_activity(current_admin(), 'stock.' . $mode, STOCK_REASONS[$mode] . ' — «' . $p['name'] . '» ' . ($new > $old ? '+' : '') . ($new - $old) . " (المخزن $old ← $new)" . ($note ? " — $note" : ''), 'product', (string)$p['id']);
+    return ['stock' => $new];
+}
+
+function stock_moves_list(array $q): array {
+    $where = []; $args = [];
+    if (!empty($q['product'])) { $where[] = 'product_id = ?'; $args[] = (int)$q['product']; }
+    if (!empty($q['before'])) { $where[] = 'id < ?'; $args[] = (int)$q['before']; }
+    $st = db()->prepare('SELECT * FROM stock_moves' . ($where ? ' WHERE ' . implode(' AND ', $where) : '') . ' ORDER BY id DESC LIMIT 80');
+    $st->execute($args);
+    return ['moves' => $st->fetchAll(), 'reasons' => STOCK_REASONS];
 }

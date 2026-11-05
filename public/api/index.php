@@ -50,6 +50,14 @@ try {
         case 'POST admin/wa-cloud-test': need('owner'); ok(test_wa_cloud(body())); break;
         case 'GET admin/activity':     need('owner'); ok(activity_list($_GET)); break;
 
+        /* ---------- admin: cashier & inventory ---------- */
+        case 'POST admin/pos-sale':     need(); ok(pos_sale(body())); break;
+        case 'GET admin/pos-day':       need(); ok(pos_day($_GET)); break;
+        case 'GET admin/pos-receipt':   need(); ok(pos_receipt((string)($_GET['code'] ?? ''))); break;
+        case 'POST admin/pos-return':   need(); ok(pos_void(body())); break;
+        case 'POST admin/stock-adjust': need(); ok(stock_adjust(body())); break;
+        case 'GET admin/stock-moves':   need(); ok(stock_moves_list($_GET)); break;
+
         /* ---------- admin: site pages ---------- */
         case 'GET admin/pages':        need(); ok(site_pages(true, public_settings()['store_name'])); break;
         case 'POST admin/page':        need(); ok(save_page(body())); break;
