@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { api, money } from '../../lib/api';
 import { Card, Spinner, StatusBadge, STATUS, Empty, Input, Modal, Button, useToast } from '../ui';
-import { Phone, MessageCircle, Search, Download } from 'lucide-react';
+import { Phone, MessageCircle, Search, Download, Trash2 } from 'lucide-react';
 
 const PAY: Record<string, string> = { cod: 'الدفع عند الاستلام', vodafone: 'فودافون كاش', instapay: 'إنستاباي', card: 'فيزا / ماستركارد', cash: 'كاش', wallet: 'محفظة', credit: 'آجل' };
 const FLOW = ['pending', 'confirmed', 'shipped', 'delivered'];
@@ -40,6 +40,22 @@ export const Orders: React.FC<{ isOwner?: boolean }> = ({ isOwner }) => {
       await api.post('admin/order-status', { id: o.id, status: s });
       toast(`الطلب ${o.code} بقى «${STATUS[s].label}»`);
       setOpen((cur: any) => (cur && cur.id === o.id ? { ...cur, status: s } : cur));
+      load();
+    } catch (e: any) {
+      toast(e.message, 'err');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const delOrder = async (o: any) => {
+    const back = o.status === 'cancelled' || o.status === 'returned';
+    if (!confirm(`متأكد إنك عايز تمسح الطلب ${o.code} (${o.customer_name}) نهائياً؟${back ? '' : '\nالكمية بتاعته هترجع المخزن.'}\nالمسح مش هيترجع.`)) return;
+    setBusy(true);
+    try {
+      await api.post('admin/order-delete', { id: o.id });
+      toast(`الطلب ${o.code} اتمسح`);
+      setOpen(null);
       load();
     } catch (e: any) {
       toast(e.message, 'err');
@@ -199,6 +215,15 @@ export const Orders: React.FC<{ isOwner?: boolean }> = ({ isOwner }) => {
               )}
               <p className="text-xs text-steel mt-2">الإلغاء أو المرتجع بيرجّع الكمية للمخزن تلقائياً. الطلب بيتحسب في المبيعات لما يبقى «اتسلّم».</p>
             </div>
+
+            {isOwner && (
+              <div className="pt-4 border-t border-line">
+                <Button variant="danger" className="w-full sm:w-auto" disabled={busy} onClick={() => delOrder(open)}>
+                  <Trash2 className="w-4 h-4" /> مسح الطلب نهائياً
+                </Button>
+                <p className="text-xs text-steel mt-1.5">لو الطلب وهمي أو متكرر. لو العميل لغاه بس، الأفضل تخلي حالته «اتلغى» عشان يفضل في السجل.</p>
+              </div>
+            )}
 
             {isOwner && (
               <div>

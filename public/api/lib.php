@@ -2025,7 +2025,7 @@ function test_wa_cloud(array $b): array {
 
 const STOCK_REASONS = [
     'opening' => 'رصيد أول المدة', 'edit' => 'تعديل من شاشة المنتج', 'web_order' => 'طلب من الموقع', 'pos_sale' => 'بيع من الكاشير',
-    'cancel' => 'إلغاء طلب', 'return' => 'مرتجع', 'reopen' => 'إعادة فتح طلب', 'restock' => 'استلام بضاعة', 'damaged' => 'تالف / هالك',
+    'cancel' => 'إلغاء طلب', 'return' => 'مرتجع', 'delete' => 'مسح طلب', 'reopen' => 'إعادة فتح طلب', 'restock' => 'استلام بضاعة', 'damaged' => 'تالف / هالك',
     'out' => 'صرف (هدية/عينة/استخدام)', 'count' => 'تسوية جرد',
 ];
 const POS_PAYMENTS = ['cash' => 'كاش', 'card' => 'فيزا / ماكينة', 'wallet' => 'محفظة (فودافون كاش...)', 'instapay' => 'إنستاباي', 'credit' => 'آجل'];
@@ -2215,4 +2215,33 @@ function auto_skus(array $b): array {
         $st->execute([$code, $id]);
     }
     return admin_products();
+}
+
+
+/** Permanently removes an order (owner only). Items still counted as sold go back to stock first. */
+function delete_order(array $b): array {
+    $o = act_row('SELECT * FROM orders WHERE id = ?', [(int)($b['id'] ?? 0)]);
+    if (!$o) throw new ApiError('الطلب مش موجود', 404);
+    $db = db();
+    $db->beginTransaction();
+    try {
+        if (!in_array($o['status'], ['cancelled', 'returned'], true)) {
+            $items = $db->prepare('SELECT oi.product_id, oi.name, SUM(oi.qty) q FROM order_items oi WHERE oi.order_id = ? GROUP BY oi.product_id');
+            $items->execute([$o['id']]);
+            $up = $db->prepare('UPDATE products SET stock = stock + ? WHERE id = ?');
+            foreach ($items->fetchAll() as $m) {
+                $up->execute([(int)$m['q'], (int)$m['product_id']]);
+                $after = (int)(act_row('SELECT stock FROM products WHERE id = ?', [(int)$m['product_id']])['stock'] ?? 0);
+                if ($m['product_id']) stock_move((int)$m['product_id'], (string)$m['name'], (int)$m['q'], $after, 'delete', '', $o['code']);
+            }
+        }
+        $db->prepare('DELETE FROM order_items WHERE order_id = ?')->execute([$o['id']]);
+        $db->prepare('DELETE FROM orders WHERE id = ?')->execute([$o['id']]);
+        $db->commit();
+    } catch (Throwable $e) {
+        $db->rollBack();
+        throw $e;
+    }
+    log_activity(current_admin(), 'order.delete', 'مسح الطلب ' . $o['code'] . ' (' . $o['customer_name'] . ' — ' . fmt_money($o['total']) . ')' . (!in_array($o['status'], ['cancelled', 'returned'], true) ? ' والكمية رجعت المخزن' : ''), 'order', (string)$o['id']);
+    return ['deleted' => (int)$o['id']];
 }

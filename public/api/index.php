@@ -80,6 +80,7 @@ try {
         /* ---------- admin: orders ---------- */
         case 'GET admin/orders':       need(); ok(admin_orders($_GET)); break;
         case 'POST admin/order-status': need(); ok(set_order_status(body())); break;
+        case 'POST admin/order-delete': need('owner'); ok(delete_order(body())); break;
         case 'GET admin/orders-export': need(); export_orders($_GET); break;
 
         /* ---------- admin: accounting ---------- */
