@@ -145,6 +145,18 @@ function migrate(PDO $db): void {
     CREATE TABLE IF NOT EXISTS order_attempts (ip TEXT NOT NULL, phone TEXT NOT NULL DEFAULT '', at INTEGER NOT NULL);
     CREATE INDEX IF NOT EXISTS idx_orders_created ON orders(created_at);
     CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(date);
+    CREATE TABLE IF NOT EXISTS reviews (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        product_id INTEGER NOT NULL,
+        order_id INTEGER NOT NULL DEFAULT 0,
+        name TEXT NOT NULL,
+        city TEXT NOT NULL DEFAULT '',
+        rating INTEGER NOT NULL,
+        comment TEXT NOT NULL DEFAULT '',
+        status TEXT NOT NULL DEFAULT 'pending',
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_reviews_product ON reviews(product_id, status);
     CREATE TABLE IF NOT EXISTS stock_moves (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         product_id INTEGER NOT NULL,
@@ -202,6 +214,7 @@ function migrate(PDO $db): void {
     if (!in_array('created_by', $cols, true)) $db->exec("ALTER TABLE orders ADD COLUMN created_by TEXT NOT NULL DEFAULT ''");
     $pcols = array_column($db->query('PRAGMA table_info(products)')->fetchAll(), 'name');
     if (!in_array('sku', $pcols, true)) $db->exec("ALTER TABLE products ADD COLUMN sku TEXT NOT NULL DEFAULT ''");
+    if (!in_array('slug', $pcols, true)) $db->exec("ALTER TABLE products ADD COLUMN slug TEXT NOT NULL DEFAULT ''");
     if (!in_array('created_by', $pcols, true)) $db->exec("ALTER TABLE products ADD COLUMN created_by TEXT NOT NULL DEFAULT ''");
     if (!in_array('updated_by', $pcols, true)) $db->exec("ALTER TABLE products ADD COLUMN updated_by TEXT NOT NULL DEFAULT ''");
     $ecols = array_column($db->query('PRAGMA table_info(expenses)')->fetchAll(), 'name');
@@ -700,6 +713,7 @@ function product_out(array $p, bool $admin = false): array {
         'rating' => (float)$p['rating'],
         'reviewsCount' => (int)$p['reviews_count'],
         'createdAt' => $p['created_at'],
+        'slug' => $p['slug'] ?? '',
     ];
     if ($admin) { $out['cost'] = (float)$p['cost']; $out['active'] = (bool)$p['active']; $out['sku'] = $p['sku'] ?? ''; }
     // Who added / last edited — visible to the owner only
@@ -815,6 +829,10 @@ function save_product(array $b): array {
         db()->prepare('INSERT INTO products (name, category_id, brand, price, original_price, cost, stock, image, gallery, description, features, specs, warranty, wattage, capacity, is_featured, is_new, active, rating, reviews_count, created_by, updated_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')->execute($vals);
         $id = (int)db()->lastInsertId();
         if ((int)($b['stock'] ?? 0) > 0) stock_move($id, $name, (int)$b['stock'], (int)$b['stock'], 'opening', 'رصيد أول المدة');
+    }
+    if (array_key_exists('slug', $b)) {
+        $slug = trim((string)preg_replace('/[^a-z0-9]+/', '-', strtolower(str((string)$b['slug'], 80))), '-');
+        db()->prepare('UPDATE products SET slug = ? WHERE id = ?')->execute([$slug, $id]);
     }
     if (array_key_exists('sku', $b)) {
         $sku = str((string)$b['sku'], 60);
@@ -2286,4 +2304,67 @@ function order_guard(array $b): void {
 function order_guard_record(string $phone): void {
     db()->prepare('INSERT INTO order_attempts (ip, phone, at) VALUES (?, ?, ?)')
         ->execute([(string)($_SERVER['HTTP_CF_CONNECTING_IP'] ?? $_SERVER['REMOTE_ADDR'] ?? ''), preg_replace('/\D/', '', $phone), time()]);
+}
+
+
+/* ============================================================
+   Product pages for crawlers & link previews (WhatsApp/Facebook don't run JS)
+   ============================================================ */
+
+function product_url(array $p): string {
+    return site_base() . '/product/' . (int)$p['id'] . (($p['slug'] ?? '') !== '' ? '-' . $p['slug'] : '');
+}
+
+/** index.html with the product's title, description, image, canonical and schema.org Product data baked in. */
+function render_product_html(int $id): void {
+    $html = (string)@file_get_contents(dirname(__DIR__) . '/index.html');
+    $p = act_row('SELECT * FROM products WHERE id = ? AND active = 1', [$id]);
+    header('Content-Type: text/html; charset=utf-8');
+    header('Cache-Control: no-cache');
+    if (!$p || $html === '') { http_response_code($p ? 200 : 404); echo $html; return; }
+    $store = get_setting('store_name', 'HOMEX') ?: 'HOMEX';
+    $h = fn($v) => htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
+    $url = product_url($p);
+    $img = abs_url((string)$p['image']);
+    $desc = trim(preg_replace('/\s+/u', ' ', (string)$p['description']));
+    $desc = mb_substr($desc !== '' ? $desc : $p['name'] . ' من ' . $store . ' بضمان حقيقي وشحن لكل محافظات مصر', 0, 160);
+    $title = $p['name'] . ' بسعر ' . number_format((float)$p['price']) . ' ج.م | ' . $store;
+    $reviews = act_row("SELECT COUNT(*) n, AVG(rating) a FROM reviews WHERE product_id = ? AND status = 'approved'", [$id]) ?: ['n' => 0, 'a' => null];
+    $ld = [
+        '@context' => 'https://schema.org', '@type' => 'Product', 'name' => $p['name'], 'image' => [$img], 'description' => $desc,
+        'sku' => ($p['sku'] ?? '') ?: 'HX' . $p['id'], 'brand' => ['@type' => 'Brand', 'name' => $p['brand'] ?: $store],
+        'offers' => ['@type' => 'Offer', 'url' => $url, 'priceCurrency' => 'EGP', 'price' => (string)(float)$p['price'],
+            'availability' => (int)$p['stock'] > 0 ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock', 'itemCondition' => 'https://schema.org/NewCondition'],
+    ];
+    if ((int)$reviews['n'] > 0) $ld['aggregateRating'] = ['@type' => 'AggregateRating', 'ratingValue' => round((float)$reviews['a'], 1), 'reviewCount' => (int)$reviews['n']];
+    $meta = '<title>' . $h($title) . '</title>'
+        . '<meta name="description" content="' . $h($desc) . '" />'
+        . '<meta property="og:type" content="product" /><meta property="og:title" content="' . $h($p['name']) . '" />'
+        . '<meta property="og:description" content="' . $h($desc) . '" /><meta property="og:url" content="' . $h($url) . '" />'
+        . '<meta property="og:image" content="' . $h($img) . '" /><meta property="product:price:amount" content="' . (float)$p['price'] . '" />'
+        . '<meta property="product:price:currency" content="EGP" /><link rel="canonical" href="' . $h($url) . '" />'
+        . '<script type="application/ld+json">' . json_encode($ld, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . '</script>';
+    // drop the generic tags of the home page, then add the product's
+    $html = preg_replace('~<title>.*?</title>|<meta (name="description"|property="og:(title|description|type|url|image(:width|:height)?)")[^>]*>|<link rel="canonical"[^>]*>~su', '', $html);
+    echo str_replace('</head>', $meta . "\n</head>", $html);
+}
+
+function sitemap_xml(): void {
+    header('Content-Type: application/xml; charset=utf-8');
+    $b = site_base();
+    $urls = [[$b . '/', '1.0']];
+    foreach (db()->query("SELECT id, slug, updated_at FROM products WHERE active = 1 ORDER BY id DESC") as $p) $urls[] = [product_url($p), '0.8', substr((string)$p['updated_at'], 0, 10)];
+    foreach (db()->query("SELECT slug FROM pages WHERE in_footer = 1") as $pg) $urls[] = [$b . '/p/' . $pg['slug'], '0.3'];
+    echo '<?xml version="1.0" encoding="UTF-8"?>' . "\n" . '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' . "\n";
+    foreach ($urls as $u) echo '  <url><loc>' . htmlspecialchars($u[0], ENT_XML1) . '</loc>' . (!empty($u[2]) ? "<lastmod>{$u[2]}</lastmod>" : '') . "<priority>{$u[1]}</priority></url>\n";
+    echo "</urlset>\n";
+}
+
+
+function product_reviews(int $pid): array {
+    $st = db()->prepare("SELECT id, name, city, rating, comment, created_at FROM reviews WHERE product_id = ? AND status = 'approved' ORDER BY id DESC LIMIT 50");
+    $st->execute([$pid]);
+    $items = array_map(fn($r) => ['id' => (int)$r['id'], 'name' => $r['name'], 'city' => $r['city'], 'rating' => (int)$r['rating'], 'comment' => $r['comment'], 'createdAt' => utc_to_cairo($r['created_at'])], $st->fetchAll());
+    $agg = act_row("SELECT COUNT(*) n, AVG(rating) a FROM reviews WHERE product_id = ? AND status = 'approved'", [$pid]);
+    return ['items' => $items, 'count' => (int)($agg['n'] ?? 0), 'avg' => round((float)($agg['a'] ?? 0), 1)];
 }

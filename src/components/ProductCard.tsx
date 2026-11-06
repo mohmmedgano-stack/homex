@@ -1,5 +1,6 @@
 import React from 'react';
 import { thumb } from '../lib/api';
+import { productPath } from './ProductPage';
 import { Product } from '../types';
 import { useStore } from '../context/StoreContext';
 import { Heart, Star, ShoppingCart, Check, ArrowLeftRight } from 'lucide-react';
@@ -27,7 +28,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, compact }) =>
     <article className="group relative bg-white rounded-xl border border-line hover:border-gold hover:shadow-lg transition flex flex-col overflow-hidden h-full">
       {/* Image */}
       <div className="relative aspect-square bg-white overflow-hidden">
-        <button onClick={() => setSelectedProduct(product)} className="absolute inset-0" aria-label={`تفاصيل ${product.name}`}>
+        <a href={productPath(product as any)} onClick={(e) => { if (e.metaKey || e.ctrlKey) return; e.preventDefault(); setSelectedProduct(product); }} className="absolute inset-0" aria-label={`تفاصيل ${product.name}`}>
           <img
             src={thumb(product.image)}
             alt={product.name}
@@ -35,7 +36,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, compact }) =>
             decoding="async"
             className={`w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ${isOut ? 'opacity-40 grayscale' : ''}`}
           />
-        </button>
+        </a>
 
         <div className="absolute top-2 right-2 flex flex-col items-start gap-1 pointer-events-none">
           {hasDiscount && !isOut && (
@@ -80,9 +81,9 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, compact }) =>
         </div>
 
         <h3 className={`mt-1 font-bold text-ink leading-snug line-clamp-2 ${compact ? 'text-[13px] min-h-[2.5rem]' : 'text-[13px] sm:text-[15px] min-h-[2.5rem] sm:min-h-[2.75rem]'}`}>
-          <button onClick={() => setSelectedProduct(product)} className="text-right hover:text-gold-deep">
+          <a href={productPath(product as any)} onClick={(e) => { if (e.metaKey || e.ctrlKey) return; e.preventDefault(); setSelectedProduct(product); }} className="text-right hover:text-gold-deep">
             {product.name}
-          </button>
+          </a>
         </h3>
 
         <div className="mt-2">

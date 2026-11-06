@@ -56,6 +56,8 @@ export interface Product {
   isFeatured?: boolean;
   isNewArrival?: boolean;
   createdAt: string;
+  slug?: string;
+  sku?: string;
 }
 
 export type AdminRole = 'super_admin' | 'product_manager' | 'orders_manager';

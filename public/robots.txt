@@ -1,6 +1,8 @@
 User-agent: *
 Allow: /
+Allow: /api/?r=img
 Disallow: /admin/
 Disallow: /api/
+Disallow: /o/
 
 Sitemap: https://home-x.online/sitemap.xml

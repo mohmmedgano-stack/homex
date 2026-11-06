@@ -9,7 +9,7 @@ import { PolicyPage, policyKeyFromPath } from './components/PolicyPage';
 import { OrderPage, orderFromPath } from './components/OrderPage';
 import { POLICY_PAGES } from './lib/api';
 import { ProductCard } from './components/ProductCard';
-import { ProductModal } from './components/ProductModal';
+import { ProductPage, productPath, productIdFromPath } from './components/ProductPage';
 import { CartDrawer } from './components/CartDrawer';
 import { WishlistDrawer } from './components/WishlistDrawer';
 import { CompareModal } from './components/CompareModal';
@@ -73,7 +73,84 @@ const StoreContent: React.FC = () => {
     setSortBy,
     setCurrentView,
     settings,
+    selectedProduct,
+    setSelectedProduct,
+    catalogLoaded,
   } = useStore();
+
+  /* ---- product pages: /product/ID-slug, kept in sync with the browser history ---- */
+  const storeScroll = React.useRef(0);
+  const pushedProduct = React.useRef(false);
+  // open from a link (ad, WhatsApp share, Google)
+  useEffect(() => {
+    if (!catalogLoaded) return;
+    const id = productIdFromPath();
+    if (!id) return;
+    const p = products.find((x) => String(x.id) === id);
+    if (p) setSelectedProduct(p);
+    else history.replaceState(null, '', '/');
+  }, [catalogLoaded]);
+  // clicking a product inside the store → new history entry
+  // (layout effect: must remember the scroll position before the product page scrolls to the top)
+  React.useLayoutEffect(() => {
+    if (!selectedProduct) return;
+    const path = productPath(selectedProduct as any);
+    if (location.pathname !== path) {
+      if (productIdFromPath()) history.replaceState({ homexProduct: true }, '', path);
+      else {
+        storeScroll.current = window.scrollY;
+        history.pushState({ homexProduct: true }, '', path);
+        pushedProduct.current = true;
+      }
+    }
+    if (currentView !== 'store') setCurrentView('store');
+  }, [selectedProduct?.id]);
+  // back / forward buttons
+  useEffect(() => {
+    const onPop = () => {
+      const id = productIdFromPath();
+      if (id) {
+        const p = products.find((x) => String(x.id) === id);
+        if (p) { setSelectedProduct(p); return; }
+      }
+      if (selectedProduct) {
+        setSelectedProduct(null);
+        pushedProduct.current = false;
+        const y = storeScroll.current;
+        // wait for the store to lay out again before jumping back
+        let tries = 0;
+        const go = () => { window.scrollTo({ top: y }); if (Math.abs(window.scrollY - y) > 4 && tries++ < 20) setTimeout(go, 50); };
+        requestAnimationFrame(() => requestAnimationFrame(go));
+      }
+    };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, [products, selectedProduct?.id]);
+  useEffect(() => {
+    try { history.scrollRestoration = 'manual'; } catch { /* old browsers */ }
+    const onClose = () => {
+      if (!productIdFromPath()) return;
+      history.pushState(null, '', '/');
+      pushedProduct.current = false;
+      setSelectedProduct(null);
+    };
+    window.addEventListener('homex:close-product', onClose);
+    return () => window.removeEventListener('homex:close-product', onClose);
+  }, []);
+  const closeProduct = () => {
+    if (pushedProduct.current) { history.back(); return; }
+    history.pushState(null, '', '/');
+    setSelectedProduct(null);
+    window.scrollTo({ top: 0 });
+  };
+  // leaving the product page for checkout keeps the URL honest
+  useEffect(() => {
+    if (currentView === 'checkout' && selectedProduct) {
+      setSelectedProduct(null);
+      history.replaceState(null, '', '/');
+      pushedProduct.current = false;
+    }
+  }, [currentView]);
   const STORE_INFO = settings;
   const [policyPage] = useState(policyKeyFromPath);
   const [orderPage] = useState(orderFromPath);
@@ -166,7 +243,9 @@ const StoreContent: React.FC = () => {
     <div className="min-h-screen flex flex-col bg-page text-ink pb-20 md:pb-0">
       <Navbar />
 
-      {orderPage && currentView === 'store' ? (
+      {selectedProduct && currentView === 'store' ? (
+        <ProductPage product={selectedProduct} onBack={closeProduct} />
+      ) : orderPage && currentView === 'store' ? (
         <OrderPage code={orderPage.code} t={orderPage.t} fresh={new URLSearchParams(location.search).get('pay') === 'success'} />
       ) : policyPage && currentView === 'store' ? (
         <PolicyPage pageKey={policyPage} />
@@ -288,7 +367,6 @@ const StoreContent: React.FC = () => {
         </main>
       )}
 
-      <ProductModal />
       <CartDrawer />
       <WishlistDrawer />
       <CompareModal />
@@ -301,7 +379,7 @@ const StoreContent: React.FC = () => {
           href={`https://wa.me/${waNumber(STORE_INFO.whatsapp)}`}
           target="_blank"
           rel="noopener noreferrer"
-          className="fixed bottom-20 md:bottom-6 left-4 z-40 w-14 h-14 rounded-full bg-[#25D366] text-white shadow-xl shadow-black/20 flex items-center justify-center hover:scale-105 transition-transform"
+          className={`fixed ${selectedProduct && currentView === 'store' ? 'bottom-36' : 'bottom-20'} md:bottom-6 left-4 z-40 w-14 h-14 rounded-full bg-[#25D366] text-white shadow-xl shadow-black/20 flex items-center justify-center hover:scale-105 transition-transform`}
           aria-label="كلمنا واتساب"
         >
           <FaWhatsapp className="w-8 h-8" />

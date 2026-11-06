@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useStore } from '../context/StoreContext';
+import { closeProductPage } from '../lib/nav';
 import { ShoppingCart, Heart, ArrowLeftRight, Search, ShieldCheck, X, Menu, Phone, Truck, ChevronDown, LayoutGrid } from 'lucide-react';
 
 export const Navbar: React.FC = () => {
@@ -38,9 +39,12 @@ export const Navbar: React.FC = () => {
 
   // On a policy page (/p/...) the store lives at "/", so store actions go home first
   const leavePolicyPage = (hash = '') => {
-    if (!location.pathname.startsWith('/p/')) return false;
-    location.href = '/' + hash;
-    return true;
+    if (/^\/(p|o)\//.test(location.pathname)) {
+      location.href = '/' + hash;
+      return true;
+    }
+    closeProductPage();
+    return false;
   };
 
   const toCatalog = (cat: string = 'all', sort?: any) => {
@@ -203,7 +207,7 @@ export const Navbar: React.FC = () => {
               )}
             </div>
             {[
-              { label: 'الرئيسية', on: () => { setSelectedCategory('all'); window.scrollTo({ top: 0, behavior: 'smooth' }); } },
+              { label: 'الرئيسية', on: () => { if (leavePolicyPage()) return; setSelectedCategory('all'); window.scrollTo({ top: 0, behavior: 'smooth' }); } },
               { label: 'كل المنتجات', on: () => toCatalog('all', 'featured') },
               { label: 'العروض', on: () => toCatalog('all', 'price-asc'), hot: true },
               { label: 'وصل حديثاً', on: () => toCatalog('all', 'newest') },

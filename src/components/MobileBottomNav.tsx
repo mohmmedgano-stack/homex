@@ -1,5 +1,6 @@
 import React from 'react';
 import { useStore } from '../context/StoreContext';
+import { closeProductPage } from '../lib/nav';
 import { Home, Layers, Heart, ShoppingBag, ShieldCheck, ArrowLeftRight } from 'lucide-react';
 
 export const MobileBottomNav: React.FC = () => {
@@ -23,9 +24,11 @@ export const MobileBottomNav: React.FC = () => {
         {/* Home */}
         <button
           onClick={() => {
-            if (location.pathname.startsWith('/p/')) { location.href = '/'; return; }
+            if (/^\/(p|o)\//.test(location.pathname)) { location.href = '/'; return; }
+            closeProductPage();
             setCurrentView('store');
             setSelectedCategory('all');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
           }}
           className={`flex flex-col items-center gap-1 py-1 px-2.5 rounded-xl transition-colors ${
             currentView === 'store' ? 'text-amber-600 font-bold' : 'text-slate-500 hover:text-slate-800'
@@ -38,9 +41,10 @@ export const MobileBottomNav: React.FC = () => {
         {/* Categories */}
         <button
           onClick={() => {
+            if (/^\/(p|o)\//.test(location.pathname)) { location.href = '/#catalog'; return; }
+            closeProductPage();
             setCurrentView('store');
-            const el = document.getElementById('appliances-catalog-section');
-            if (el) el.scrollIntoView({ behavior: 'smooth' });
+            setTimeout(() => document.getElementById('appliances-catalog-section')?.scrollIntoView({ behavior: 'smooth' }), 60);
           }}
           className="flex flex-col items-center gap-1 py-1 px-2.5 text-slate-500 hover:text-slate-800 transition-colors"
         >

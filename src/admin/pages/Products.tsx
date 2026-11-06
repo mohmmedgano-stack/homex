@@ -1,10 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { api, money } from '../../lib/api';
 import { Card, Spinner, Empty, Input, Textarea, Select, Field, Modal, Button, Toggle, useToast } from '../ui';
-import { Plus, Search, ImagePlus, Trash2, Star, X, Pencil, ChevronUp, ChevronDown, FolderCog } from 'lucide-react';
+import { Plus, Search, ImagePlus, Trash2, Star, X, Pencil, ChevronUp, ChevronDown, FolderCog, Link2 } from 'lucide-react';
 
 const blank = {
-  id: '', name: '', category: '', brand: '', price: '', originalPrice: '', cost: '', stock: '', sku: '',
+  id: '', name: '', category: '', brand: '', price: '', originalPrice: '', cost: '', stock: '', sku: '', slug: '',
   image: '', gallery: [] as string[], description: '', features: [] as string[], specs: [] as { label: string; value: string }[],
   warranty: '', wattage: '', capacity: '', isFeatured: false, isNewArrival: true, active: true, rating: '', reviewsCount: '',
 };
@@ -106,6 +106,15 @@ export const Products: React.FC = () => {
                       </p>
                     )}
                   </div>
+                  <button
+                    onClick={() => {
+                      const url = `${location.origin}/product/${p.id}${p.slug ? '-' + p.slug : ''}`;
+                      navigator.clipboard?.writeText(url).then(() => toast('اتنسخ رابط صفحة المنتج — حطه في الإعلان')).catch(() => window.open(url, '_blank'));
+                    }}
+                    className="p-2 text-steel hover:text-ink shrink-0" aria-label="انسخ رابط المنتج" title="انسخ رابط المنتج للإعلانات"
+                  >
+                    <Link2 className="w-4 h-4" />
+                  </button>
                   <Button variant="ghost" className="shrink-0 px-3" onClick={() => setEdit({ ...blank, ...p, originalPrice: p.originalPrice ?? '' })} aria-label="تعديل">
                     <Pencil className="w-4 h-4" /> <span className="hidden sm:inline">تعديل</span>
                   </Button>
@@ -271,6 +280,9 @@ const ProductEditor: React.FC<{ initial: any; cats: any[]; onClose: () => void; 
             </Field>
             <Field label="الكمية في المخزن">
               <Input type="number" inputMode="numeric" min="0" value={p.stock} onChange={(e) => set('stock', e.target.value)} />
+            </Field>
+            <Field label="رابط المنتج بالإنجليزي (اختياري)" hint={`مثلاً electric-kettle-1-7l ← home-x.online/product/${p.id || 'رقم'}-electric-kettle-1-7l`}>
+              <Input dir="ltr" value={p.slug || ''} onChange={(e) => set('slug', e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-'))} placeholder="electric-kettle-1-7l" />
             </Field>
             <Field label="الباركود / كود المنتج" hint="اختياري — عشان تبيعه بالقارئ في الكاشير">
               <Input dir="ltr" value={p.sku || ''} onChange={(e) => set('sku', e.target.value.trim())} placeholder="6221234567890" />

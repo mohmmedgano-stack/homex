@@ -18,6 +18,7 @@ try {
         case 'POST order':     ok(create_order(body())); break;
         case 'GET img':        serve_image($_GET['f'] ?? ''); break;
         case 'GET dealers':    ok(dealers_public()); break;
+        case 'GET reviews':    ok(product_reviews((int)($_GET['product'] ?? 0))); break;
         case 'GET order-view': ok(order_view((string)($_GET['code'] ?? ''), (string)($_GET['t'] ?? ''))); break;
         case 'POST paymob-callback': ok(paymob_callback()); break;
         case 'GET paymob-return': paymob_return(); break;
