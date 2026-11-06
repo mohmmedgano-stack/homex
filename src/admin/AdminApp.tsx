@@ -273,12 +273,12 @@ const Shell: React.FC<{ admin: Admin; onLogout: () => void }> = ({ admin, onLogo
         {page === 'accounting' && <Accounting />}
         {page === 'settings' && (
           <div className="space-y-4">
-            <div className="flex gap-1 p-1 bg-white border border-line rounded-xl overflow-x-auto no-scrollbar">
+            <div className="grid grid-cols-3 sm:flex gap-1 p-1 bg-white border border-line rounded-xl">
               {SETTINGS_TABS.filter((t) => !['activity', 'backups'].includes(t.id) || isOwner).map((t) => (
                 <button
                   key={t.id}
                   onClick={() => setSettingsTab(t.id)}
-                  className={`flex-1 min-w-max h-10 px-2.5 sm:px-4 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-colors ${
+                  className={`sm:flex-1 min-w-0 h-10 px-2 sm:px-4 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-colors ${
                     settingsTab === t.id ? 'bg-ink text-white' : 'text-steel hover:text-ink hover:bg-shelf'
                   }`}
                   aria-pressed={settingsTab === t.id}
