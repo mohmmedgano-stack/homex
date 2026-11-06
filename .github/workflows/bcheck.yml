@@ -6,8 +6,10 @@ jobs:
     steps:
       - run: |
           K=a61c617b007f82b2fdd32c86903148f2fbbdf567ce488e577ec5500679c09ccd
-          for u in "https://stg-app.bosta.co/api/v2/cities" "https://app.bosta.co/api/v2/cities"; do
-            echo "== $u"; curl -s -m 20 -H "Authorization: $K" "$u" | head -c 700; echo
-          done
-          echo "== no auth prod"; curl -s -m 20 "https://app.bosta.co/api/v2/cities" | head -c 400; echo
-          echo "== deliveries schema probe (empty body, staging)"; curl -s -m 20 -X POST -H "Authorization: $K" -H "Content-Type: application/json" -d '{}' "https://stg-app.bosta.co/api/v2/deliveries?apiVersion=1" | head -c 700; echo
+          U="https://stg-app.bosta.co/api/v2/deliveries?apiVersion=1"
+          p() { echo "== $1"; curl -s -m 20 -X POST -H "Authorization: $K" -H "Content-Type: application/json" -d "$2" "$U" | head -c 500; echo; }
+          echo "== bad key"; curl -s -m 20 -X POST -H "Authorization: bad" -H "Content-Type: application/json" -d '{}' "$U" | head -c 300; echo
+          p "no receiver" '{"type":10,"specs":{"packageType":"Parcel","size":"MEDIUM","packageDetails":{"itemsCount":1,"description":"x"}},"cod":-5,"dropOffAddress":{"city":"Jrb6X6ucjiYgMP4T7","firstLine":"street 1"},"businessReference":"T1"}'
+          p "city code + bad phone" '{"type":10,"specs":{"packageType":"Parcel","size":"MEDIUM","packageDetails":{"itemsCount":1,"description":"x"}},"cod":-5,"dropOffAddress":{"city":"EG-02","firstLine":"street 1"},"receiver":{"firstName":"A","lastName":"B","phone":"123"},"businessReference":"T1"}'
+          p "city id + bad phone" '{"type":10,"specs":{"packageType":"Parcel","size":"MEDIUM","packageDetails":{"itemsCount":1,"description":"x"}},"cod":-5,"dropOffAddress":{"city":"Jrb6X6ucjiYgMP4T7","firstLine":"street 1"},"receiver":{"firstName":"A","lastName":"B","phone":"123"},"businessReference":"T1"}'
+          p "city name + bad phone" '{"type":10,"specs":{"packageType":"Parcel","size":"MEDIUM","packageDetails":{"itemsCount":1,"description":"x"}},"cod":-5,"dropOffAddress":{"city":"Alexandria","firstLine":"street 1"},"receiver":{"firstName":"A","lastName":"B","phone":"123"},"businessReference":"T1"}'
