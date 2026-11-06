@@ -95,6 +95,7 @@ export interface CustomerDetails {
   phone: string;
   altPhone?: string;
   email?: string;
+  couponCode?: string;
   city: string;
   address: string;
   notes?: string;

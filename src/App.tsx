@@ -76,7 +76,19 @@ const StoreContent: React.FC = () => {
     selectedProduct,
     setSelectedProduct,
     catalogLoaded,
+    showToast,
   } = useStore();
+
+  // Influencer links: home-x.online/?coupon=CODE → remembered and applied at checkout
+  useEffect(() => {
+    const q = new URLSearchParams(location.search);
+    const c = (q.get('coupon') || '').trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '');
+    if (!c) return;
+    try { localStorage.setItem('homex_coupon', c); } catch { /* ignore */ }
+    q.delete('coupon');
+    history.replaceState(history.state, '', location.pathname + (q.toString() ? `?${q}` : '') + location.hash);
+    setTimeout(() => showToast(`كود الخصم ${c} هيتطبق لوحده لما تكمّل طلبك`, 'success'), 900);
+  }, []);
 
   /* ---- product pages: /product/ID-slug, kept in sync with the browser history ---- */
   const storeScroll = React.useRef(0);

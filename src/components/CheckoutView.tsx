@@ -57,7 +57,37 @@ export const CheckoutView: React.FC = () => {
     settings.pay_vodafone && { id: 'vodafone' as const, title: 'فودافون كاش', sub: `حوّل على ${settings.pay_vodafone}` },
     settings.pay_instapay && { id: 'instapay' as const, title: 'إنستاباي', sub: `حوّل على ${settings.pay_instapay}` },
   ].filter(Boolean) as { id: 'cod' | 'vodafone' | 'instapay'; title: string; sub: string }[];
-  const finalTotal = cartTotal + shippingFee;
+  // Coupon (typed here, or saved from an influencer link ?coupon=CODE)
+  const [couponInput, setCouponInput] = useState(() => { try { return localStorage.getItem('homex_coupon') || ''; } catch { return ''; } });
+  const [coupon, setCoupon] = useState<{ code: string; discount: number; freeShipping: boolean; label: string } | null>(null);
+  const [couponErr, setCouponErr] = useState('');
+  const [couponBusy, setCouponBusy] = useState(false);
+  const applyCoupon = async (code = couponInput, quiet = false) => {
+    const c = code.trim();
+    if (!c) return;
+    setCouponBusy(true);
+    try {
+      const r = await api.post('coupon-check', { code: c, phone: form.phone, items: cart.map((i) => ({ productId: Number(i.product.id), quantity: i.quantity })) });
+      setCoupon(r); setCouponErr('');
+      try { localStorage.setItem('homex_coupon', r.code); } catch { /* ignore */ }
+      if (!quiet) showToast(`اتطبق ${r.label}`, 'success');
+    } catch (e: any) {
+      setCoupon(null); setCouponErr(e.message || 'الكود مش صحيح');
+    }
+    setCouponBusy(false);
+  };
+  const removeCoupon = () => {
+    setCoupon(null); setCouponInput(''); setCouponErr('');
+    try { localStorage.removeItem('homex_coupon'); } catch { /* ignore */ }
+  };
+  // re-check when the cart changes (minimum order / percentage)
+  React.useEffect(() => {
+    if (couponInput && cart.length) applyCoupon(coupon?.code || couponInput, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cartTotal]);
+  const discount = coupon ? coupon.discount : 0;
+  const shipping = coupon?.freeShipping ? 0 : shippingFee;
+  const finalTotal = cartTotal - discount + shipping;
 
   const handleSubmitOrder = (e: React.FormEvent) => {
     e.preventDefault();
@@ -95,8 +125,9 @@ export const CheckoutView: React.FC = () => {
 
     setIsSubmitting(true);
 
-    submitOrder({ ...form, name: form.name.trim().replace(/\s+/g, ' '), phone: normalizePhone(form.phone), altPhone: form.altPhone ? normalizePhone(form.altPhone) : '' }).then((order) => {
+    submitOrder({ ...form, couponCode: coupon?.code || '', name: form.name.trim().replace(/\s+/g, ' '), phone: normalizePhone(form.phone), altPhone: form.altPhone ? normalizePhone(form.altPhone) : '' }).then((order) => {
       setCompletedOrder(order);
+      try { localStorage.removeItem('homex_coupon'); } catch { /* ignore */ }
       try { history.replaceState(null, '', `/o/${order.id}?t=${(order as any).token || ''}`); } catch { /* ignore */ }
       setIsSubmitting(false);
 
@@ -389,16 +420,44 @@ export const CheckoutView: React.FC = () => {
               ))}
             </div>
 
+            {/* Coupon */}
+            <div className="pt-4 border-t border-slate-200">
+              {coupon ? (
+                <div className="flex items-center justify-between gap-2 bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2.5 text-sm">
+                  <span className="font-bold text-emerald-800">✓ {coupon.label} <span dir="ltr" className="font-mono">({coupon.code})</span></span>
+                  <button type="button" onClick={removeCoupon} className="text-xs text-slate-500 underline">شيل الكود</button>
+                </div>
+              ) : (
+                <>
+                  <label htmlFor="coupon" className="block text-xs font-bold text-slate-700 mb-1.5">عندك كود خصم؟</label>
+                  <div className="flex gap-2">
+                    <input id="coupon" dir="ltr" value={couponInput} onChange={(e) => { setCouponInput(e.target.value.toUpperCase()); setCouponErr(''); }}
+                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); applyCoupon(); } }}
+                      placeholder="CODE" className="flex-1 min-w-0 bg-slate-50 text-slate-900 rounded-xl px-3 py-2.5 border border-slate-200 focus:outline-hidden focus:border-amber-500 font-mono uppercase" />
+                    <button type="button" onClick={() => applyCoupon()} disabled={!couponInput.trim() || couponBusy}
+                      className="shrink-0 px-4 rounded-xl bg-slate-900 text-white text-sm font-bold disabled:opacity-40">{couponBusy ? '...' : 'طبّق'}</button>
+                  </div>
+                  {couponErr && <p className="text-xs text-red-600 mt-1.5">{couponErr}</p>}
+                </>
+              )}
+            </div>
+
             {/* Calculation details */}
             <div className="pt-4 border-t border-slate-200 space-y-2 text-xs text-slate-600">
               <div className="flex justify-between">
                 <span>المجموع الفرعي:</span>
                 <span className="font-mono font-bold">{cartTotal.toLocaleString()} ج.م</span>
               </div>
+              {discount > 0 && (
+                <div className="flex justify-between text-emerald-700 font-bold">
+                  <span>خصم ({coupon!.code}):</span>
+                  <span className="font-mono">- {discount.toLocaleString()} ج.م</span>
+                </div>
+              )}
               <div className="flex justify-between">
                 <span>تكلفة الشحن والتوصيل:</span>
                 <span className="font-mono font-bold text-emerald-600">
-                  {shippingFee === 0 ? 'شحن مجاني' : `${shippingFee} ج.م`}
+                  {shipping === 0 ? 'شحن مجاني' : `${shipping} ج.م`}
                 </span>
               </div>
               <div className="flex justify-between text-base font-black text-slate-900 pt-2 border-t border-slate-200">

@@ -167,12 +167,13 @@ export const Orders: React.FC<{ isOwner?: boolean }> = ({ isOwner }) => {
               </div>
 
               <div className="rounded-xl border border-line p-4 text-sm space-y-1.5">
-                <Row k="المنتجات" v={money(open.subtotal)} />
+                <Row k="المنتجات" v={money(Number(open.subtotal) + Number(open.discount || 0))} />
+                {Number(open.discount) > 0 && <Row k={`خصم${open.coupon_code ? ` (${open.coupon_code})` : ''}`} v={`- ${money(open.discount)}`} good />}
                 <Row k="الشحن" v={money(open.shipping_fee)} />
                 <Row k="الإجمالي" v={money(open.total)} strong />
                 <div className="border-t border-line my-2" />
                 <Row k="التكلفة" v={money(open.cost_total)} muted />
-                <Row k="ربح المنتجات" v={money(open.subtotal - open.cost_total)} good />
+                <Row k="ربح المنتجات (بعد الخصم)" v={money(open.subtotal - open.cost_total)} good />
               </div>
             </div>
 

@@ -507,6 +507,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       customer,
       website: (document.getElementById('hp-website') as HTMLInputElement | null)?.value || '',
       cartToken: cartToken(),
+      couponCode: (customer as any).couponCode || '',
       paymentMethod: customer.paymentMethod,
       items: cart.map((i) => ({ productId: Number(i.product.id), quantity: i.quantity })),
     });
@@ -525,7 +526,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       items: cart.map((i) => ({ productId: i.product.id, productName: i.product.name, productImage: i.product.image, price: i.product.price, quantity: i.quantity })),
       subtotal: res.subtotal,
       shippingFee: res.shippingFee,
-      discount: 0,
+      discount: res.discount || 0,
       total: res.total,
       status: 'pending',
       createdAt: new Date().toISOString(),

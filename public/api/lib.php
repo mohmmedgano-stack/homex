@@ -145,6 +145,23 @@ function migrate(PDO $db): void {
     CREATE TABLE IF NOT EXISTS order_attempts (ip TEXT NOT NULL, phone TEXT NOT NULL DEFAULT '', at INTEGER NOT NULL);
     CREATE INDEX IF NOT EXISTS idx_orders_created ON orders(created_at);
     CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(date);
+    CREATE TABLE IF NOT EXISTS coupons (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        code TEXT NOT NULL UNIQUE,
+        type TEXT NOT NULL DEFAULT 'percent',
+        value REAL NOT NULL DEFAULT 0,
+        max_discount REAL NOT NULL DEFAULT 0,
+        min_total REAL NOT NULL DEFAULT 0,
+        max_uses INTEGER NOT NULL DEFAULT 0,
+        per_phone INTEGER NOT NULL DEFAULT 1,
+        starts_at TEXT NOT NULL DEFAULT '',
+        ends_at TEXT NOT NULL DEFAULT '',
+        owner TEXT NOT NULL DEFAULT '',
+        commission REAL NOT NULL DEFAULT 0,
+        active INTEGER NOT NULL DEFAULT 1,
+        note TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
     CREATE TABLE IF NOT EXISTS carts (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         token TEXT NOT NULL UNIQUE,
@@ -227,6 +244,7 @@ function migrate(PDO $db): void {
     if (!in_array('email', $cols, true)) $db->exec("ALTER TABLE orders ADD COLUMN email TEXT NOT NULL DEFAULT ''");
     if (!in_array('token', $cols, true)) $db->exec("ALTER TABLE orders ADD COLUMN token TEXT NOT NULL DEFAULT ''");
     if (!in_array('client_meta', $cols, true)) $db->exec("ALTER TABLE orders ADD COLUMN client_meta TEXT NOT NULL DEFAULT ''");
+    if (!in_array('coupon_code', $cols, true)) $db->exec("ALTER TABLE orders ADD COLUMN coupon_code TEXT NOT NULL DEFAULT ''");
     if (!in_array('source', $cols, true)) $db->exec("ALTER TABLE orders ADD COLUMN source TEXT NOT NULL DEFAULT 'web'");
     if (!in_array('channel', $cols, true)) $db->exec("ALTER TABLE orders ADD COLUMN channel TEXT NOT NULL DEFAULT ''");
     if (!in_array('discount', $cols, true)) $db->exec("ALTER TABLE orders ADD COLUMN discount REAL NOT NULL DEFAULT 0");
@@ -961,6 +979,14 @@ function create_order(array $b): array {
         $fee = (float)get_setting('shipping_fee', '60');
         $freeOver = (float)get_setting('free_shipping_over', '0');
         if ($freeOver > 0 && $sub >= $freeOver) $fee = 0;
+        $couponCode = ''; $discount = 0.0;
+        if (trim((string)($b['couponCode'] ?? '')) !== '') {
+            $cp = coupon_apply((string)$b['couponCode'], $sub, $phone);   // throws with a clear message if it can't be used
+            $couponCode = $cp['code']; $discount = $cp['discount'];
+            if ($cp['freeShipping']) $fee = 0;
+        }
+        $grossSub = $sub;
+        $sub = $grossSub - $discount;   // stored after discount so profit reports stay right
         $total = $sub + $fee;
 
         $pm = (string)($b['paymentMethod'] ?? 'cod');
@@ -974,8 +1000,8 @@ function create_order(array $b): array {
             'fbp' => mb_substr((string)($_COOKIE['_fbp'] ?? ''), 0, 100), 'fbc' => mb_substr((string)($_COOKIE['_fbc'] ?? ''), 0, 200),
             'url' => mb_substr((string)($_SERVER['HTTP_REFERER'] ?? ''), 0, 300),
         ]);
-        $db->prepare('INSERT INTO orders (code, customer_name, phone, alt_phone, city, address, notes, payment_method, subtotal, shipping_fee, total, cost_total, status, email, token, client_meta) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
-            ->execute([$code, $name, $phone, $alt, $city, $address, str($c['notes'] ?? '', 500), $pm, $sub, $fee, $total, $cost, $pm === 'card' ? 'awaiting_payment' : 'pending', $email, $token, $clientMeta]);
+        $db->prepare('INSERT INTO orders (code, customer_name, phone, alt_phone, city, address, notes, payment_method, subtotal, shipping_fee, total, cost_total, status, email, token, client_meta, coupon_code, discount) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
+            ->execute([$code, $name, $phone, $alt, $city, $address, str($c['notes'] ?? '', 500), $pm, $sub, $fee, $total, $cost, $pm === 'card' ? 'awaiting_payment' : 'pending', $email, $token, $clientMeta, $couponCode, $discount]);
         $oid = (int)$db->lastInsertId();
         $ins = $db->prepare('INSERT INTO order_items (order_id, product_id, name, image, price, cost, qty) VALUES (?,?,?,?,?,?,?)');
         $dec = $db->prepare('UPDATE products SET stock = stock - ? WHERE id = ?');
@@ -994,7 +1020,7 @@ function create_order(array $b): array {
         db()->prepare("UPDATE carts SET status = 'ordered', order_code = ?, updated_at = datetime('now') WHERE status IN ('open', 'contacted') AND (phone = ? OR token = ?)")
             ->execute([$code, $phone, str((string)($b['cartToken'] ?? ''), 40)]);
     } catch (Throwable $e) { error_log('[homex carts] ' . $e->getMessage()); }
-    $res = ['code' => $code, 'token' => $token, 'subtotal' => $sub, 'shippingFee' => $fee, 'total' => $total];
+    $res = ['code' => $code, 'token' => $token, 'subtotal' => $sub, 'shippingFee' => $fee, 'total' => $total, 'discount' => $discount, 'coupon' => $couponCode];
     if ($pm !== 'card') { notify_new_order($code); notify_customer($code); }
     if ($pm === 'card') {
         try {
@@ -1866,7 +1892,8 @@ function order_view(string $code, string $t): array {
         'name' => $o['customer_name'], 'phone' => $o['phone'], 'altPhone' => $o['alt_phone'], 'email' => $o['email'] ?? '',
         'city' => $o['city'], 'address' => $o['address'], 'notes' => $o['notes'],
         'paymentMethod' => $o['payment_method'], 'paid' => ($o['payment_status'] ?? '') === 'paid',
-        'subtotal' => (float)$o['subtotal'], 'shippingFee' => (float)$o['shipping_fee'], 'total' => (float)$o['total'],
+        'subtotal' => (float)$o['subtotal'] + (float)($o['discount'] ?? 0), 'discount' => (float)($o['discount'] ?? 0), 'coupon' => $o['coupon_code'] ?? '',
+        'shippingFee' => (float)$o['shipping_fee'], 'total' => (float)$o['total'],
         'items' => array_map(fn($i) => ['name' => $i['name'], 'image' => $i['image'], 'price' => (float)$i['price'], 'qty' => (int)$i['qty']], $o['items']),
     ];
 }
@@ -1978,7 +2005,8 @@ function order_email_html(array $o): array {
         . '<h2 style="margin:30px 0 4px;font-size:17px;color:#1c1f24">ملخص الطلب</h2>'
         . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0">' . $rows . '</table>'
         . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:12px;font-size:15px;color:#1c1f24">'
-        . '<tr><td style="color:#6b7280;padding:4px 0">المنتجات</td><td style="text-align:left;padding:4px 0">' . money_ar($o['subtotal']) . '</td></tr>'
+        . '<tr><td style="color:#6b7280;padding:4px 0">المنتجات</td><td style="text-align:left;padding:4px 0">' . money_ar((float)$o['subtotal'] + (float)($o['discount'] ?? 0)) . '</td></tr>'
+        . ((float)($o['discount'] ?? 0) > 0 ? '<tr><td style="color:#0e9f6e;padding:4px 0">خصم' . (($o['coupon_code'] ?? '') !== '' ? ' (' . $h($o['coupon_code']) . ')' : '') . '</td><td style="color:#0e9f6e;text-align:left;padding:4px 0">- ' . money_ar($o['discount']) . '</td></tr>' : '')
         . '<tr><td style="color:#6b7280;padding:4px 0">الشحن</td><td style="text-align:left;padding:4px 0">' . money_ar($o['shipping_fee']) . '</td></tr>'
         . '<tr><td style="padding:10px 0;border-top:1px solid #eceef1;font-size:17px"><b>الإجمالي</b></td><td style="padding:10px 0;border-top:1px solid #eceef1;text-align:left;font-size:19px"><b>' . money_ar($o['total']) . '</b></td></tr>'
         . $paidLine . '</table>'
@@ -2663,4 +2691,104 @@ function cart_update(array $b): array {
     $label = ['contacted' => 'اتواصل مع', 'dismissed' => 'قفل', 'open' => 'رجّع للمتابعة'][$status];
     log_activity(current_admin(), 'cart.' . $status, $label . ' سلة متروكة — ' . $c['name'] . ' (' . $c['phone'] . ') بـ ' . fmt_money($c['total']) . ($note !== '' && $note !== $c['note'] ? " — $note" : ''), 'cart', (string)$c['id']);
     return carts_admin(['status' => (string)($b['view'] ?? 'open')]);
+}
+
+
+/* ============================================================
+   Coupons (e.g. one code per influencer, with sales report and commission)
+   ============================================================ */
+
+function coupon_norm(string $c): string { return strtoupper(preg_replace('/[^A-Za-z0-9_-]/', '', $c)); }
+
+/** Checks a code against the cart and returns the discount, or throws a message the customer understands. */
+function coupon_apply(string $code, float $sub, string $phone = ''): array {
+    $code = coupon_norm($code);
+    $c = $code !== '' ? act_row('SELECT * FROM coupons WHERE code = ?', [$code]) : null;
+    if (!$c || !(int)$c['active']) throw new ApiError('كود الخصم ده مش صحيح');
+    $today = date('Y-m-d');
+    if ($c['starts_at'] !== '' && $today < $c['starts_at']) throw new ApiError('كود الخصم ده لسه مبدأش');
+    if ($c['ends_at'] !== '' && $today > $c['ends_at']) throw new ApiError('كود الخصم ده خلص');
+    if ((float)$c['min_total'] > 0 && $sub < (float)$c['min_total']) throw new ApiError('الكود ده محتاج مشتريات بـ ' . money_ar($c['min_total']) . ' على الأقل');
+    $live = "status NOT IN ('cancelled', 'awaiting_payment')";
+    if ((int)$c['max_uses'] > 0) {
+        $used = (int)(act_row("SELECT COUNT(*) n FROM orders WHERE coupon_code = ? AND $live", [$code])['n'] ?? 0);
+        if ($used >= (int)$c['max_uses']) throw new ApiError('كود الخصم ده خلص عدد مرات استخدامه');
+    }
+    if ((int)$c['per_phone'] > 0 && $phone !== '') {
+        $mine = (int)(act_row("SELECT COUNT(*) n FROM orders WHERE coupon_code = ? AND phone = ? AND $live", [$code, $phone])['n'] ?? 0);
+        if ($mine >= (int)$c['per_phone']) throw new ApiError('إنت استخدمت الكود ده قبل كده');
+    }
+    $disc = 0.0; $free = false;
+    if ($c['type'] === 'percent') {
+        $disc = round($sub * min(100, (float)$c['value']) / 100);
+        if ((float)$c['max_discount'] > 0) $disc = min($disc, (float)$c['max_discount']);
+    } elseif ($c['type'] === 'fixed') {
+        $disc = min($sub, (float)$c['value']);
+    } else {
+        $free = true;
+    }
+    $label = $c['type'] === 'percent' ? 'خصم ' . rtrim(rtrim(number_format((float)$c['value'], 1), '0'), '.') . '%' : ($c['type'] === 'fixed' ? 'خصم ' . money_ar($c['value']) : 'شحن مجاني');
+    return ['code' => $code, 'discount' => (float)$disc, 'freeShipping' => $free, 'label' => $label];
+}
+
+/** Public: the checkout asks before submitting so the customer sees the new total. */
+function coupon_check(array $b): array {
+    $sub = 0;
+    $get = db()->prepare('SELECT price FROM products WHERE id = ? AND active = 1');
+    foreach (array_slice((array)($b['items'] ?? []), 0, 50) as $it) {
+        $get->execute([(int)($it['productId'] ?? 0)]);
+        $p = $get->fetchColumn();
+        if ($p !== false) $sub += (float)$p * max(1, min(99, (int)($it['quantity'] ?? 1)));
+    }
+    $phone = '';
+    try { if (!empty($b['phone'])) $phone = egypt_mobile((string)$b['phone']); } catch (Throwable $e) {}
+    return coupon_apply((string)($b['code'] ?? ''), $sub, $phone);
+}
+
+function coupons_admin(): array {
+    $rows = db()->query('SELECT * FROM coupons ORDER BY active DESC, id DESC')->fetchAll();
+    $stats = [];
+    foreach (db()->query("SELECT coupon_code, COUNT(*) n, SUM(CASE WHEN status='delivered' THEN 1 ELSE 0 END) dn, SUM(CASE WHEN status='delivered' THEN subtotal ELSE 0 END) rev, SUM(CASE WHEN status NOT IN ('cancelled','awaiting_payment') THEN discount ELSE 0 END) disc, SUM(CASE WHEN status IN ('cancelled','returned') THEN 1 ELSE 0 END) bad FROM orders WHERE coupon_code != '' GROUP BY coupon_code") as $r) $stats[$r['coupon_code']] = $r;
+    return array_map(function ($c) use ($stats) {
+        $st = $stats[$c['code']] ?? ['n' => 0, 'dn' => 0, 'rev' => 0, 'disc' => 0, 'bad' => 0];
+        return [
+            'id' => (int)$c['id'], 'code' => $c['code'], 'type' => $c['type'], 'value' => (float)$c['value'], 'maxDiscount' => (float)$c['max_discount'],
+            'minTotal' => (float)$c['min_total'], 'maxUses' => (int)$c['max_uses'], 'perPhone' => (int)$c['per_phone'], 'startsAt' => $c['starts_at'], 'endsAt' => $c['ends_at'],
+            'owner' => $c['owner'], 'commission' => (float)$c['commission'], 'active' => (bool)$c['active'], 'note' => $c['note'],
+            'orders' => (int)$st['n'], 'delivered' => (int)$st['dn'], 'revenue' => (float)$st['rev'], 'discountGiven' => (float)$st['disc'], 'cancelled' => (int)$st['bad'],
+            'commissionDue' => round((float)$st['rev'] * (float)$c['commission'] / 100),
+        ];
+    }, $rows);
+}
+
+function save_coupon(array $b): array {
+    $code = coupon_norm((string)($b['code'] ?? ''));
+    if (strlen($code) < 3 || strlen($code) > 30) throw new ApiError('الكود لازم يكون من 3 لـ 30 حرف إنجليزي أو أرقام');
+    $type = in_array($b['type'] ?? '', ['percent', 'fixed', 'free_shipping'], true) ? $b['type'] : 'percent';
+    $value = max(0, num($b['value'] ?? 0));
+    if ($type === 'percent' && ($value <= 0 || $value > 90)) throw new ApiError('نسبة الخصم لازم تكون بين 1 و 90%');
+    if ($type === 'fixed' && $value <= 0) throw new ApiError('اكتب قيمة الخصم');
+    $d = fn($k) => preg_match('/^\d{4}-\d{2}-\d{2}$/', (string)($b[$k] ?? '')) ? $b[$k] : '';
+    $vals = [$code, $type, $value, max(0, num($b['maxDiscount'] ?? 0)), max(0, num($b['minTotal'] ?? 0)), max(0, (int)($b['maxUses'] ?? 0)), max(0, (int)($b['perPhone'] ?? 1)),
+        $d('startsAt'), $d('endsAt'), str($b['owner'] ?? '', 80), min(100, max(0, num($b['commission'] ?? 0))), !array_key_exists('active', $b) || !empty($b['active']) ? 1 : 0, str($b['note'] ?? '', 300)];
+    $id = (int)($b['id'] ?? 0);
+    $dup = act_row('SELECT id FROM coupons WHERE code = ? AND id <> ?', [$code, $id]);
+    if ($dup) throw new ApiError("الكود {$code} موجود قبل كده");
+    if ($id) {
+        $vals[] = $id;
+        db()->prepare('UPDATE coupons SET code=?, type=?, value=?, max_discount=?, min_total=?, max_uses=?, per_phone=?, starts_at=?, ends_at=?, owner=?, commission=?, active=?, note=? WHERE id=?')->execute($vals);
+    } else {
+        db()->prepare('INSERT INTO coupons (code, type, value, max_discount, min_total, max_uses, per_phone, starts_at, ends_at, owner, commission, active, note) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)')->execute($vals);
+    }
+    log_activity(current_admin(), $id ? 'coupon.update' : 'coupon.create', ($id ? 'عدّل كوبون ' : 'عمل كوبون ') . $code . ($vals[9] !== '' ? ' (' . $vals[9] . ')' : ''), 'coupon');
+    return coupons_admin();
+}
+
+function delete_coupon(int $id): array {
+    $c = act_row('SELECT code FROM coupons WHERE id = ?', [$id]);
+    if (!$c) throw new ApiError('الكوبون مش موجود', 404);
+    if (act_row('SELECT 1 x FROM orders WHERE coupon_code = ? LIMIT 1', [$c['code']])) throw new ApiError('الكوبون ده اتستخدم في طلبات، وقّفه بدل ما تمسحه عشان تفضل أرقامه موجودة');
+    db()->prepare('DELETE FROM coupons WHERE id = ?')->execute([$id]);
+    log_activity(current_admin(), 'coupon.delete', 'مسح كوبون ' . $c['code'], 'coupon');
+    return coupons_admin();
 }

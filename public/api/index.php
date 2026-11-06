@@ -27,6 +27,7 @@ try {
         case 'POST kashier-webhook': ok(kashier_webhook()); break;
         case 'GET fawry-return': fawry_return(); break;
         case 'POST fawry-callback': ok(fawry_callback()); break;
+        case 'POST coupon-check': ok(coupon_check(body())); break;
         case 'POST cart-save':  ok(cart_save(body())); break;
         case 'POST dealer-click': ok(dealer_click(body())); break;
 
@@ -47,6 +48,9 @@ try {
         case 'POST admin/categories-order': need(); ok(reorder_categories(body())); break;
         case 'POST admin/category-delete': need(); ok(delete_category((string)(body()['id'] ?? ''))); break;
 
+        case 'GET admin/coupons':      need(); ok(coupons_admin()); break;
+        case 'POST admin/coupon':      need('owner'); ok(save_coupon(body())); break;
+        case 'POST admin/coupon-delete': need('owner'); ok(delete_coupon((int)(body()['id'] ?? 0))); break;
         case 'GET admin/carts':        need(); ok(carts_admin($_GET)); break;
         case 'POST admin/cart':        need(); ok(cart_update(body())); break;
         case 'GET admin/orders-pulse': need(); ok(orders_pulse()); break;

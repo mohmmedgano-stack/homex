@@ -8,7 +8,7 @@ import { Check, Mail, Phone, MapPin, CreditCard, Banknote, Truck, PackageCheck, 
 export type OrderView = {
   code: string; status: string; createdAt: string;
   name: string; phone: string; altPhone: string; email: string; city: string; address: string; notes: string;
-  paymentMethod: string; paid: boolean; subtotal: number; shippingFee: number; total: number;
+  paymentMethod: string; paid: boolean; subtotal: number; discount?: number; coupon?: string; shippingFee: number; total: number;
   items: { name: string; image: string; price: number; qty: number }[];
 };
 
@@ -180,6 +180,7 @@ export const OrderPage: React.FC<{ code: string; t: string; fresh?: boolean }> =
           </ul>
           <dl className="mt-4 pt-4 border-t border-line space-y-1.5 text-sm">
             <div className="flex justify-between"><dt className="text-steel">المنتجات</dt><dd className="price">{money(o.subtotal)}</dd></div>
+            {(o.discount || 0) > 0 && <div className="flex justify-between text-save font-bold"><dt>خصم{o.coupon ? ` (${o.coupon})` : ''}</dt><dd className="price">- {money(o.discount!)}</dd></div>}
             <div className="flex justify-between"><dt className="text-steel">الشحن</dt><dd className="price">{money(o.shippingFee)}</dd></div>
             <div className="flex justify-between pt-2 border-t border-line text-base"><dt className="font-extrabold text-ink">الإجمالي</dt><dd className="price font-black text-ink text-lg">{money(o.total)}</dd></div>
             <div className="flex justify-between text-xs">
