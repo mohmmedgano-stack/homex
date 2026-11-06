@@ -38,9 +38,13 @@ export const api = {
     const fd = new FormData();
     fd.append('img', file);
     if (kind) fd.append('kind', kind);
-    return fetch(`${BASE}?r=admin/upload`, { method: 'POST', credentials: 'same-origin', body: fd }).then((r) =>
+    return fetch(`${BASE}?r=admin/upload`, { method: 'POST', credentials: 'same-origin', headers: { 'X-Homex': '1' }, body: fd }).then((r) =>
       handle<{ url: string }>(r)
     );
+  },
+  /** multipart POST with any form fields/files */
+  form<T = any>(route: string, fd: FormData): Promise<T> {
+    return fetch(`${BASE}?r=${route}`, { method: 'POST', credentials: 'same-origin', headers: { 'X-Homex': '1' }, body: fd }).then((r) => handle<T>(r));
   },
 };
 

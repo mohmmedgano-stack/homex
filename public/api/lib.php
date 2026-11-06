@@ -611,6 +611,7 @@ function save_settings(array $b): array {
    ============================================================ */
 
 function upload_image(string $field): array {
+    if (($_SERVER['HTTP_X_HOMEX'] ?? '') !== '1') throw new ApiError('طلب غير صالح', 403);
     if (empty($_FILES[$field]) || $_FILES[$field]['error'] !== UPLOAD_ERR_OK) throw new ApiError('الصورة متاخدتش، جرّب تاني');
     $f = $_FILES[$field];
     if ($f['size'] > 8 * 1024 * 1024) throw new ApiError('الصورة أكبر من 8 ميجا');
@@ -2461,4 +2462,111 @@ function capi_test(array $b): array {
     $e = meta_capi_purchase($demo, $code);
     if ($e !== '') throw new ApiError($e);
     return ['sent' => true];
+}
+
+
+/* ============================================================
+   Backups: one automatic copy of the database per day (kept 14 days) + manual download
+   ============================================================ */
+
+function backup_dir(): string {
+    $d = data_dir() . '/backups';
+    if (!is_dir($d)) @mkdir($d, 0700, true);
+    if (!is_file("$d/.htaccess")) @file_put_contents("$d/.htaccess", "Require all denied\n");
+    return $d;
+}
+
+/** Consistent snapshot of the live database (safe while the site is being used). */
+function make_backup(string $tag = 'auto'): string {
+    $dir = backup_dir();
+    $name = 'homex-' . date('Y-m-d-His') . ($tag === 'auto' ? '' : '-' . $tag) . '.sqlite';
+    $path = "$dir/$name";
+    db()->exec('VACUUM INTO ' . db()->quote($path));
+    @chmod($path, 0600);
+    // keep the newest 14 automatic copies + the newest 10 manual ones
+    $all = glob("$dir/homex-*.sqlite") ?: [];
+    rsort($all);
+    $auto = array_values(array_filter($all, fn($f) => !preg_match('/-(manual|before-restore)\.sqlite$/', $f)));
+    $manual = array_values(array_filter($all, fn($f) => preg_match('/-(manual|before-restore)\.sqlite$/', $f)));
+    foreach (array_slice($auto, 14) as $old) @unlink($old);
+    foreach (array_slice($manual, 10) as $old) @unlink($old);
+    return $name;
+}
+
+/** Called on normal traffic: makes today's copy once (no cron needed). */
+function daily_backup(): void {
+    try {
+        $flag = data_dir() . '/last_backup.txt';
+        $today = date('Y-m-d');
+        if (is_file($flag) && trim((string)file_get_contents($flag)) === $today) return;
+        $lock = fopen(data_dir() . '/backup.lock', 'c');
+        if (!$lock || !flock($lock, LOCK_EX | LOCK_NB)) return;
+        if (!(is_file($flag) && trim((string)file_get_contents($flag)) === $today)) {
+            file_put_contents($flag, $today);
+            make_backup('auto');
+        }
+        flock($lock, LOCK_UN);
+    } catch (Throwable $e) {
+        error_log('[homex backup] ' . $e->getMessage());
+    }
+}
+
+function list_backups(): array {
+    $out = [];
+    foreach (glob(backup_dir() . '/homex-*.sqlite') ?: [] as $f) {
+        $out[] = ['file' => basename($f), 'size' => filesize($f), 'at' => date('Y-m-d H:i', filemtime($f)), 'manual' => (bool)preg_match('/-(manual|before-restore)\.sqlite$/', $f)];
+    }
+    usort($out, fn($a, $b) => strcmp($b['file'], $a['file']));
+    $uploads = glob(data_dir() . '/uploads/*') ?: [];
+    return ['backups' => $out, 'images' => count(array_filter($uploads, 'is_file')), 'imagesSize' => array_sum(array_map(fn($f) => is_file($f) ? filesize($f) : 0, $uploads))];
+}
+
+function download_backup(string $file): void {
+    if (!preg_match('/^homex-[0-9-]+(-manual|-before-restore)?\.sqlite$/', $file) || !is_file(backup_dir() . "/$file")) throw new ApiError('النسخة مش موجودة', 404);
+    log_activity(current_admin(), 'backup.download', 'نزّل نسخة احتياطية ' . $file, 'backup');
+    header('Content-Type: application/octet-stream');
+    header('Content-Disposition: attachment; filename="' . $file . '"');
+    header('Content-Length: ' . filesize(backup_dir() . "/$file"));
+    readfile(backup_dir() . "/$file");
+    exit;
+}
+
+/** All product/banner images as one zip (they are not inside the database file). */
+function download_images(): void {
+    if (!class_exists('ZipArchive')) throw new ApiError('السيرفر مش بيدعم ملفات zip');
+    $tmp = tempnam(sys_get_temp_dir(), 'hximg');
+    $zip = new ZipArchive();
+    $zip->open($tmp, ZipArchive::OVERWRITE);
+    foreach (glob(data_dir() . '/uploads/*') ?: [] as $f) if (is_file($f)) $zip->addFile($f, 'uploads/' . basename($f));
+    $zip->close();
+    log_activity(current_admin(), 'backup.images', 'نزّل كل صور الموقع (zip)', 'backup');
+    header('Content-Type: application/zip');
+    header('Content-Disposition: attachment; filename="homex-images-' . date('Y-m-d') . '.zip"');
+    header('Content-Length: ' . filesize($tmp));
+    readfile($tmp);
+    @unlink($tmp);
+    exit;
+}
+
+/** Owner uploads a backup file to roll the store back. The current data is saved first, so this can be undone. */
+function restore_backup(): array {
+    if (($_SERVER['HTTP_X_HOMEX'] ?? '') !== '1') throw new ApiError('طلب غير صالح', 403);
+    $f = $_FILES['file'] ?? null;
+    if (!$f || $f['error'] !== UPLOAD_ERR_OK) throw new ApiError('ارفع ملف النسخة الاحتياطية');
+    $head = (string)file_get_contents($f['tmp_name'], false, null, 0, 16);
+    if ($head !== "SQLite format 3\0") throw new ApiError('الملف ده مش نسخة احتياطية من الموقع');
+    $test = new PDO('sqlite:' . $f['tmp_name']);
+    $tables = $test->query("SELECT name FROM sqlite_master WHERE type='table'")->fetchAll(PDO::FETCH_COLUMN);
+    foreach (['products', 'orders', 'admins', 'settings'] as $t) if (!in_array($t, $tables, true)) throw new ApiError('الملف ده مش نسخة احتياطية من HOMEX');
+    $test = null;
+    $saved = make_backup('before-restore');
+    $who = current_admin();
+    $live = data_dir() . '/homex.sqlite';
+    $pdo = db();
+    $pdo->exec('PRAGMA wal_checkpoint(TRUNCATE)');
+    if (!copy($f['tmp_name'], $live . '.restoring')) throw new ApiError('مقدرناش نحفظ الملف على السيرفر');
+    @unlink($live . '-wal'); @unlink($live . '-shm');
+    rename($live . '.restoring', $live);
+    log_activity($who, 'backup.restore', 'رجّع الموقع لنسخة احتياطية مرفوعة (النسخة اللي كانت قبلها اتحفظت باسم ' . $saved . ')', 'backup');
+    return ['restored' => true, 'savedAs' => $saved];
 }

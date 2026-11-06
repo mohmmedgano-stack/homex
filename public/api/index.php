@@ -10,6 +10,7 @@ $r = $_GET['r'] ?? '';
 $m = $_SERVER['REQUEST_METHOD'];
 
 try {
+    if ($m === 'GET' && in_array($r, ['catalog', 'settings', 'me'], true)) daily_backup();
     try { activity_begin("$m $r"); } catch (ApiError $e) { throw $e; } catch (Throwable $e) { error_log("[homex] activity: " . $e->getMessage()); }
     switch ("$m $r") {
         /* ---------- public ---------- */
@@ -50,6 +51,11 @@ try {
         case 'POST admin/email-test':  need('owner'); ok(test_email(body())); break;
         case 'POST admin/capi-test':   need('owner'); ok(capi_test(body())); break;
         case 'POST admin/wa-cloud-test': need('owner'); ok(test_wa_cloud(body())); break;
+        case 'GET admin/backups':      need('owner'); ok(list_backups()); break;
+        case 'POST admin/backup-now':  need('owner'); $n = make_backup('manual'); log_activity(current_admin(), 'backup.create', 'عمل نسخة احتياطية يدوي ' . $n, 'backup'); ok(list_backups()); break;
+        case 'GET admin/backup-download': need('owner'); download_backup((string)($_GET['f'] ?? '')); break;
+        case 'GET admin/images-download': need('owner'); download_images(); break;
+        case 'POST admin/backup-restore': need('owner'); ok(restore_backup()); break;
         case 'GET admin/activity':     need('owner'); ok(activity_list($_GET)); break;
 
         /* ---------- admin: cashier & inventory ---------- */

@@ -3,7 +3,8 @@ import { api, ApiError } from '../lib/api';
 import { ToastProvider, Button, Field, Input, Spinner, useToast } from './ui';
 import { useOrderAlerts } from './useOrderAlerts';
 import { ActivityLog } from './pages/ActivityLog';
-import { LayoutDashboard, Package, ShoppingBag, Calculator, Settings, Users, LogOut, Menu, X, ExternalLink, Store, Images, FileText, Bell, BellOff, History, ScanBarcode } from 'lucide-react';
+import { Backups } from './pages/Backups';
+import { LayoutDashboard, Package, ShoppingBag, Calculator, Settings, Users, LogOut, Menu, X, ExternalLink, Store, Images, FileText, Bell, BellOff, History, ScanBarcode, DatabaseBackup } from 'lucide-react';
 import { Overview } from './pages/Overview';
 import { Products } from './pages/Products';
 import { Orders } from './pages/Orders';
@@ -24,12 +25,13 @@ export interface Admin {
 
 type Page = 'overview' | 'products' | 'orders' | 'inventory' | 'banners' | 'pages' | 'dealers' | 'accounting' | 'settings' | 'team';
 
-type SettingsTab = 'general' | 'pages' | 'team' | 'activity';
+type SettingsTab = 'general' | 'pages' | 'team' | 'activity' | 'backups';
 const SETTINGS_TABS: { id: SettingsTab; label: string; short: string; Icon: React.FC<any> }[] = [
   { id: 'general', label: 'الإعدادات العامة', short: 'عام', Icon: Settings },
   { id: 'pages', label: 'صفحات الموقع', short: 'الصفحات', Icon: FileText },
   { id: 'team', label: 'المستخدمين والباسورد', short: 'المستخدمين', Icon: Users },
   { id: 'activity', label: 'سجل النشاطات', short: 'السجل', Icon: History },
+  { id: 'backups', label: 'النسخ الاحتياطي', short: 'النسخ', Icon: DatabaseBackup },
 ];
 
 const NAV: { id: Page; label: string; Icon: React.FC<any>; owner?: boolean }[] = [
@@ -260,7 +262,7 @@ const Shell: React.FC<{ admin: Admin; onLogout: () => void }> = ({ admin, onLogo
         {page === 'settings' && (
           <div className="space-y-4">
             <div className="flex gap-1 p-1 bg-white border border-line rounded-xl overflow-x-auto no-scrollbar">
-              {SETTINGS_TABS.filter((t) => t.id !== 'activity' || isOwner).map((t) => (
+              {SETTINGS_TABS.filter((t) => !['activity', 'backups'].includes(t.id) || isOwner).map((t) => (
                 <button
                   key={t.id}
                   onClick={() => setSettingsTab(t.id)}
@@ -277,6 +279,7 @@ const Shell: React.FC<{ admin: Admin; onLogout: () => void }> = ({ admin, onLogo
             {settingsTab === 'pages' && <SitePages />}
             {settingsTab === 'team' && <Team admin={admin} onShowActivity={(id) => { setActivityUser(id); setSettingsTab('activity'); }} />}
             {settingsTab === 'activity' && isOwner && <ActivityLog initialAdmin={activityUser} />}
+            {settingsTab === 'backups' && isOwner && <Backups />}
           </div>
         )}
       </main>
