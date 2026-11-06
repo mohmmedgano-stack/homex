@@ -206,6 +206,7 @@ export const StoreSettingsPage: React.FC<{ admin: Admin }> = ({ admin }) => {
           </div>
         </Card>
         <CustomerMessages s={s} set={set} />
+        <BostaSettings s={s} set={set} />
       </fieldset>
 
       {owner && (
@@ -431,5 +432,39 @@ const MetaServerSide: React.FC<{ s: any; set: (k: string, v: string) => void }> 
         </div>
       </div>
     </div>
+  );
+};
+
+/** Bosta: create shipments from an order in one click. */
+const BostaSettings: React.FC<{ s: any; set: (k: string, v: string) => void }> = ({ s, set }) => {
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  const test = async () => {
+    setBusy(true);
+    try {
+      await api.post('admin/settings', { bosta_api_key: s.bosta_api_key || '', bosta_allow_open: s.bosta_allow_open ?? '1', bosta_staging: s.bosta_staging ?? '0' });
+      const r = await api.post('admin/bosta-test', {});
+      toast(`الربط شغال ✅ (${r.cities} محافظة)`);
+    } catch (e: any) { toast(e.message, 'err'); }
+    setBusy(false);
+  };
+  return (
+    <Card title="شركة الشحن (بوسطة)">
+      <p className="text-sm text-steel -mt-1 mb-4">
+        لو بتشحن مع بوسطة: حط الـ API key وهيظهرلك في كل طلب زرار «اعمل شحنة على بوسطة» — بيعمل البوليصة بالاسم والعنوان والمبلغ المطلوب تحصيله، والطلب بيبقى «اتشحن» والعميل يشوف رقم التتبع.
+        الـ key من حسابك على بوسطة: Settings ← API Integration ← Create API Key.
+        لأي شركة تانية تقدر تكتب رقم البوليصة يدوي في الطلب.
+      </p>
+      <div className="grid sm:grid-cols-2 gap-3">
+        <Field label="Bosta API key">
+          <Input dir="ltr" type="password" value={s.bosta_api_key || ''} onChange={(e) => set('bosta_api_key', e.target.value.trim())} autoComplete="new-password" />
+        </Field>
+        <div className="space-y-2 sm:pt-7">
+          <Toggle checked={(s.bosta_allow_open ?? '1') === '1'} onChange={(v) => set('bosta_allow_open', v ? '1' : '0')} label="العميل يقدر يفتح الشحنة قبل ما يستلم" />
+          <Toggle checked={s.bosta_staging === '1'} onChange={(v) => set('bosta_staging', v ? '1' : '0')} label="حساب تجريبي (staging)" />
+        </div>
+      </div>
+      <Button type="button" variant="ghost" className="mt-3" loading={busy} disabled={!s.bosta_api_key} onClick={test}>اختبر الربط</Button>
+    </Card>
   );
 };

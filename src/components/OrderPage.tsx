@@ -9,6 +9,7 @@ export type OrderView = {
   code: string; status: string; createdAt: string;
   name: string; phone: string; altPhone: string; email: string; city: string; address: string; notes: string;
   paymentMethod: string; paid: boolean; subtotal: number; discount?: number; coupon?: string; shippingFee: number; total: number;
+  courier?: string; tracking?: string; trackingUrl?: string;
   items: { name: string; image: string; price: number; qty: number }[];
 };
 
@@ -17,6 +18,8 @@ export const orderFromPath = (): { code: string; t: string } | null => {
   if (!m) return null;
   return { code: m[1], t: new URLSearchParams(location.search).get('t') || '' };
 };
+
+const COURIER_NAMES: Record<string, string> = { bosta: 'بوسطة', jt: 'J&T', aramex: 'أرامكس', mylerz: 'مايلرز', egypt_post: 'البريد المصري', own: 'مندوب الشركة', other: '' };
 
 const money = (v: number) => `${Math.round(v).toLocaleString('en-US')} ج.م`;
 
@@ -148,6 +151,12 @@ export const OrderPage: React.FC<{ code: string; t: string; fresh?: boolean }> =
               <div>
                 <h3 className="font-bold text-ink mb-1.5">الشحن</h3>
                 <p className="text-steel flex items-center gap-2"><Truck className="w-4 h-4 shrink-0" /> توصيل لحد البيت · {money(o.shippingFee)}</p>
+                {o.tracking && (
+                  <p className="text-steel mt-1">
+                    بوليصة {COURIER_NAMES[o.courier || ''] || ''}: <b dir="ltr" className="text-ink price">{o.tracking}</b>
+                    {o.trackingUrl && <> · <a href={o.trackingUrl} target="_blank" rel="noopener noreferrer" className="text-gold-deep font-bold underline">تابع الشحنة</a></>}
+                  </p>
+                )}
               </div>
             </div>
             {o.notes && <p className="text-sm text-steel mt-4 pt-4 border-t border-line">ملاحظاتك: {o.notes}</p>}

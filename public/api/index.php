@@ -95,6 +95,10 @@ try {
         /* ---------- admin: orders ---------- */
         case 'GET admin/orders':       need(); ok(admin_orders($_GET)); break;
         case 'POST admin/order-status': need(); ok(set_order_status(body())); break;
+        case 'POST admin/order-tracking': need(); ok(set_tracking(body())); break;
+        case 'POST admin/bosta-create': need(); ok(bosta_create(body())); break;
+        case 'GET admin/bosta-districts': need(); ok(bosta_districts($_GET)); break;
+        case 'POST admin/bosta-test':  need('owner'); ok(bosta_test()); break;
         case 'POST admin/order-delete': need('owner'); ok(delete_order(body())); break;
         case 'GET admin/orders-export': need(); export_orders($_GET); break;
 

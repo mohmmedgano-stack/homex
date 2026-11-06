@@ -245,6 +245,8 @@ function migrate(PDO $db): void {
     if (!in_array('token', $cols, true)) $db->exec("ALTER TABLE orders ADD COLUMN token TEXT NOT NULL DEFAULT ''");
     if (!in_array('client_meta', $cols, true)) $db->exec("ALTER TABLE orders ADD COLUMN client_meta TEXT NOT NULL DEFAULT ''");
     if (!in_array('coupon_code', $cols, true)) $db->exec("ALTER TABLE orders ADD COLUMN coupon_code TEXT NOT NULL DEFAULT ''");
+    if (!in_array('courier', $cols, true)) $db->exec("ALTER TABLE orders ADD COLUMN courier TEXT NOT NULL DEFAULT ''");
+    if (!in_array('tracking', $cols, true)) $db->exec("ALTER TABLE orders ADD COLUMN tracking TEXT NOT NULL DEFAULT ''");
     if (!in_array('source', $cols, true)) $db->exec("ALTER TABLE orders ADD COLUMN source TEXT NOT NULL DEFAULT 'web'");
     if (!in_array('channel', $cols, true)) $db->exec("ALTER TABLE orders ADD COLUMN channel TEXT NOT NULL DEFAULT ''");
     if (!in_array('discount', $cols, true)) $db->exec("ALTER TABLE orders ADD COLUMN discount REAL NOT NULL DEFAULT 0");
@@ -504,10 +506,11 @@ const PAYMENT_SETTINGS = [
     'customer_email_on' => '1',
     'smtp_host' => '', 'smtp_port' => '465', 'smtp_user' => '', 'smtp_pass' => '',
     'meta_capi_token' => '', 'meta_test_code' => '',
+    'bosta_api_key' => '', 'bosta_allow_open' => '1', 'bosta_staging' => '0',
     'wa_cloud_on' => '0', 'wa_cloud_phone_id' => '', 'wa_cloud_token' => '', 'wa_cloud_template' => 'order_confirmation', 'wa_cloud_lang' => 'ar',
     'fawry_merchant_code' => '', 'fawry_secure_key' => '',
 ];
-const SECRET_SETTINGS = ['paymob_secret_key', 'paymob_hmac', 'kashier_api_key', 'fawry_secure_key', 'wa_notify_apikey', 'smtp_pass', 'wa_cloud_token', 'meta_capi_token'];
+const SECRET_SETTINGS = ['paymob_secret_key', 'paymob_hmac', 'kashier_api_key', 'fawry_secure_key', 'wa_notify_apikey', 'smtp_pass', 'wa_cloud_token', 'meta_capi_token', 'bosta_api_key'];
 
 function payment_settings(): array {
     $out = PAYMENT_SETTINGS;
@@ -1053,7 +1056,7 @@ function admin_orders(array $q): array {
         $ids = implode(',', array_map(fn($o) => (int)$o['id'], $orders));
         $items = [];
         foreach (db()->query("SELECT * FROM order_items WHERE order_id IN ($ids)") as $it) $items[$it['order_id']][] = $it;
-        foreach ($orders as &$o) { $o['items'] = $items[$o['id']] ?? []; $o['created_at'] = utc_to_cairo($o['created_at']); $o['updated_at'] = utc_to_cairo($o['updated_at'] ?? ''); }
+        foreach ($orders as &$o) { $o['items'] = $items[$o['id']] ?? []; $o['created_at'] = utc_to_cairo($o['created_at']); $o['updated_at'] = utc_to_cairo($o['updated_at'] ?? ''); $o['trackingUrl'] = tracking_url($o['courier'] ?? '', $o['tracking'] ?? ''); unset($o['client_meta']); }
     }
     $counts = [];
     foreach (db()->query('SELECT status, COUNT(*) n FROM orders GROUP BY status') as $r) $counts[$r['status']] = (int)$r['n'];
@@ -1893,6 +1896,7 @@ function order_view(string $code, string $t): array {
         'city' => $o['city'], 'address' => $o['address'], 'notes' => $o['notes'],
         'paymentMethod' => $o['payment_method'], 'paid' => ($o['payment_status'] ?? '') === 'paid',
         'subtotal' => (float)$o['subtotal'] + (float)($o['discount'] ?? 0), 'discount' => (float)($o['discount'] ?? 0), 'coupon' => $o['coupon_code'] ?? '',
+        'courier' => $o['courier'] ?? '', 'tracking' => $o['tracking'] ?? '', 'trackingUrl' => tracking_url($o['courier'] ?? '', $o['tracking'] ?? ''),
         'shippingFee' => (float)$o['shipping_fee'], 'total' => (float)$o['total'],
         'items' => array_map(fn($i) => ['name' => $i['name'], 'image' => $i['image'], 'price' => (float)$i['price'], 'qty' => (int)$i['qty']], $o['items']),
     ];
@@ -2791,4 +2795,153 @@ function delete_coupon(int $id): array {
     db()->prepare('DELETE FROM coupons WHERE id = ?')->execute([$id]);
     log_activity(current_admin(), 'coupon.delete', 'مسح كوبون ' . $c['code'], 'coupon');
     return coupons_admin();
+}
+
+
+/* ============================================================
+   Shipping companies: tracking number on every order + Bosta API (create the shipment in one click)
+   ============================================================ */
+
+const COURIERS = [
+    'bosta' => ['name' => 'بوسطة', 'url' => 'https://bosta.co/tracking-shipments?shipment-number=%s'],
+    'jt' => ['name' => 'J&T Express', 'url' => 'https://www.jtexpress-eg.com/trajectoryQuery?waybillNo=%s'],
+    'aramex' => ['name' => 'أرامكس', 'url' => 'https://www.aramex.com/eg/ar/track/results?ShipmentNumber=%s'],
+    'mylerz' => ['name' => 'مايلرز', 'url' => 'https://mylerz.com/trackShipment?id=%s'],
+    'egypt_post' => ['name' => 'البريد المصري', 'url' => ''],
+    'own' => ['name' => 'مندوب الشركة', 'url' => ''],
+    'other' => ['name' => 'شركة شحن', 'url' => ''],
+];
+
+function tracking_url(string $courier, string $no): string {
+    if ($no === '' || !isset(COURIERS[$courier]) || COURIERS[$courier]['url'] === '') return '';
+    return sprintf(COURIERS[$courier]['url'], rawurlencode($no));
+}
+
+/** Manual: pick the courier and type the waybill number (any company). */
+function set_tracking(array $b): array {
+    $o = act_row('SELECT id, code, status FROM orders WHERE id = ?', [(int)($b['id'] ?? 0)]);
+    if (!$o) throw new ApiError('الطلب مش موجود', 404);
+    $courier = (string)($b['courier'] ?? '');
+    if ($courier !== '' && !isset(COURIERS[$courier])) throw new ApiError('شركة الشحن مش معروفة');
+    $no = preg_replace('/[^A-Za-z0-9-]/', '', (string)($b['tracking'] ?? ''));
+    db()->prepare("UPDATE orders SET courier = ?, tracking = ?, updated_at = datetime('now') WHERE id = ?")->execute([$courier, mb_substr($no, 0, 40), $o['id']]);
+    log_activity(current_admin(), 'order.tracking', 'سجّل بوليصة ' . (COURIERS[$courier]['name'] ?? '') . ' ' . $no . ' للطلب ' . $o['code'], 'order', (string)$o['id']);
+    if (!empty($b['markShipped']) && in_array($o['status'], ['pending', 'confirmed'], true)) set_order_status(['id' => (int)$o['id'], 'status' => 'shipped']);
+    return ['courier' => $courier, 'tracking' => $no, 'trackingUrl' => tracking_url($courier, $no)];
+}
+
+function bosta_req(string $method, string $path, ?array $data = null): array {
+    $p = payment_settings();
+    if ($p['bosta_api_key'] === '') throw new ApiError('اكتب API key بتاع بوسطة في الإعدادات الأول');
+    $base = $p['bosta_staging'] === '1' ? 'https://stg-app.bosta.co' : 'https://app.bosta.co';
+    $ch = curl_init("$base/api/v2/$path");
+    curl_setopt_array($ch, [CURLOPT_CUSTOMREQUEST => $method, CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 25,
+        CURLOPT_HTTPHEADER => ['Authorization: ' . $p['bosta_api_key'], 'Content-Type: application/json', 'Accept: application/json']]);
+    if ($data !== null) curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data, JSON_UNESCAPED_UNICODE));
+    $raw = (string)curl_exec($ch);
+    $code = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+    $err = curl_error($ch);
+    curl_close($ch);
+    if ($err !== '') throw new ApiError('مقدرناش نوصل لبوسطة: ' . $err);
+    $res = json_decode($raw, true) ?: [];
+    if ($code === 401 || $code === 403) throw new ApiError('بوسطة رفضت الـ API key — اتأكد منه');
+    if ($code >= 400 || (isset($res['success']) && !$res['success'])) throw new ApiError('بوسطة: ' . mb_substr((string)($res['message'] ?? $res['error'] ?? "HTTP $code"), 0, 250));
+    return $res;
+}
+
+function ar_norm(string $s): string {
+    return str_replace(['أ', 'إ', 'آ', 'ة', 'ى', ' ', 'ال'], ['ا', 'ا', 'ا', 'ه', 'ي', '', ''], trim($s));
+}
+
+/** Our governorate (Arabic) → Bosta city id, using Bosta's own city list (cached for a day). */
+function bosta_city(string $gov): string {
+    $cache = data_dir() . '/bosta_cities.json';
+    $list = is_file($cache) && filemtime($cache) > time() - 86400 ? json_decode((string)file_get_contents($cache), true) : null;
+    if (!$list) {
+        $res = bosta_req('GET', 'cities');
+        $list = $res['data']['list'] ?? $res['data'] ?? [];
+        @file_put_contents($cache, json_encode($list, JSON_UNESCAPED_UNICODE));
+    }
+    $want = ar_norm($gov);
+    $alias = ['القاهره' => 'Cairo', 'الجيزه' => 'Giza', 'الاسكندريه' => 'Alexandria', 'القليوبيه' => 'Qalyubia', 'الدقهليه' => 'Dakahlia', 'الشرقيه' => 'Sharqia', 'الغربيه' => 'Gharbia', 'المنوفيه' => 'Monufia', 'البحيره' => 'Beheira', 'كفرالشيخ' => 'Kafr Alsheikh', 'دمياط' => 'Damietta', 'بورسعيد' => 'Port Said', 'الاسماعيليه' => 'Ismailia', 'السويس' => 'Suez', 'الفيوم' => 'Fayoum', 'بنيسويف' => 'Bani Suif', 'المنيا' => 'Menya', 'اسيوط' => 'Assuit', 'سوهاج' => 'Sohag', 'قنا' => 'Qena', 'الاقصر' => 'Luxor', 'اسوان' => 'Aswan', 'البحرالاحمر' => 'Red Sea', 'الوادي الجديد' => 'New Valley', 'الواديالجديد' => 'New Valley', 'مطروح' => 'Matrouh', 'شمالسيناء' => 'North Coast', 'جنوبسيناء' => 'South Sinai'];
+    foreach ((array)$list as $c) {
+        if (ar_norm((string)($c['nameAr'] ?? '')) === $want) return (string)($c['_id'] ?? $c['code'] ?? '');
+    }
+    $en = strtolower($alias[str_replace(' ', '', $want)] ?? $alias[$want] ?? '');
+    foreach ((array)$list as $c) {
+        if ($en !== '' && str_contains(strtolower((string)($c['name'] ?? '')), strtolower(explode(' ', $en)[0]))) return (string)($c['_id'] ?? $c['code'] ?? '');
+    }
+    throw new ApiError("مش لاقيين محافظة «{$gov}» في قايمة بوسطة — اكتب البوليصة يدوي");
+}
+
+/** One click: creates the shipment on Bosta with the order's data and saves the tracking number. */
+function bosta_create(array $b): array {
+    $o = act_row('SELECT * FROM orders WHERE id = ?', [(int)($b['id'] ?? 0)]);
+    if (!$o) throw new ApiError('الطلب مش موجود', 404);
+    if (($o['tracking'] ?? '') !== '') throw new ApiError('الطلب ده ليه بوليصة بالفعل: ' . $o['tracking']);
+    if (in_array($o['status'], ['cancelled', 'returned', 'awaiting_payment'], true)) throw new ApiError('مينفعش تشحن طلب حالته دي');
+    $district = preg_replace('/[^A-Za-z0-9_-]/', '', (string)($b['districtId'] ?? ''));
+    if ($district === '') throw new ApiError('اختار المنطقة من قايمة بوسطة');
+    $items = db()->prepare('SELECT name, qty FROM order_items WHERE order_id = ?');
+    $items->execute([$o['id']]);
+    $items = $items->fetchAll();
+    $names = preg_split('/\s+/u', trim($o['customer_name']));
+    $paid = ($o['payment_status'] ?? '') === 'paid';
+    $p = payment_settings();
+    $payload = [
+        'type' => 10,   // SEND
+        'specs' => ['packageType' => 'Parcel', 'size' => 'MEDIUM', 'packageDetails' => [
+            'itemsCount' => array_sum(array_map(fn($i) => (int)$i['qty'], $items)),
+            'description' => mb_substr(implode(' + ', array_map(fn($i) => $i['name'] . ' ×' . $i['qty'], $items)), 0, 250),
+        ]],
+        'cod' => $paid ? 0 : round((float)$o['total']),
+        'allowToOpenPackage' => $p['bosta_allow_open'] === '1',
+        'businessReference' => $o['code'],
+        'notes' => mb_substr((string)$o['notes'], 0, 250),
+        'receiver' => ['firstName' => $names[0] ?? $o['customer_name'], 'lastName' => count($names) > 1 ? implode(' ', array_slice($names, 1)) : '-', 'phone' => $o['phone'],
+            'secondPhone' => $o['alt_phone'] ?: null, 'email' => ($o['email'] ?? '') ?: null],
+        'dropOffAddress' => ['city' => bosta_city($o['city']), 'districtId' => $district, 'firstLine' => mb_substr($o['address'], 0, 250)],
+    ];
+    $payload['receiver'] = array_filter($payload['receiver']);
+    $res = bosta_req('POST', 'deliveries?apiVersion=1', $payload);
+    $no = (string)($res['data']['trackingNumber'] ?? $res['trackingNumber'] ?? '');
+    if ($no === '') throw new ApiError('بوسطة عملت الشحنة بس مرجعتش رقم بوليصة — شوفها في حسابك على بوسطة');
+    db()->prepare("UPDATE orders SET courier = 'bosta', tracking = ?, updated_at = datetime('now') WHERE id = ?")->execute([$no, $o['id']]);
+    log_activity(current_admin(), 'order.bosta', 'عمل شحنة بوسطة ' . $no . ' للطلب ' . $o['code'] . ($paid ? '' : ' (تحصيل ' . fmt_money($o['total']) . ')'), 'order', (string)$o['id']);
+    if (in_array($o['status'], ['pending', 'confirmed'], true)) set_order_status(['id' => (int)$o['id'], 'status' => 'shipped']);
+    return ['courier' => 'bosta', 'tracking' => $no, 'trackingUrl' => tracking_url('bosta', $no)];
+}
+
+/** Checks the key without creating anything: an empty shipment is rejected for a missing field only when the key is valid. */
+function bosta_test(): array {
+    try {
+        bosta_req('POST', 'deliveries?apiVersion=1', []);
+    } catch (ApiError $e) {
+        if (str_contains($e->getMessage(), 'API key') || str_contains($e->getMessage(), 'رفضت')) throw $e;
+        if (str_contains($e->getMessage(), 'is required')) return ['ok' => true];
+        throw $e;
+    }
+    return ['ok' => true];
+}
+
+/** Bosta areas (districts) of the order's governorate, with a best guess from the address text. */
+function bosta_districts(array $q): array {
+    $o = act_row('SELECT city, address FROM orders WHERE id = ?', [(int)($q['id'] ?? 0)]);
+    if (!$o) throw new ApiError('الطلب مش موجود', 404);
+    $cityId = bosta_city($o['city']);
+    $res = bosta_req('GET', 'cities/' . rawurlencode($cityId) . '/districts');
+    $list = [];
+    foreach ((array)($res['data'] ?? []) as $d) {
+        if (empty($d['districtId']) || (isset($d['dropOffAvailability']) && !$d['dropOffAvailability'])) continue;
+        $ar = (string)($d['districtOtherName'] ?? ''); $zoneAr = (string)($d['zoneOtherName'] ?? '');
+        $list[] = ['id' => $d['districtId'], 'name' => $ar !== '' ? $ar . ($zoneAr !== '' && $zoneAr !== $ar ? " — $zoneAr" : '') : (string)$d['districtName'], 'ar' => $ar, 'zoneAr' => $zoneAr];
+    }
+    // guess: the longest district/zone name that appears in the customer's address
+    $addr = ar_norm($o['address']); $guess = ''; $best = 0;
+    foreach ($list as $d) foreach ([$d['ar'], $d['zoneAr']] as $n) {
+        $nn = ar_norm($n);
+        if (mb_strlen($nn) >= 3 && mb_strlen($nn) > $best && mb_strpos($addr, $nn) !== false) { $best = mb_strlen($nn); $guess = $d['id']; }
+    }
+    usort($list, fn($a, $b) => strcmp($a['name'], $b['name']));
+    return ['districts' => array_map(fn($d) => ['id' => $d['id'], 'name' => $d['name']], $list), 'guess' => $guess, 'city' => $o['city']];
 }

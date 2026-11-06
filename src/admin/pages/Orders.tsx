@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { api, money } from '../../lib/api';
-import { Card, Spinner, StatusBadge, STATUS, Empty, Input, Modal, Button, useToast } from '../ui';
+import { Card, Spinner, StatusBadge, STATUS, Empty, Input, Select, Modal, Button, useToast } from '../ui';
 import { Phone, MessageCircle, Search, Download, Trash2 } from 'lucide-react';
 
 const PAY: Record<string, string> = { cod: 'الدفع عند الاستلام', vodafone: 'فودافون كاش', instapay: 'إنستاباي', card: 'فيزا / ماستركارد', cash: 'كاش', wallet: 'محفظة', credit: 'آجل' };
@@ -28,6 +28,46 @@ export const Orders: React.FC<{ isOwner?: boolean }> = ({ isOwner }) => {
   }, [status, q]);
 
   const [history, setHistory] = useState<any[] | null>(null);
+  const [bostaReady, setBostaReady] = useState(false);
+  useEffect(() => { api.get('admin/settings').then((st: any) => setBostaReady(!!st.bosta_api_key)).catch(() => {}); }, []);
+  const [ship, setShip] = useState({ courier: '', tracking: '' });
+  useEffect(() => { if (open) setShip({ courier: open.courier || '', tracking: open.tracking || '' }); }, [open?.id]);
+  const saveTracking = async (markShipped: boolean) => {
+    if (!open) return;
+    setBusy(true);
+    try {
+      const r = await api.post('admin/order-tracking', { id: open.id, ...ship, markShipped });
+      setOpen((cur: any) => ({ ...cur, ...r, status: markShipped && ['pending', 'confirmed'].includes(cur.status) ? 'shipped' : cur.status }));
+      toast('البوليصة اتسجلت' + (markShipped ? ' والطلب بقى «اتشحن»' : ''));
+      load();
+    } catch (e: any) { toast(e.message, 'err'); }
+    setBusy(false);
+  };
+  const [districts, setDistricts] = useState<{ list: { id: string; name: string }[]; pick: string } | null>(null);
+  useEffect(() => setDistricts(null), [open?.id]);
+  const loadDistricts = async () => {
+    if (!open) return;
+    setBusy(true);
+    try {
+      const d = await api.get('admin/bosta-districts', { id: String(open.id) });
+      setDistricts({ list: d.districts, pick: d.guess || '' });
+      if (!d.guess) toast('اختار منطقة العميل من القايمة', 'err');
+    } catch (e: any) { toast(e.message, 'err'); }
+    setBusy(false);
+  };
+  const bosta = async () => {
+    if (!open || !districts?.pick) return;
+    if (!confirm(`تعمل شحنة على بوسطة للطلب ${open.code}؟${open.payment_status === 'paid' ? '' : `\nالمندوب هيحصّل ${Math.round(open.total)} ج.م`}`)) return;
+    setBusy(true);
+    try {
+      const r = await api.post('admin/bosta-create', { id: open.id, districtId: districts.pick });
+      setOpen((cur: any) => ({ ...cur, ...r, status: ['pending', 'confirmed'].includes(cur.status) ? 'shipped' : cur.status }));
+      setShip({ courier: 'bosta', tracking: r.tracking });
+      toast(`اتعملت الشحنة على بوسطة — بوليصة ${r.tracking}`);
+      load();
+    } catch (e: any) { toast(e.message, 'err'); }
+    setBusy(false);
+  };
   useEffect(() => {
     setHistory(null);
     if (!open || !isOwner) return;
@@ -117,6 +157,7 @@ export const Orders: React.FC<{ isOwner?: boolean }> = ({ isOwner }) => {
                       <span className="font-bold text-ink truncate">{o.customer_name}</span>
                       <StatusBadge s={o.status} />
                       {o.source === 'pos' && <span className="text-xs font-bold px-1.5 py-0.5 rounded bg-ink text-white">كاشير</span>}
+                      {o.tracking && <span className="text-xs font-bold px-1.5 py-0.5 rounded bg-shelf text-steel">بوليصة</span>}
                       {o.payment_method === 'card' && o.payment_status === 'paid' && <span className="text-xs font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800">مدفوع</span>}
                     </span>
                     <span className="block text-xs text-steel mt-0.5 price">
@@ -216,6 +257,47 @@ export const Orders: React.FC<{ isOwner?: boolean }> = ({ isOwner }) => {
               )}
               <p className="text-xs text-steel mt-2">الإلغاء أو المرتجع بيرجّع الكمية للمخزن تلقائياً. الطلب بيتحسب في المبيعات لما يبقى «اتسلّم».</p>
             </div>
+
+            {open.source !== 'pos' && (
+              <div className="rounded-xl border border-line p-4 space-y-3">
+                <p className="font-extrabold text-ink">الشحن والبوليصة</p>
+                <div className="grid sm:grid-cols-2 gap-2">
+                  <Select value={ship.courier} onChange={(e) => setShip({ ...ship, courier: e.target.value })} aria-label="شركة الشحن">
+                    <option value="">اختار شركة الشحن</option>
+                    <option value="bosta">بوسطة</option>
+                    <option value="jt">J&amp;T Express</option>
+                    <option value="aramex">أرامكس</option>
+                    <option value="mylerz">مايلرز</option>
+                    <option value="egypt_post">البريد المصري</option>
+                    <option value="own">مندوب الشركة</option>
+                    <option value="other">شركة تانية</option>
+                  </Select>
+                  <Input dir="ltr" value={ship.tracking} onChange={(e) => setShip({ ...ship, tracking: e.target.value })} placeholder="رقم البوليصة" aria-label="رقم البوليصة" />
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="ghost" disabled={busy || !ship.courier} onClick={() => saveTracking(false)}>احفظ</Button>
+                  {['pending', 'confirmed'].includes(open.status) && <Button disabled={busy || !ship.courier || !ship.tracking} onClick={() => saveTracking(true)}>احفظ وخلّي الطلب «اتشحن»</Button>}
+                  {bostaReady && !open.tracking && !districts && !['cancelled', 'returned', 'awaiting_payment'].includes(open.status) && (
+                    <Button variant="dark" disabled={busy} onClick={loadDistricts}>اعمل شحنة على بوسطة</Button>
+                  )}
+                  {open.trackingUrl && <a href={open.trackingUrl} target="_blank" rel="noreferrer" className="h-11 px-4 rounded-lg text-sm font-bold inline-flex items-center bg-white text-ink border border-line hover:border-ink">تتبع الشحنة</a>}
+                </div>
+                {districts && !open.tracking && (
+                  <div className="bg-shelf rounded-lg p-3 space-y-2">
+                    <p className="text-sm font-bold text-ink">منطقة العميل في بوسطة <span className="text-steel font-normal">({open.city})</span></p>
+                    <p className="text-xs text-steel">العنوان: {open.address}</p>
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <Select value={districts.pick} onChange={(e) => setDistricts({ ...districts, pick: e.target.value })} aria-label="المنطقة">
+                        <option value="">اختار المنطقة...</option>
+                        {districts.list.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+                      </Select>
+                      <Button variant="dark" className="shrink-0" disabled={busy || !districts.pick} onClick={bosta}>أكّد وابعت لبوسطة</Button>
+                    </div>
+                  </div>
+                )}
+                <p className="text-xs text-steel">العميل بيشوف رقم البوليصة ولينك التتبع في صفحة طلبه.</p>
+              </div>
+            )}
 
             {isOwner && (
               <div className="pt-4 border-t border-line">
