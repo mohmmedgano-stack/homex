@@ -27,6 +27,7 @@ try {
         case 'POST kashier-webhook': ok(kashier_webhook()); break;
         case 'GET fawry-return': fawry_return(); break;
         case 'POST fawry-callback': ok(fawry_callback()); break;
+        case 'POST cart-save':  ok(cart_save(body())); break;
         case 'POST dealer-click': ok(dealer_click(body())); break;
 
         /* ---------- auth ---------- */
@@ -46,6 +47,8 @@ try {
         case 'POST admin/categories-order': need(); ok(reorder_categories(body())); break;
         case 'POST admin/category-delete': need(); ok(delete_category((string)(body()['id'] ?? ''))); break;
 
+        case 'GET admin/carts':        need(); ok(carts_admin($_GET)); break;
+        case 'POST admin/cart':        need(); ok(cart_update(body())); break;
         case 'GET admin/orders-pulse': need(); ok(orders_pulse()); break;
         case 'POST admin/wa-test':     need('owner'); ok(wa_test()); break;
         case 'POST admin/email-test':  need('owner'); ok(test_email(body())); break;

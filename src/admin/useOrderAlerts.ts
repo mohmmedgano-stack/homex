@@ -83,6 +83,7 @@ export type NewOrder = { id: number; code: string; name: string; total: number; 
  */
 export function useOrderAlerts(onNew: (o: NewOrder | null, added: number) => void) {
   const [pending, setPending] = useState(0);
+  const [carts, setCarts] = useState(0);
   const [sound, setSoundState] = useState(() => {
     try { return localStorage.getItem(SOUND_KEY) !== '0'; } catch { return true; }
   });
@@ -109,6 +110,7 @@ export function useOrderAlerts(onNew: (o: NewOrder | null, added: number) => voi
         const d = await api.get('admin/orders-pulse');
         if (stop) return;
         setPending(d.pending);
+        setCarts(d.carts || 0);
         if (base.current !== null && d.count > base.current) {
           const added = d.count - base.current;
           if (soundRef.current) playChime();
@@ -150,5 +152,5 @@ export function useOrderAlerts(onNew: (o: NewOrder | null, added: number) => voi
     playChime();
   };
 
-  return { pending, sound, setSound, perm, askPermission };
+  return { pending, carts, sound, setSound, perm, askPermission };
 }

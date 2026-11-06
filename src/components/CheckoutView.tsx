@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { OrderPage } from './OrderPage';
+import { api, cartToken } from '../lib/api';
 import { useStore } from '../context/StoreContext';
 import { CustomerDetails, Order } from '../types';
 import { EGYPT_GOVERNORATES, isEgyptMobile, isTripleName, normalizePhone } from '../data/governorates';
@@ -127,6 +128,20 @@ export const CheckoutView: React.FC = () => {
     const url = `https://wa.me/${num}?text=${encodeURIComponent(text)}`;
     window.open(url, '_blank');
   };
+
+  // Remember who started checking out (name + phone) so the team can follow up if they don't finish
+  React.useEffect(() => {
+    if (completedOrder || !cart.length || !isEgyptMobile(form.phone)) return;
+    const t = setTimeout(() => {
+      const token = cartToken();
+      if (!token) return;
+      api.post('cart-save', {
+        token, name: form.name, phone: normalizePhone(form.phone), city: form.city,
+        items: cart.map((i) => ({ productId: Number(i.product.id), quantity: i.quantity })),
+      }).catch(() => {});
+    }, 1200);
+    return () => clearTimeout(t);
+  }, [form.name, form.phone, form.city, cart, completedOrder]);
 
   // SUCCESS → Shopify-style order page (same page the confirmation email links to)
   if (completedOrder) {

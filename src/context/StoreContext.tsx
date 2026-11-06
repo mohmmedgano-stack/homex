@@ -16,7 +16,7 @@ import {
   INITIAL_ORDERS, 
   CATEGORIES 
 } from '../data/initialData';
-import { api, StoreSettings } from '../lib/api';
+import { api, StoreSettings, cartToken } from '../lib/api';
 import { initTracking, trackAddToCart, trackViewContent, trackInitiateCheckout, trackPurchase } from '../lib/track';
 
 interface ToastState {
@@ -506,6 +506,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const res = await api.post('order', {
       customer,
       website: (document.getElementById('hp-website') as HTMLInputElement | null)?.value || '',
+      cartToken: cartToken(),
       paymentMethod: customer.paymentMethod,
       items: cart.map((i) => ({ productId: Number(i.product.id), quantity: i.quantity })),
     });

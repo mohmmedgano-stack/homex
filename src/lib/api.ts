@@ -98,3 +98,17 @@ export const POLICY_PAGES = [
 
 /** Small version of an uploaded image (cards, lists). External URLs are returned as-is. */
 export const thumb = (url?: string) => (url && url.startsWith('/api/?r=img&f=') ? `${url}&s=1` : url || '');
+
+/** Random id for this browser's checkout (abandoned-cart follow-up). */
+export const cartToken = () => {
+  try {
+    let t = localStorage.getItem('homex_cart_token');
+    if (!t) {
+      t = Array.from(crypto.getRandomValues(new Uint8Array(12)), (b) => b.toString(16).padStart(2, '0')).join('');
+      localStorage.setItem('homex_cart_token', t);
+    }
+    return t;
+  } catch {
+    return '';
+  }
+};

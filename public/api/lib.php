@@ -145,6 +145,24 @@ function migrate(PDO $db): void {
     CREATE TABLE IF NOT EXISTS order_attempts (ip TEXT NOT NULL, phone TEXT NOT NULL DEFAULT '', at INTEGER NOT NULL);
     CREATE INDEX IF NOT EXISTS idx_orders_created ON orders(created_at);
     CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(date);
+    CREATE TABLE IF NOT EXISTS carts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        token TEXT NOT NULL UNIQUE,
+        name TEXT NOT NULL DEFAULT '',
+        phone TEXT NOT NULL DEFAULT '',
+        city TEXT NOT NULL DEFAULT '',
+        items TEXT NOT NULL DEFAULT '[]',
+        total REAL NOT NULL DEFAULT 0,
+        status TEXT NOT NULL DEFAULT 'open',
+        order_code TEXT NOT NULL DEFAULT '',
+        note TEXT NOT NULL DEFAULT '',
+        handled_by TEXT NOT NULL DEFAULT '',
+        ip TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_carts_status ON carts(status, updated_at);
+    CREATE INDEX IF NOT EXISTS idx_carts_phone ON carts(phone);
     CREATE TABLE IF NOT EXISTS reviews (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         product_id INTEGER NOT NULL,
@@ -972,6 +990,10 @@ function create_order(array $b): array {
         throw $e;
     }
     order_guard_record($phone);
+    try {
+        db()->prepare("UPDATE carts SET status = 'ordered', order_code = ?, updated_at = datetime('now') WHERE status IN ('open', 'contacted') AND (phone = ? OR token = ?)")
+            ->execute([$code, $phone, str((string)($b['cartToken'] ?? ''), 40)]);
+    } catch (Throwable $e) { error_log('[homex carts] ' . $e->getMessage()); }
     $res = ['code' => $code, 'token' => $token, 'subtotal' => $sub, 'shippingFee' => $fee, 'total' => $total];
     if ($pm !== 'card') { notify_new_order($code); notify_customer($code); }
     if ($pm === 'card') {
@@ -1568,7 +1590,8 @@ function orders_pulse(): array {
     $last = db()->query("SELECT id, code, customer_name, total, city FROM orders WHERE status = 'pending' AND source != 'pos' ORDER BY updated_at DESC, id DESC LIMIT 1")->fetch() ?: null;
     $count = (int)db()->query("SELECT COUNT(*) FROM orders WHERE $real")->fetchColumn();
     $pending = (int)db()->query("SELECT COUNT(*) FROM orders WHERE status = 'pending'")->fetchColumn();
-    return ['count' => $count, 'pending' => $pending, 'last' => $last ? ['id' => (int)$last['id'], 'code' => $last['code'], 'name' => $last['customer_name'], 'total' => (float)$last['total'], 'city' => $last['city']] : null];
+    $carts = (int)db()->query("SELECT COUNT(*) FROM carts WHERE status = 'open' AND updated_at < datetime('now', '-30 minutes')")->fetchColumn();
+    return ['count' => $count, 'pending' => $pending, 'carts' => $carts, 'last' => $last ? ['id' => (int)$last['id'], 'code' => $last['code'], 'name' => $last['customer_name'], 'total' => (float)$last['total'], 'city' => $last['city']] : null];
 }
 
 /** CSV (opens in Excel with Arabic) of orders, filtered like the orders page. */
@@ -2569,4 +2592,75 @@ function restore_backup(): array {
     rename($live . '.restoring', $live);
     log_activity($who, 'backup.restore', 'رجّع الموقع لنسخة احتياطية مرفوعة (النسخة اللي كانت قبلها اتحفظت باسم ' . $saved . ')', 'backup');
     return ['restored' => true, 'savedAs' => $saved];
+}
+
+
+/* ============================================================
+   Abandoned checkouts: customer typed name + phone but didn't place the order
+   ============================================================ */
+
+function cart_save(array $b): array {
+    $token = (string)($b['token'] ?? '');
+    if (!preg_match('/^[a-z0-9]{16,40}$/', $token)) throw new ApiError('bad token', 400);
+    try { $phone = egypt_mobile((string)($b['phone'] ?? '')); } catch (Throwable $e) { return ['saved' => false]; }
+    $ip = (string)($_SERVER['HTTP_CF_CONNECTING_IP'] ?? $_SERVER['REMOTE_ADDR'] ?? '');
+    $n = act_row("SELECT COUNT(*) n FROM carts WHERE ip = ? AND created_at > datetime('now', '-1 hour')", [$ip]);
+    if ((int)($n['n'] ?? 0) > 20) return ['saved' => false];
+    $items = []; $total = 0;
+    $get = db()->prepare('SELECT id, name, price, image FROM products WHERE id = ? AND active = 1');
+    foreach (array_slice((array)($b['items'] ?? []), 0, 30) as $it) {
+        $get->execute([(int)($it['productId'] ?? 0)]);
+        $p = $get->fetch();
+        $q = max(1, min(99, (int)($it['quantity'] ?? 1)));
+        if (!$p) continue;
+        $items[] = ['id' => (int)$p['id'], 'name' => $p['name'], 'price' => (float)$p['price'], 'qty' => $q, 'image' => $p['image']];
+        $total += (float)$p['price'] * $q;
+    }
+    if (!$items) return ['saved' => false];
+    $name = preg_replace('/\s+/u', ' ', str($b['name'] ?? '', 100));
+    $city = str($b['city'] ?? '', 60);
+    $json = json_encode($items, JSON_UNESCAPED_UNICODE);
+    $ex = act_row('SELECT id, status FROM carts WHERE token = ?', [$token]);
+    if ($ex) {
+        if ($ex['status'] === 'ordered') {   // same browser, new shopping trip
+            db()->prepare("UPDATE carts SET name=?, phone=?, city=?, items=?, total=?, status='open', order_code='', note='', handled_by='', created_at=datetime('now'), updated_at=datetime('now') WHERE id=?")->execute([$name, $phone, $city, $json, $total, $ex['id']]);
+        } else {
+            db()->prepare("UPDATE carts SET name=?, phone=?, city=?, items=?, total=?, updated_at=datetime('now') WHERE id=?")->execute([$name, $phone, $city, $json, $total, $ex['id']]);
+        }
+    } else {
+        db()->prepare('INSERT INTO carts (token, name, phone, city, items, total, ip) VALUES (?,?,?,?,?,?,?)')->execute([$token, $name, $phone, $city, $json, $total, $ip]);
+    }
+    return ['saved' => true];
+}
+
+/** Dashboard list. «open» only shows carts left for 30+ minutes (the customer may still be typing). */
+function carts_admin(array $q): array {
+    $status = (string)($q['status'] ?? 'open');
+    if (!in_array($status, ['open', 'contacted', 'ordered', 'dismissed'], true)) $status = 'open';
+    $extra = $status === 'open' ? " AND updated_at < datetime('now', '-30 minutes')" : '';
+    $st = db()->prepare("SELECT * FROM carts WHERE status = ?$extra ORDER BY updated_at DESC LIMIT 200");
+    $st->execute([$status]);
+    $rows = array_map(function ($c) {
+        return ['id' => (int)$c['id'], 'name' => $c['name'], 'phone' => $c['phone'], 'city' => $c['city'], 'items' => json_decode($c['items'], true) ?: [],
+            'total' => (float)$c['total'], 'status' => $c['status'], 'orderCode' => $c['order_code'], 'note' => $c['note'], 'handledBy' => $c['handled_by'],
+            'createdAt' => utc_to_cairo($c['created_at']), 'updatedAt' => utc_to_cairo($c['updated_at'])];
+    }, $st->fetchAll());
+    $counts = [];
+    foreach (db()->query("SELECT status, COUNT(*) n, SUM(total) v FROM carts WHERE status != 'open' OR updated_at < datetime('now', '-30 minutes') GROUP BY status") as $r) $counts[$r['status']] = ['n' => (int)$r['n'], 'value' => (float)$r['v']];
+    // recovered = we contacted them, then they ordered
+    $rec = act_row("SELECT COUNT(*) n, COALESCE(SUM(o.total),0) v FROM carts c JOIN orders o ON o.code = c.order_code WHERE c.status = 'ordered' AND c.handled_by != ''", []);
+    return ['carts' => $rows, 'counts' => $counts, 'recovered' => ['n' => (int)($rec['n'] ?? 0), 'value' => (float)($rec['v'] ?? 0)]];
+}
+
+function cart_update(array $b): array {
+    $c = act_row('SELECT * FROM carts WHERE id = ?', [(int)($b['id'] ?? 0)]);
+    if (!$c) throw new ApiError('السلة مش موجودة', 404);
+    $status = (string)($b['status'] ?? $c['status']);
+    if (!in_array($status, ['open', 'contacted', 'dismissed'], true)) throw new ApiError('حالة مش صحيحة');
+    $note = array_key_exists('note', $b) ? str($b['note'], 300) : $c['note'];
+    $by = current_admin()['name'] ?? '';
+    db()->prepare("UPDATE carts SET status = ?, note = ?, handled_by = CASE WHEN ? = 'contacted' THEN ? ELSE handled_by END WHERE id = ?")->execute([$status, $note, $status, $by, $c['id']]);
+    $label = ['contacted' => 'اتواصل مع', 'dismissed' => 'قفل', 'open' => 'رجّع للمتابعة'][$status];
+    log_activity(current_admin(), 'cart.' . $status, $label . ' سلة متروكة — ' . $c['name'] . ' (' . $c['phone'] . ') بـ ' . fmt_money($c['total']) . ($note !== '' && $note !== $c['note'] ? " — $note" : ''), 'cart', (string)$c['id']);
+    return carts_admin(['status' => (string)($b['view'] ?? 'open')]);
 }
