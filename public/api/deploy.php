@@ -63,13 +63,17 @@ if (($_GET['status'] ?? '') === '1') {
 }
 
 // Rate limit
-if (is_file($lock) && time() - (int)file_get_contents($lock) < 20) out(['ok' => true, 'skipped' => 'busy'], 429);
+if (is_file($lock) && time() - (int)file_get_contents($lock) < 20) out(['ok' => false, 'skipped' => 'busy'], 429);
 file_put_contents($lock, (string)time());
 
 try {
     $branch = json_decode(http_get('https://api.github.com/repos/' . REPO . '/branches/' . BRANCH), true);
     $sha = (string)($branch['commit']['sha'] ?? '');
     if (!preg_match('/^[a-f0-9]{40}$/', $sha)) throw new RuntimeException('could not read latest build');
+    // CI says which build it just published; GitHub's API can lag a few seconds behind a push,
+    // so until it shows that build we answer "waiting" and CI asks again. (Only the branch head is ever installed.)
+    $want = (string)($_GET['sha'] ?? '');
+    if (preg_match('/^[a-f0-9]{40}$/', $want) && $want !== $sha) { @unlink($lock); out(['ok' => false, 'waiting' => true, 'branch' => $sha]); }
 
     $current = is_file($shaFile) ? trim((string)file_get_contents($shaFile)) : '';
     if ($current === $sha && empty($_GET['force'])) out(['ok' => true, 'unchanged' => true, 'sha' => $sha]);

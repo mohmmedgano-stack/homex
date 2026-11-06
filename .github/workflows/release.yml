@@ -36,6 +36,7 @@ jobs:
           git add -A
           git commit -q -m "Release build from ${GITHUB_SHA::7}"
           git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" hostinger-release
+          echo "RELEASE_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
       - name: Upload the site to Hostinger over FTP
         env:
           FTP_SERVER: ${{ secrets.FTP_SERVER }}
@@ -54,9 +55,9 @@ jobs:
           echo "::notice::Site uploaded to Hostinger"
       - name: Tell home-x.online to install this build
         run: |
-          for i in 1 2 3 4 5; do
-            sleep 10
-            res=$(curl -sS --max-time 120 https://home-x.online/api/deploy.php || true)
+          for i in 1 2 3 4 5 6 7 8; do
+            sleep 12
+            res=$(curl -sS --max-time 120 "https://home-x.online/api/deploy.php?sha=${RELEASE_SHA}" || true)
             echo "$res"
             echo "$res" | grep -q '"ok":true' && exit 0
           done
