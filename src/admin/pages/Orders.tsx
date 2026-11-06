@@ -258,6 +258,15 @@ export const Orders: React.FC<{ isOwner?: boolean }> = ({ isOwner }) => {
               <p className="text-xs text-steel mt-2">الإلغاء أو المرتجع بيرجّع الكمية للمخزن تلقائياً. الطلب بيتحسب في المبيعات لما يبقى «اتسلّم».</p>
             </div>
 
+            {open.status === 'delivered' && open.source !== 'pos' && (
+              <div className="rounded-xl border border-gold/40 bg-gold/5 p-4 flex flex-wrap items-center gap-3">
+                <p className="text-sm text-ink flex-1 min-w-[180px]"><b>اطلب تقييم من العميل</b> — بيقيّم المنتجات في دقيقة والتقييم بيظهر على صفحة المنتج.</p>
+                <a target="_blank" rel="noopener noreferrer"
+                  href={`https://wa.me/${String(open.phone).replace(/^0/, '20')}?text=${encodeURIComponent(`أهلاً ${String(open.customer_name).split(' ')[0]} 👋 نتمنى يكون طلبك من HOMEX عجبك! لو عندك دقيقة قولنا رأيك في المنتج من هنا 🙏\n${location.origin}/r/${open.code}?t=${open.token}`)}`}
+                  className="h-10 px-4 rounded-lg bg-[#25D366] text-white text-sm font-bold inline-flex items-center gap-1.5 shrink-0">ابعت لينك التقييم واتساب</a>
+              </div>
+            )}
+
             {open.source !== 'pos' && (
               <div className="rounded-xl border border-line p-4 space-y-3">
                 <p className="font-extrabold text-ink">الشحن والبوليصة</p>

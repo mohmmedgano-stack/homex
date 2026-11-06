@@ -472,7 +472,7 @@ const PUBLIC_SETTINGS = [
     'facebook' => '', 'instagram' => '', 'tiktok' => '',
     'shipping_fee' => '60', 'free_shipping_over' => '0',
     'pay_cod' => '1', 'pay_vodafone' => '', 'pay_instapay' => '',
-    'hero_title' => '', 'hero_subtitle' => '', 'footer_pages_title' => 'خدمة العملاء',
+    'hero_title' => '', 'hero_subtitle' => '', 'footer_pages_title' => 'خدمة العملاء', 'reviews_auto' => '0',
     'brand_banner_desktop' => '1', 'brand_banner_mobile' => '1', 'brand_title' => '', 'brand_subtitle' => '',
     // Policy pages (empty = the default text below)
     'page_about' => '', 'page_shipping' => '', 'page_returns' => '', 'page_privacy' => '', 'page_terms' => '',
@@ -872,6 +872,7 @@ function save_product(array $b): array {
         $id = (int)db()->lastInsertId();
         if ((int)($b['stock'] ?? 0) > 0) stock_move($id, $name, (int)$b['stock'], (int)$b['stock'], 'opening', 'رصيد أول المدة');
     }
+    rating_refresh($id);   // stars always come from real approved reviews
     if (array_key_exists('slug', $b)) {
         $slug = trim((string)preg_replace('/[^a-z0-9]+/', '-', strtolower(str((string)$b['slug'], 80))), '-');
         db()->prepare('UPDATE products SET slug = ? WHERE id = ?')->execute([$slug, $id]);
@@ -1898,6 +1899,7 @@ function order_view(string $code, string $t): array {
         'subtotal' => (float)$o['subtotal'] + (float)($o['discount'] ?? 0), 'discount' => (float)($o['discount'] ?? 0), 'coupon' => $o['coupon_code'] ?? '',
         'courier' => $o['courier'] ?? '', 'tracking' => $o['tracking'] ?? '', 'trackingUrl' => tracking_url($o['courier'] ?? '', $o['tracking'] ?? ''),
         'shippingFee' => (float)$o['shipping_fee'], 'total' => (float)$o['total'],
+        'reviewUrl' => $o['status'] === 'delivered' ? review_link($o) : '',
         'items' => array_map(fn($i) => ['name' => $i['name'], 'image' => $i['image'], 'price' => (float)$i['price'], 'qty' => (int)$i['qty']], $o['items']),
     ];
 }
@@ -2944,4 +2946,83 @@ function bosta_districts(array $q): array {
     }
     usort($list, fn($a, $b) => strcmp($a['name'], $b['name']));
     return ['districts' => array_map(fn($d) => ['id' => $d['id'], 'name' => $d['name']], $list), 'guess' => $guess, 'city' => $o['city']];
+}
+
+
+/* ============================================================
+   Reviews from real buyers: link per delivered order → stars + comment → owner approves → product page
+   ============================================================ */
+
+function review_link(array $o): string { return site_base() . '/r/' . rawurlencode($o['code']) . '?t=' . order_token($o); }
+
+function rating_refresh(int $pid): void {
+    $a = act_row("SELECT COUNT(*) n, COALESCE(AVG(rating), 0) a FROM reviews WHERE product_id = ? AND status = 'approved'", [$pid]);
+    db()->prepare('UPDATE products SET rating = ?, reviews_count = ? WHERE id = ?')->execute([round((float)$a['a'], 1), (int)$a['n'], $pid]);
+}
+
+/** What the customer sees on the review page: the products of their delivered order. */
+function review_form(string $code, string $t): array {
+    $o = order_with_items(str($code, 30));
+    if (!$o || $t === '' || !hash_equals(order_token($o), $t)) throw new ApiError('اللينك ده مش صحيح', 404);
+    if ($o['status'] !== 'delivered') throw new ApiError('تقدر تقيّم بعد ما الطلب يوصلك');
+    $done = db()->prepare('SELECT product_id, rating, comment FROM reviews WHERE order_id = ?');
+    $done->execute([$o['id']]);
+    $done = array_column($done->fetchAll(), null, 'product_id');
+    $seen = []; $items = [];
+    foreach ($o['items'] as $i) {
+        if (isset($seen[$i['product_id']])) continue;
+        $seen[$i['product_id']] = true;
+        $d = $done[$i['product_id']] ?? null;
+        $items[] = ['productId' => (int)$i['product_id'], 'name' => $i['name'], 'image' => $i['image'], 'rated' => (bool)$d, 'rating' => $d ? (int)$d['rating'] : 0, 'comment' => $d['comment'] ?? ''];
+    }
+    return ['code' => $o['code'], 'name' => explode(' ', trim($o['customer_name']))[0] ?? '', 'city' => $o['city'], 'items' => $items];
+}
+
+function review_submit(array $b): array {
+    $o = order_with_items(str((string)($b['code'] ?? ''), 30));
+    if (!$o || !hash_equals(order_token($o), (string)($b['t'] ?? ''))) throw new ApiError('اللينك ده مش صحيح', 404);
+    if ($o['status'] !== 'delivered') throw new ApiError('تقدر تقيّم بعد ما الطلب يوصلك');
+    $pids = array_map(fn($i) => (int)$i['product_id'], $o['items']);
+    $name = preg_replace('/\s+/u', ' ', str($b['name'] ?? '', 40)) ?: (explode(' ', trim($o['customer_name']))[0] ?? 'عميل');
+    $autoApprove = get_setting('reviews_auto', '0') === '1';
+    $n = 0;
+    foreach (array_slice((array)($b['reviews'] ?? []), 0, 50) as $rv) {
+        $pid = (int)($rv['productId'] ?? 0);
+        $rating = (int)($rv['rating'] ?? 0);
+        if (!in_array($pid, $pids, true) || $rating < 1 || $rating > 5) continue;
+        if (act_row('SELECT id FROM reviews WHERE order_id = ? AND product_id = ?', [$o['id'], $pid])) continue;
+        $status = $autoApprove && $rating >= 4 ? 'approved' : 'pending';
+        db()->prepare('INSERT INTO reviews (product_id, order_id, name, city, rating, comment, status) VALUES (?,?,?,?,?,?,?)')
+            ->execute([$pid, $o['id'], $name, str($o['city'], 40), $rating, str($rv['comment'] ?? '', 1000), $status]);
+        if ($status === 'approved') rating_refresh($pid);
+        $n++;
+    }
+    if (!$n) throw new ApiError('اختار عدد النجوم لمنتج واحد على الأقل');
+    return ['saved' => $n];
+}
+
+function reviews_admin(array $q): array {
+    $status = in_array($q['status'] ?? '', ['pending', 'approved', 'hidden'], true) ? $q['status'] : 'pending';
+    $st = db()->prepare("SELECT r.*, p.name product, p.image, o.code order_code FROM reviews r LEFT JOIN products p ON p.id = r.product_id LEFT JOIN orders o ON o.id = r.order_id WHERE r.status = ? ORDER BY r.id DESC LIMIT 200");
+    $st->execute([$status]);
+    $rows = array_map(fn($r) => ['id' => (int)$r['id'], 'productId' => (int)$r['product_id'], 'product' => $r['product'] ?? '—', 'image' => $r['image'] ?? '', 'orderCode' => $r['order_code'] ?? '',
+        'name' => $r['name'], 'city' => $r['city'], 'rating' => (int)$r['rating'], 'comment' => $r['comment'], 'status' => $r['status'], 'createdAt' => utc_to_cairo($r['created_at'])], $st->fetchAll());
+    $counts = db()->query('SELECT status, COUNT(*) n FROM reviews GROUP BY status')->fetchAll(PDO::FETCH_KEY_PAIR);
+    $avg = act_row("SELECT COALESCE(AVG(rating),0) a, COUNT(*) n FROM reviews WHERE status = 'approved'", []);
+    return ['reviews' => $rows, 'counts' => $counts, 'avg' => round((float)$avg['a'], 1), 'auto' => get_setting('reviews_auto', '0') === '1'];
+}
+
+function review_moderate(array $b): array {
+    $r = act_row('SELECT r.*, p.name product FROM reviews r LEFT JOIN products p ON p.id = r.product_id WHERE r.id = ?', [(int)($b['id'] ?? 0)]);
+    if (!$r) throw new ApiError('التقييم مش موجود', 404);
+    $status = (string)($b['status'] ?? '');
+    if ($status === 'delete') {
+        db()->prepare('DELETE FROM reviews WHERE id = ?')->execute([$r['id']]);
+    } else {
+        if (!in_array($status, ['approved', 'hidden', 'pending'], true)) throw new ApiError('حالة مش صحيحة');
+        db()->prepare('UPDATE reviews SET status = ? WHERE id = ?')->execute([$status, $r['id']]);
+    }
+    rating_refresh((int)$r['product_id']);
+    log_activity(current_admin(), 'review.' . $status, ['approved' => 'نشر', 'hidden' => 'خفى', 'pending' => 'رجّع للمراجعة', 'delete' => 'مسح'][$status] . ' تقييم ' . $r['rating'] . '★ من ' . $r['name'] . ' على «' . ($r['product'] ?? '') . '»', 'review', (string)$r['id']);
+    return reviews_admin(['status' => (string)($b['view'] ?? 'pending')]);
 }

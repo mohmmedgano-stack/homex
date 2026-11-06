@@ -9,7 +9,7 @@ export type OrderView = {
   code: string; status: string; createdAt: string;
   name: string; phone: string; altPhone: string; email: string; city: string; address: string; notes: string;
   paymentMethod: string; paid: boolean; subtotal: number; discount?: number; coupon?: string; shippingFee: number; total: number;
-  courier?: string; tracking?: string; trackingUrl?: string;
+  courier?: string; tracking?: string; trackingUrl?: string; reviewUrl?: string;
   items: { name: string; image: string; price: number; qty: number }[];
 };
 
@@ -162,6 +162,9 @@ export const OrderPage: React.FC<{ code: string; t: string; fresh?: boolean }> =
             {o.notes && <p className="text-sm text-steel mt-4 pt-4 border-t border-line">ملاحظاتك: {o.notes}</p>}
           </section>
 
+          {o.reviewUrl && (
+            <a href={o.reviewUrl} className="block rounded-2xl border-2 border-gold bg-gold/5 p-4 text-center font-extrabold text-ink">⭐ قيّم المنتجات اللي اشتريتها</a>
+          )}
           <div className="flex flex-col sm:flex-row gap-2">
             {wa && (
               <a href={`https://wa.me/${wa}?text=${encodeURIComponent(waText)}`} target="_blank" rel="noopener noreferrer" className="sm:flex-1 h-12 shrink-0 rounded-xl bg-[#25D366] text-white font-extrabold flex items-center justify-center gap-2">

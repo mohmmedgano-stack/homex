@@ -19,6 +19,8 @@ try {
         case 'POST order':     ok(create_order(body())); break;
         case 'GET img':        serve_image($_GET['f'] ?? ''); break;
         case 'GET dealers':    ok(dealers_public()); break;
+        case 'GET review-form': ok(review_form((string)($_GET['code'] ?? ''), (string)($_GET['t'] ?? ''))); break;
+        case 'POST review':    ok(review_submit(body())); break;
         case 'GET reviews':    ok(product_reviews((int)($_GET['product'] ?? 0))); break;
         case 'GET order-view': ok(order_view((string)($_GET['code'] ?? ''), (string)($_GET['t'] ?? ''))); break;
         case 'POST paymob-callback': ok(paymob_callback()); break;
@@ -48,6 +50,8 @@ try {
         case 'POST admin/categories-order': need(); ok(reorder_categories(body())); break;
         case 'POST admin/category-delete': need(); ok(delete_category((string)(body()['id'] ?? ''))); break;
 
+        case 'GET admin/reviews':      need(); ok(reviews_admin($_GET)); break;
+        case 'POST admin/review':      need(); ok(review_moderate(body())); break;
         case 'GET admin/coupons':      need(); ok(coupons_admin()); break;
         case 'POST admin/coupon':      need('owner'); ok(save_coupon(body())); break;
         case 'POST admin/coupon-delete': need('owner'); ok(delete_coupon((int)(body()['id'] ?? 0))); break;

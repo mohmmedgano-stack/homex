@@ -39,7 +39,7 @@ export const Navbar: React.FC = () => {
 
   // On a policy page (/p/...) the store lives at "/", so store actions go home first
   const leavePolicyPage = (hash = '') => {
-    if (/^\/(p|o)\//.test(location.pathname)) {
+    if (/^\/(p|o|r)\//.test(location.pathname)) {
       location.href = '/' + hash;
       return true;
     }

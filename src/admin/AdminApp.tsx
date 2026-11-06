@@ -6,7 +6,8 @@ import { ActivityLog } from './pages/ActivityLog';
 import { Backups } from './pages/Backups';
 import { Carts } from './pages/Carts';
 import { Coupons } from './pages/Coupons';
-import { LayoutDashboard, Package, ShoppingBag, Calculator, Settings, Users, LogOut, Menu, X, ExternalLink, Store, Images, FileText, Bell, BellOff, History, ScanBarcode, DatabaseBackup, ShoppingCart, TicketPercent } from 'lucide-react';
+import { Reviews } from './pages/Reviews';
+import { LayoutDashboard, Package, ShoppingBag, Calculator, Settings, Users, LogOut, Menu, X, ExternalLink, Store, Images, FileText, Bell, BellOff, History, ScanBarcode, DatabaseBackup, ShoppingCart, TicketPercent, Star } from 'lucide-react';
 import { Overview } from './pages/Overview';
 import { Products } from './pages/Products';
 import { Orders } from './pages/Orders';
@@ -25,7 +26,7 @@ export interface Admin {
   role: 'owner' | 'staff';
 }
 
-type Page = 'overview' | 'products' | 'orders' | 'carts' | 'coupons' | 'inventory' | 'banners' | 'pages' | 'dealers' | 'accounting' | 'settings' | 'team';
+type Page = 'overview' | 'products' | 'orders' | 'carts' | 'coupons' | 'reviews' | 'inventory' | 'banners' | 'pages' | 'dealers' | 'accounting' | 'settings' | 'team';
 
 type SettingsTab = 'general' | 'pages' | 'team' | 'activity' | 'backups';
 const SETTINGS_TABS: { id: SettingsTab; label: string; short: string; Icon: React.FC<any> }[] = [
@@ -42,6 +43,7 @@ const NAV: { id: Page; label: string; Icon: React.FC<any>; owner?: boolean }[] =
   { id: 'products', label: 'المنتجات والأقسام', Icon: Package },
   { id: 'carts', label: 'السلات المتروكة', Icon: ShoppingCart },
   { id: 'coupons', label: 'كوبونات الخصم', Icon: TicketPercent },
+  { id: 'reviews', label: 'التقييمات', Icon: Star },
   { id: 'inventory', label: 'الكاشير والمخزن', Icon: ScanBarcode },
   { id: 'banners', label: 'البانرات', Icon: Images },
   { id: 'dealers', label: 'التجار المعتمدين', Icon: Store },
@@ -264,6 +266,7 @@ const Shell: React.FC<{ admin: Admin; onLogout: () => void }> = ({ admin, onLogo
         {page === 'products' && <Products />}
         {page === 'carts' && <Carts />}
         {page === 'coupons' && <Coupons isOwner={isOwner} />}
+        {page === 'reviews' && <Reviews isOwner={isOwner} />}
         {page === 'inventory' && <Inventory />}
         {page === 'banners' && <Banners />}
         {page === 'dealers' && <Dealers />}

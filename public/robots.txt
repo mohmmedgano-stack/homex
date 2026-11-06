@@ -4,5 +4,6 @@ Allow: /api/?r=img
 Disallow: /admin/
 Disallow: /api/
 Disallow: /o/
+Disallow: /r/
 
 Sitemap: https://home-x.online/sitemap.xml

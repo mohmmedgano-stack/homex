@@ -24,7 +24,7 @@ export const MobileBottomNav: React.FC = () => {
         {/* Home */}
         <button
           onClick={() => {
-            if (/^\/(p|o)\//.test(location.pathname)) { location.href = '/'; return; }
+            if (/^\/(p|o|r)\//.test(location.pathname)) { location.href = '/'; return; }
             closeProductPage();
             setCurrentView('store');
             setSelectedCategory('all');
@@ -41,7 +41,7 @@ export const MobileBottomNav: React.FC = () => {
         {/* Categories */}
         <button
           onClick={() => {
-            if (/^\/(p|o)\//.test(location.pathname)) { location.href = '/#catalog'; return; }
+            if (/^\/(p|o|r)\//.test(location.pathname)) { location.href = '/#catalog'; return; }
             closeProductPage();
             setCurrentView('store');
             setTimeout(() => document.getElementById('appliances-catalog-section')?.scrollIntoView({ behavior: 'smooth' }), 60);
