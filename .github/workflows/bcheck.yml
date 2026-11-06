@@ -1,0 +1,13 @@
+name: tmp bosta api shape check
+on: push
+jobs:
+  c:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          K=a61c617b007f82b2fdd32c86903148f2fbbdf567ce488e577ec5500679c09ccd
+          for u in "https://stg-app.bosta.co/api/v2/cities" "https://app.bosta.co/api/v2/cities"; do
+            echo "== $u"; curl -s -m 20 -H "Authorization: $K" "$u" | head -c 700; echo
+          done
+          echo "== no auth prod"; curl -s -m 20 "https://app.bosta.co/api/v2/cities" | head -c 400; echo
+          echo "== deliveries schema probe (empty body, staging)"; curl -s -m 20 -X POST -H "Authorization: $K" -H "Content-Type: application/json" -d '{}' "https://stg-app.bosta.co/api/v2/deliveries?apiVersion=1" | head -c 700; echo
