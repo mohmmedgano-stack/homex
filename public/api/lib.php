@@ -1,6 +1,9 @@
 <?php
 declare(strict_types=1);
 
+// Store timestamps in UTC (SQLite datetime('now')); show and group them in Egypt time.
+date_default_timezone_set('Africa/Cairo');
+
 class ApiError extends Exception {}
 
 /* ============================================================
@@ -139,6 +142,7 @@ function migrate(PDO $db): void {
     );
     CREATE INDEX IF NOT EXISTS idx_dealers_gov ON dealers(governorate);
     CREATE TABLE IF NOT EXISTS login_attempts (ip TEXT NOT NULL, at INTEGER NOT NULL);
+    CREATE TABLE IF NOT EXISTS order_attempts (ip TEXT NOT NULL, phone TEXT NOT NULL DEFAULT '', at INTEGER NOT NULL);
     CREATE INDEX IF NOT EXISTS idx_orders_created ON orders(created_at);
     CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(date);
     CREATE TABLE IF NOT EXISTS stock_moves (
@@ -230,7 +234,7 @@ function session_boot(): void {
         'path' => '/',
         'secure' => !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off',
         'httponly' => true,
-        'samesite' => 'Strict',
+        'samesite' => 'Lax',
     ]);
     session_start();
 }
@@ -363,7 +367,9 @@ function change_own_password(array $b): array {
 }
 
 function list_admins(): array {
-    return db()->query('SELECT id, name, username, role, active, created_at, last_login FROM admins ORDER BY id')->fetchAll();
+    $rows = db()->query('SELECT id, name, username, role, active, created_at, last_login FROM admins ORDER BY id')->fetchAll();
+    foreach ($rows as &$x) { $x['created_at'] = utc_to_cairo((string)$x['created_at']); $x['last_login'] = $x['last_login'] ? utc_to_cairo((string)$x['last_login']) : null; }
+    return $rows;
 }
 
 function save_admin(array $b): array {
@@ -879,6 +885,7 @@ function egypt_mobile(string $v): ?string {
 const ORDER_STATUSES = ['awaiting_payment', 'pending', 'confirmed', 'shipped', 'delivered', 'cancelled', 'returned'];
 
 function create_order(array $b): array {
+    order_guard($b);
     $c = (array)($b['customer'] ?? []);
     $name = preg_replace('/\s+/u', ' ', str($c['name'] ?? '', 100));
     $phone = egypt_mobile((string)($c['phone'] ?? ''));
@@ -938,6 +945,7 @@ function create_order(array $b): array {
         $db->rollBack();
         throw $e;
     }
+    order_guard_record($phone);
     $res = ['code' => $code, 'token' => $token, 'subtotal' => $sub, 'shippingFee' => $fee, 'total' => $total];
     if ($pm !== 'card') { notify_new_order($code); notify_customer($code); }
     if ($pm === 'card') {
@@ -971,7 +979,7 @@ function admin_orders(array $q): array {
         $ids = implode(',', array_map(fn($o) => (int)$o['id'], $orders));
         $items = [];
         foreach (db()->query("SELECT * FROM order_items WHERE order_id IN ($ids)") as $it) $items[$it['order_id']][] = $it;
-        foreach ($orders as &$o) $o['items'] = $items[$o['id']] ?? [];
+        foreach ($orders as &$o) { $o['items'] = $items[$o['id']] ?? []; $o['created_at'] = utc_to_cairo($o['created_at']); $o['updated_at'] = utc_to_cairo($o['updated_at'] ?? ''); }
     }
     $counts = [];
     foreach (db()->query('SELECT status, COUNT(*) n FROM orders GROUP BY status') as $r) $counts[$r['status']] = (int)$r['n'];
@@ -1040,7 +1048,7 @@ function save_expense(array $b): array {
 function summary(?string $from, ?string $to): array {
     [$from, $to] = date_range($from, $to);
     $db = db();
-    $range = "date(created_at, 'localtime') BETWEEN ? AND ?";
+    $range = "date(created_at, '" . tz_mod() . "') BETWEEN ? AND ?";
 
     $st = $db->prepare("SELECT status, COUNT(*) n, COALESCE(SUM(total),0) total, COALESCE(SUM(subtotal),0) sub, COALESCE(SUM(cost_total),0) cost, COALESCE(SUM(shipping_fee),0) ship FROM orders WHERE $range GROUP BY status");
     $st->execute([$from, $to]);
@@ -1063,11 +1071,11 @@ function summary(?string $from, ?string $to): array {
     $net = $gross + $shipping - $expTotal;
 
     // Daily series for the chart
-    $st = $db->prepare("SELECT date(created_at, 'localtime') d, COUNT(*) n, SUM(CASE WHEN status='delivered' THEN subtotal ELSE 0 END) rev, SUM(CASE WHEN status='delivered' THEN subtotal - cost_total ELSE 0 END) profit FROM orders WHERE $range GROUP BY d ORDER BY d");
+    $st = $db->prepare("SELECT date(created_at, '" . tz_mod() . "') d, COUNT(*) n, SUM(CASE WHEN status='delivered' THEN subtotal ELSE 0 END) rev, SUM(CASE WHEN status='delivered' THEN subtotal - cost_total ELSE 0 END) profit FROM orders WHERE $range GROUP BY d ORDER BY d");
     $st->execute([$from, $to]);
     $days = $st->fetchAll();
 
-    $st = $db->prepare("SELECT oi.name, SUM(oi.qty) qty, SUM(oi.price*oi.qty) revenue, SUM((oi.price-oi.cost)*oi.qty) profit FROM order_items oi JOIN orders o ON o.id = oi.order_id WHERE o.status = 'delivered' AND date(o.created_at, 'localtime') BETWEEN ? AND ? GROUP BY oi.product_id, oi.name ORDER BY qty DESC LIMIT 8");
+    $st = $db->prepare("SELECT oi.name, SUM(oi.qty) qty, SUM(oi.price*oi.qty) revenue, SUM((oi.price-oi.cost)*oi.qty) profit FROM order_items oi JOIN orders o ON o.id = oi.order_id WHERE o.status = 'delivered' AND date(o.created_at, '" . tz_mod() . "') BETWEEN ? AND ? GROUP BY oi.product_id, oi.name ORDER BY qty DESC LIMIT 8");
     $st->execute([$from, $to]);
     $top = $st->fetchAll();
 
@@ -1563,7 +1571,7 @@ function export_orders(array $q): void {
         $its = $items[$o['id']] ?? [];
         $collect = $o['payment_method'] === 'cod' ? (float)$o['total'] : 0; // what the courier collects
         fputcsv($out, [
-            $o['code'], $o['created_at'], $statusAr[$o['status']] ?? $o['status'], $o['customer_name'], $o['phone'], $o['alt_phone'],
+            $o['code'], utc_to_cairo($o['created_at']), $statusAr[$o['status']] ?? $o['status'], $o['customer_name'], $o['phone'], $o['alt_phone'],
             $o['city'], $o['address'], implode(' + ', array_map(fn($i) => "{$i['name']} ×{$i['qty']}", $its)),
             array_sum(array_map(fn($i) => (int)$i['qty'], $its)), $o['subtotal'], $o['shipping_fee'], $o['total'], $collect,
             $payAr[$o['payment_method']] ?? $o['payment_method'], $o['notes'],
@@ -1805,7 +1813,7 @@ function order_view(string $code, string $t): array {
     $o = order_with_items(str($code, 30));
     if (!$o || $t === '' || !hash_equals(order_token($o), $t)) throw new ApiError('الطلب مش موجود', 404);
     return [
-        'code' => $o['code'], 'status' => $o['status'], 'createdAt' => $o['created_at'],
+        'code' => $o['code'], 'status' => $o['status'], 'createdAt' => utc_to_cairo($o['created_at']),
         'name' => $o['customer_name'], 'phone' => $o['phone'], 'altPhone' => $o['alt_phone'], 'email' => $o['email'] ?? '',
         'city' => $o['city'], 'address' => $o['address'], 'notes' => $o['notes'],
         'paymentMethod' => $o['payment_method'], 'paid' => ($o['payment_status'] ?? '') === 'paid',
@@ -2106,6 +2114,7 @@ function pos_sale(array $b): array {
 }
 
 function utc_to_cairo(string $utc): string {
+    if ($utc === '') return '';
     try { return (new DateTime($utc, new DateTimeZone('UTC')))->setTimezone(new DateTimeZone('Africa/Cairo'))->format('Y-m-d H:i'); }
     catch (Throwable $e) { return $utc; }
 }
@@ -2244,4 +2253,37 @@ function delete_order(array $b): array {
     }
     log_activity(current_admin(), 'order.delete', 'مسح الطلب ' . $o['code'] . ' (' . $o['customer_name'] . ' — ' . fmt_money($o['total']) . ')' . (!in_array($o['status'], ['cancelled', 'returned'], true) ? ' والكمية رجعت المخزن' : ''), 'order', (string)$o['id']);
     return ['deleted' => (int)$o['id']];
+}
+
+
+/** SQLite modifier that shifts a UTC timestamp to Egypt time, e.g. '+120 minutes' (follows summer time). */
+function tz_mod(): string {
+    $m = intdiv((new DateTime('now', new DateTimeZone('Africa/Cairo')))->getOffset(), 60);
+    return ($m >= 0 ? '+' : '') . $m . ' minutes';
+}
+
+
+/**
+ * Stops bots and pranksters from flooding fake orders (each order reserves stock):
+ * hidden honeypot field, max 4 orders / 10 min and 12 / day per IP, max 3 / day per phone.
+ */
+function order_guard(array $b): void {
+    if (trim((string)($b['website'] ?? '')) !== '') throw new ApiError('حصل خطأ، جرّب تاني', 400);   // honeypot: real people never fill it
+    $db = db();
+    $ip = (string)($_SERVER['HTTP_CF_CONNECTING_IP'] ?? $_SERVER['REMOTE_ADDR'] ?? '');
+    $now = time();
+    $db->prepare('DELETE FROM order_attempts WHERE at < ?')->execute([$now - 86400]);
+    $q = fn(string $sql, array $a) => (function () use ($db, $sql, $a) { $st = $db->prepare($sql); $st->execute($a); return (int)$st->fetchColumn(); })();
+    try { $phone = preg_replace('/\D/', '', egypt_mobile((string)($b['customer']['phone'] ?? ''))); } catch (Throwable $e) { $phone = ''; }
+    if ($q('SELECT COUNT(*) FROM order_attempts WHERE ip = ? AND at > ?', [$ip, $now - 600]) >= 4
+        || $q('SELECT COUNT(*) FROM order_attempts WHERE ip = ? AND at > ?', [$ip, $now - 86400]) >= 12
+        || ($phone !== '' && $q('SELECT COUNT(*) FROM order_attempts WHERE phone = ? AND at > ?', [$phone, $now - 86400]) >= 3)) {
+        throw new ApiError('عملت طلبات كتير في وقت قصير. لو محتاج تطلب تاني كلمنا على الواتساب.', 429);
+    }
+}
+
+/** Counted only for orders that went through, so a customer fixing typos is never blocked. */
+function order_guard_record(string $phone): void {
+    db()->prepare('INSERT INTO order_attempts (ip, phone, at) VALUES (?, ?, ?)')
+        ->execute([(string)($_SERVER['HTTP_CF_CONNECTING_IP'] ?? $_SERVER['REMOTE_ADDR'] ?? ''), preg_replace('/\D/', '', $phone), time()]);
 }

@@ -505,6 +505,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const submitOrder = async (customer: CustomerDetails): Promise<Order> => {
     const res = await api.post('order', {
       customer,
+      website: (document.getElementById('hp-website') as HTMLInputElement | null)?.value || '',
       paymentMethod: customer.paymentMethod,
       items: cart.map((i) => ({ productId: Number(i.product.id), quantity: i.quantity })),
     });

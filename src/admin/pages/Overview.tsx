@@ -50,7 +50,7 @@ export const Overview: React.FC<{ go: (p: any) => void }> = ({ go }) => {
         <Stat label="المبيعات (اتسلّمت)" value={money(sum.revenue)} sub={`${sum.deliveredCount} طلب`} />
         <Stat label="صافي الربح" value={money(sum.netProfit)} tone={sum.netProfit >= 0 ? 'good' : 'bad'} sub="بعد التكلفة والمصاريف" />
         <Stat label="طلبات لسه ماتسلمتش" value={money(sum.orders.pipelineValue)} sub={`${sum.orders.pipelineCount} طلب`} tone="brand" />
-        <Stat label="قيمة المخزن بالتكلفة" value={money(sum.stock.cost)} sub={`بسعر البيع ${money(sum.stock.value)}`} />
+        <Stat label="قيمة المخزن بالتكلفة" value={money(Math.round(sum.stock.cost))} sub={`بسعر البيع ${money(Math.round(sum.stock.value))}`} />
       </div>
 
       <div className="grid lg:grid-cols-5 gap-4 sm:gap-6">

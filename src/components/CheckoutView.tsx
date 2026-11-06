@@ -224,6 +224,10 @@ export const CheckoutView: React.FC = () => {
                 </div>
               </div>
 
+              {/* Honeypot: hidden from people, bots fill it and get rejected */}
+              <input id="hp-website" name="website" type="text" tabIndex={-1} autoComplete="off" aria-hidden="true"
+                style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clipPath: 'inset(50%)', opacity: 0, pointerEvents: 'none' }} defaultValue="" />
+
               {/* Email (optional) — for the order confirmation */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1.5">
