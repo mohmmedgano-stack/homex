@@ -208,6 +208,7 @@ function migrate(PDO $db): void {
     if (!in_array('payment_ref', $cols, true)) $db->exec("ALTER TABLE orders ADD COLUMN payment_ref TEXT NOT NULL DEFAULT ''");
     if (!in_array('email', $cols, true)) $db->exec("ALTER TABLE orders ADD COLUMN email TEXT NOT NULL DEFAULT ''");
     if (!in_array('token', $cols, true)) $db->exec("ALTER TABLE orders ADD COLUMN token TEXT NOT NULL DEFAULT ''");
+    if (!in_array('client_meta', $cols, true)) $db->exec("ALTER TABLE orders ADD COLUMN client_meta TEXT NOT NULL DEFAULT ''");
     if (!in_array('source', $cols, true)) $db->exec("ALTER TABLE orders ADD COLUMN source TEXT NOT NULL DEFAULT 'web'");
     if (!in_array('channel', $cols, true)) $db->exec("ALTER TABLE orders ADD COLUMN channel TEXT NOT NULL DEFAULT ''");
     if (!in_array('discount', $cols, true)) $db->exec("ALTER TABLE orders ADD COLUMN discount REAL NOT NULL DEFAULT 0");
@@ -466,10 +467,11 @@ const PAYMENT_SETTINGS = [
     // Customer messages after ordering
     'customer_email_on' => '1',
     'smtp_host' => '', 'smtp_port' => '465', 'smtp_user' => '', 'smtp_pass' => '',
+    'meta_capi_token' => '', 'meta_test_code' => '',
     'wa_cloud_on' => '0', 'wa_cloud_phone_id' => '', 'wa_cloud_token' => '', 'wa_cloud_template' => 'order_confirmation', 'wa_cloud_lang' => 'ar',
     'fawry_merchant_code' => '', 'fawry_secure_key' => '',
 ];
-const SECRET_SETTINGS = ['paymob_secret_key', 'paymob_hmac', 'kashier_api_key', 'fawry_secure_key', 'wa_notify_apikey', 'smtp_pass', 'wa_cloud_token'];
+const SECRET_SETTINGS = ['paymob_secret_key', 'paymob_hmac', 'kashier_api_key', 'fawry_secure_key', 'wa_notify_apikey', 'smtp_pass', 'wa_cloud_token', 'meta_capi_token'];
 
 function payment_settings(): array {
     $out = PAYMENT_SETTINGS;
@@ -948,8 +950,13 @@ function create_order(array $b): array {
         if ($pm === 'cod' && get_setting('pay_cod', '1') === '0') throw new ApiError('اختار طريقة دفع تانية');
         $code = 'HX' . date('ymd') . strtoupper(substr(bin2hex(random_bytes(3)), 0, 4));
         $token = bin2hex(random_bytes(8));
-        $db->prepare('INSERT INTO orders (code, customer_name, phone, alt_phone, city, address, notes, payment_method, subtotal, shipping_fee, total, cost_total, status, email, token) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
-            ->execute([$code, $name, $phone, $alt, $city, $address, str($c['notes'] ?? '', 500), $pm, $sub, $fee, $total, $cost, $pm === 'card' ? 'awaiting_payment' : 'pending', $email, $token]);
+        $clientMeta = json_encode([
+            'ip' => (string)($_SERVER['HTTP_CF_CONNECTING_IP'] ?? $_SERVER['REMOTE_ADDR'] ?? ''), 'ua' => mb_substr((string)($_SERVER['HTTP_USER_AGENT'] ?? ''), 0, 400),
+            'fbp' => mb_substr((string)($_COOKIE['_fbp'] ?? ''), 0, 100), 'fbc' => mb_substr((string)($_COOKIE['_fbc'] ?? ''), 0, 200),
+            'url' => mb_substr((string)($_SERVER['HTTP_REFERER'] ?? ''), 0, 300),
+        ]);
+        $db->prepare('INSERT INTO orders (code, customer_name, phone, alt_phone, city, address, notes, payment_method, subtotal, shipping_fee, total, cost_total, status, email, token, client_meta) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
+            ->execute([$code, $name, $phone, $alt, $city, $address, str($c['notes'] ?? '', 500), $pm, $sub, $fee, $total, $cost, $pm === 'card' ? 'awaiting_payment' : 'pending', $email, $token, $clientMeta]);
         $oid = (int)$db->lastInsertId();
         $ins = $db->prepare('INSERT INTO order_items (order_id, product_id, name, image, price, cost, qty) VALUES (?,?,?,?,?,?,?)');
         $dec = $db->prepare('UPDATE products SET stock = stock - ? WHERE id = ?');
@@ -2016,6 +2023,8 @@ function notify_customer(string $code): void {
                 $e = wa_cloud_send($o['phone'], wa_order_params($o));
                 if ($e !== '') error_log("[homex wa-cloud] {$o['code']}: $e");
             }
+            $e = meta_capi_purchase($o);
+            if ($e !== '') error_log("[homex capi] {$o['code']}: $e");
         } catch (Throwable $e) {
             error_log('[homex notify-customer] ' . $e->getMessage());
         }
@@ -2367,4 +2376,89 @@ function product_reviews(int $pid): array {
     $items = array_map(fn($r) => ['id' => (int)$r['id'], 'name' => $r['name'], 'city' => $r['city'], 'rating' => (int)$r['rating'], 'comment' => $r['comment'], 'createdAt' => utc_to_cairo($r['created_at'])], $st->fetchAll());
     $agg = act_row("SELECT COUNT(*) n, AVG(rating) a FROM reviews WHERE product_id = ? AND status = 'approved'", [$pid]);
     return ['items' => $items, 'count' => (int)($agg['n'] ?? 0), 'avg' => round((float)($agg['a'] ?? 0), 1)];
+}
+
+
+/* ============================================================
+   Meta: product catalog feed + Conversions API (server-side Purchase)
+   ============================================================ */
+
+/** CSV feed for Meta Commerce Manager (Catalog → Data sources → scheduled feed). Also accepted by Google Merchant Center. */
+function catalog_feed(): void {
+    header('Content-Type: text/csv; charset=utf-8');
+    header('Cache-Control: public, max-age=900');
+    $store = get_setting('store_name', 'HOMEX') ?: 'HOMEX';
+    $cats = db()->query('SELECT id, name FROM categories')->fetchAll(PDO::FETCH_KEY_PAIR);
+    $out = fopen('php://output', 'w');
+    fputcsv($out, ['id', 'title', 'description', 'availability', 'condition', 'price', 'sale_price', 'link', 'image_link', 'additional_image_link', 'brand', 'product_type', 'quantity_to_sell_on_facebook', 'google_product_category']);
+    foreach (db()->query('SELECT * FROM products WHERE active = 1 ORDER BY id') as $p) {
+        $orig = (float)$p['original_price']; $price = (float)$p['price'];
+        $hasSale = $orig > $price;
+        $gallery = array_values(array_filter(array_map('abs_url', (array)json_decode((string)$p['gallery'], true))));
+        $desc = trim(preg_replace('/\s+/u', ' ', (string)$p['description'])) ?: $p['name'] . ' — ' . $store . '، ضمان حقيقي وشحن لكل محافظات مصر';
+        fputcsv($out, [
+            (string)$p['id'], mb_substr($p['name'], 0, 150), mb_substr($desc, 0, 5000),
+            (int)$p['stock'] > 0 ? 'in stock' : 'out of stock', 'new',
+            number_format($hasSale ? $orig : $price, 2, '.', '') . ' EGP', $hasSale ? number_format($price, 2, '.', '') . ' EGP' : '',
+            product_url($p), abs_url((string)$p['image']), implode(',', array_slice(array_diff($gallery, [abs_url((string)$p['image'])]), 0, 10)),
+            $p['brand'] ?: $store, $cats[$p['category_id']] ?? '', max(0, (int)$p['stock']), 'Home & Garden > Kitchen & Dining > Kitchen Appliances',
+        ]);
+    }
+    fclose($out);
+}
+
+function sha(string $v): string { return hash('sha256', mb_strtolower(trim($v))); }
+
+/** Server-side Purchase (deduplicated with the browser pixel by event_id = order code). Returns '' or the error. */
+function meta_capi_purchase(array $o, ?string $testCode = null): string {
+    $pixel = get_setting('meta_pixel_id', '');
+    $p = payment_settings();
+    if ($pixel === '' || $p['meta_capi_token'] === '') return '';
+    $cm = json_decode((string)($o['client_meta'] ?? ''), true) ?: [];
+    $names = preg_split('/\s+/u', trim((string)$o['customer_name']));
+    $phone = wa_intl((string)$o['phone']);
+    $user = array_filter([
+        'ph' => [sha($phone)], 'fn' => [sha($names[0] ?? '')], 'ln' => [sha(end($names) ?: '')],
+        'ct' => [sha(preg_replace('/\s+/u', '', (string)$o['city']))], 'country' => [sha('eg')],
+        'external_id' => [sha($phone)], 'em' => ($o['email'] ?? '') !== '' ? [sha($o['email'])] : null,
+        'client_ip_address' => $cm['ip'] ?? null, 'client_user_agent' => $cm['ua'] ?? null,
+        'fbp' => ($cm['fbp'] ?? '') ?: null, 'fbc' => ($cm['fbc'] ?? '') ?: null,
+    ]);
+    $event = [
+        'event_name' => 'Purchase', 'event_time' => time(), 'event_id' => $o['code'], 'action_source' => 'website',
+        'event_source_url' => ($cm['url'] ?? '') ?: site_base() . '/', 'user_data' => $user,
+        'custom_data' => [
+            'currency' => 'EGP', 'value' => round((float)$o['total'], 2), 'order_id' => $o['code'], 'content_type' => 'product',
+            'content_ids' => array_values(array_map(fn($i) => (string)$i['product_id'], $o['items'])),
+            'contents' => array_values(array_map(fn($i) => ['id' => (string)$i['product_id'], 'quantity' => (int)$i['qty'], 'item_price' => (float)$i['price']], $o['items'])),
+            'num_items' => array_sum(array_map(fn($i) => (int)$i['qty'], $o['items'])),
+        ],
+    ];
+    $body = ['data' => [$event]];
+    $tc = $testCode ?? $p['meta_test_code'];
+    if ($tc !== '') $body['test_event_code'] = $tc;
+    $ch = curl_init('https://graph.facebook.com/v21.0/' . rawurlencode($pixel) . '/events?access_token=' . rawurlencode($p['meta_capi_token']));
+    curl_setopt_array($ch, [CURLOPT_POST => true, CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 15,
+        CURLOPT_HTTPHEADER => ['Content-Type: application/json'], CURLOPT_POSTFIELDS => json_encode($body, JSON_UNESCAPED_UNICODE)]);
+    $res = json_decode((string)curl_exec($ch), true);
+    $code = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+    $err = curl_error($ch);
+    curl_close($ch);
+    if ($err !== '') return 'مقدرناش نوصل لفيسبوك: ' . $err;
+    if ($code >= 400 || !empty($res['error'])) return 'فيسبوك رفض الحدث: ' . mb_substr((string)($res['error']['error_user_msg'] ?? $res['error']['message'] ?? "HTTP $code"), 0, 200);
+    return '';
+}
+
+/** Dashboard button: sends a test Purchase that shows up in Events Manager → Test events. */
+function capi_test(array $b): array {
+    $code = str($b['testCode'] ?? '', 40);
+    if ($code === '') throw new ApiError('اكتب Test event code من Events Manager');
+    if (get_setting('meta_pixel_id', '') === '' || payment_settings()['meta_capi_token'] === '') throw new ApiError('اكتب رقم البيكسل والـ Access token واحفظ الأول');
+    $first = act_row('SELECT id, name, price FROM products WHERE active = 1 ORDER BY id LIMIT 1', []);
+    $demo = ['code' => 'TEST-' . time(), 'customer_name' => 'Test Customer', 'phone' => '01000000000', 'city' => 'Cairo', 'email' => '', 'total' => (float)($first['price'] ?? 100),
+        'client_meta' => json_encode(['ip' => $_SERVER['REMOTE_ADDR'] ?? '', 'ua' => $_SERVER['HTTP_USER_AGENT'] ?? '']),
+        'items' => [['product_id' => (int)($first['id'] ?? 1), 'qty' => 1, 'price' => (float)($first['price'] ?? 100)]]];
+    $e = meta_capi_purchase($demo, $code);
+    if ($e !== '') throw new ApiError($e);
+    return ['sent' => true];
 }

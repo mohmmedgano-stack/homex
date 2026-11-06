@@ -182,6 +182,7 @@ export const StoreSettingsPage: React.FC<{ admin: Admin }> = ({ admin }) => {
               <Input dir="ltr" value={s.ga4_id || ''} onChange={(e) => set('ga4_id', e.target.value.trim())} placeholder="G-XXXXXXXXXX" />
             </Field>
           </div>
+          <MetaServerSide s={s} set={set} />
         </Card>
 
         <Card title="صفحات الموقع (من نحن والسياسات)">
@@ -380,5 +381,55 @@ const CustomerMessages: React.FC<{ s: any; set: (k: string, v: string) => void }
         </div>
       </div>
     </Card>
+  );
+};
+
+/** Conversions API (server-side Purchase) + catalog feed link for Meta Commerce Manager. */
+const MetaServerSide: React.FC<{ s: any; set: (k: string, v: string) => void }> = ({ s, set }) => {
+  const toast = useToast();
+  const [code, setCode] = useState('');
+  const [busy, setBusy] = useState(false);
+  const feed = `${location.origin}/feeds/catalog.csv`;
+  const test = async () => {
+    setBusy(true);
+    try {
+      await api.post('admin/settings', { meta_pixel_id: s.meta_pixel_id || '', meta_capi_token: s.meta_capi_token || '' });
+      await api.post('admin/capi-test', { testCode: code });
+      toast('اتبعت حدث Purchase تجريبي — هتلاقيه في Events Manager ← Test events');
+    } catch (e: any) { toast(e.message, 'err'); }
+    setBusy(false);
+  };
+  return (
+    <div className="mt-5 space-y-4">
+      <div className="rounded-xl border border-line p-4 space-y-3">
+        <p className="font-extrabold text-ink">Meta Conversions API (تتبع الشراء من السيرفر)</p>
+        <p className="text-xs text-steel leading-relaxed">
+          بيبعت كل طلب لفيسبوك من السيرفر مباشرة، فالشراء بيتحسب حتى لو العميل على آيفون أو عنده مانع إعلانات، وفيسبوك بيشيل المكرر لوحده.
+          الـ token من: Events Manager ← البيكسل ← Settings ← Conversions API ← Generate access token.
+        </p>
+        <div className="grid sm:grid-cols-2 gap-3">
+          <Field label="Access token">
+            <Input dir="ltr" type="password" value={s.meta_capi_token || ''} onChange={(e) => set('meta_capi_token', e.target.value.trim())} autoComplete="new-password" />
+          </Field>
+          <Field label="Test event code (للتجربة بس)">
+            <div className="flex gap-2">
+              <Input dir="ltr" value={code} onChange={(e) => setCode(e.target.value.trim())} placeholder="TEST12345" />
+              <Button type="button" variant="ghost" className="shrink-0" loading={busy} disabled={!code} onClick={test}>جرّب</Button>
+            </div>
+          </Field>
+        </div>
+      </div>
+      <div className="rounded-xl border border-line p-4 space-y-2">
+        <p className="font-extrabold text-ink">كتالوج المنتجات (Meta Catalog / Google Merchant)</p>
+        <p className="text-xs text-steel leading-relaxed">
+          في Commerce Manager ← Catalog ← Data sources ← Data feed ← Scheduled feed، حط اللينك ده وخليه يتحدث كل ساعة.
+          الأسعار والمخزن والصور بيتحدثوا لوحدهم، وأرقام المنتجات هي نفس اللي البيكسل بيبعتها، فإعلانات الكتالوج (Advantage+ Catalog) هتشتغل على طول.
+        </p>
+        <div className="flex gap-2">
+          <Input dir="ltr" readOnly value={feed} className="bg-shelf text-steel" onFocus={(e) => e.currentTarget.select()} />
+          <Button type="button" variant="ghost" className="shrink-0" onClick={() => navigator.clipboard?.writeText(feed).then(() => toast('اتنسخ لينك الكتالوج'))}>نسخ</Button>
+        </div>
+      </div>
+    </div>
   );
 };

@@ -20,6 +20,7 @@ DirectoryIndex index.html index.php
   RewriteRule ^o/[A-Za-z0-9-]+/?$ index.html [L]
   RewriteRule ^product/([0-9]+)(-[a-z0-9-]*)?/?$ api/page.php?id=$1 [L,QSA]
   RewriteRule ^sitemap\.xml$ api/page.php?sitemap=1 [L]
+  RewriteRule ^feeds/catalog\.csv$ api/page.php?feed=catalog [L]
 </IfModule>
 
 <IfModule mod_headers.c>

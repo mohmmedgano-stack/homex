@@ -48,6 +48,7 @@ try {
         case 'GET admin/orders-pulse': need(); ok(orders_pulse()); break;
         case 'POST admin/wa-test':     need('owner'); ok(wa_test()); break;
         case 'POST admin/email-test':  need('owner'); ok(test_email(body())); break;
+        case 'POST admin/capi-test':   need('owner'); ok(capi_test(body())); break;
         case 'POST admin/wa-cloud-test': need('owner'); ok(test_wa_cloud(body())); break;
         case 'GET admin/activity':     need('owner'); ok(activity_list($_GET)); break;
 
