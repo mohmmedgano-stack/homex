@@ -281,7 +281,7 @@ const ProductEditor: React.FC<{ initial: any; cats: any[]; onClose: () => void; 
             <Field label="الكمية في المخزن">
               <Input type="number" inputMode="numeric" min="0" value={p.stock} onChange={(e) => set('stock', e.target.value)} />
             </Field>
-            <Field label="رابط المنتج بالإنجليزي (اختياري)" hint={`مثلاً electric-kettle-1-7l ← home-x.online/product/${p.id || 'رقم'}-electric-kettle-1-7l`}>
+            <Field label="اسم المنتج في الرابط (بالإنجليزي)" hint={`مثلاً electric-kettle-1-7l ← home-x.online/product/${p.id || 'رقم'}-electric-kettle-1-7l — لو سبته فاضي هيتعمل كود عشوائي لوحده`}>
               <Input dir="ltr" value={p.slug || ''} onChange={(e) => set('slug', e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-'))} placeholder="electric-kettle-1-7l" />
             </Field>
             <Field label="الباركود / كود المنتج" hint="اختياري — عشان تبيعه بالقارئ في الكاشير">

@@ -254,6 +254,9 @@ function migrate(PDO $db): void {
     $pcols = array_column($db->query('PRAGMA table_info(products)')->fetchAll(), 'name');
     if (!in_array('sku', $pcols, true)) $db->exec("ALTER TABLE products ADD COLUMN sku TEXT NOT NULL DEFAULT ''");
     if (!in_array('slug', $pcols, true)) $db->exec("ALTER TABLE products ADD COLUMN slug TEXT NOT NULL DEFAULT ''");
+    foreach ($db->query("SELECT id FROM products WHERE slug = '' OR slug IS NULL")->fetchAll(PDO::FETCH_COLUMN) as $pid) {
+        $db->prepare('UPDATE products SET slug = ? WHERE id = ?')->execute([random_product_code(), (int)$pid]);
+    }
     if (!in_array('created_by', $pcols, true)) $db->exec("ALTER TABLE products ADD COLUMN created_by TEXT NOT NULL DEFAULT ''");
     if (!in_array('updated_by', $pcols, true)) $db->exec("ALTER TABLE products ADD COLUMN updated_by TEXT NOT NULL DEFAULT ''");
     $ecols = array_column($db->query('PRAGMA table_info(expenses)')->fetchAll(), 'name');
@@ -873,10 +876,10 @@ function save_product(array $b): array {
         if ((int)($b['stock'] ?? 0) > 0) stock_move($id, $name, (int)$b['stock'], (int)$b['stock'], 'opening', 'رصيد أول المدة');
     }
     rating_refresh($id);   // stars always come from real approved reviews
-    if (array_key_exists('slug', $b)) {
-        $slug = trim((string)preg_replace('/[^a-z0-9]+/', '-', strtolower(str((string)$b['slug'], 80))), '-');
-        db()->prepare('UPDATE products SET slug = ? WHERE id = ?')->execute([$slug, $id]);
-    }
+    // English link name typed in the dashboard, or a random code when left empty: /product/12-<slug>
+    $slug = array_key_exists('slug', $b) ? trim((string)preg_replace('/[^a-z0-9]+/', '-', strtolower(str((string)$b['slug'], 80))), '-') : (string)(act_row('SELECT slug FROM products WHERE id = ?', [$id])['slug'] ?? '');
+    if ($slug === '') $slug = random_product_code();
+    db()->prepare('UPDATE products SET slug = ? WHERE id = ?')->execute([$slug, $id]);
     if (array_key_exists('sku', $b)) {
         $sku = str((string)$b['sku'], 60);
         if ($sku !== '' && act_row('SELECT id FROM products WHERE sku = ? AND id <> ?', [$sku, $id])) throw new ApiError("الباركود/الكود «{$sku}» متسجل على منتج تاني");
@@ -2437,6 +2440,14 @@ function render_page_html(string $slug): void {
         . '<link rel="canonical" href="' . $h($url) . '" />';
     $html = preg_replace('~<title>.*?</title>|<meta (name="description"|property="og:(title|description|type|url|image(:width|:height)?)")[^>]*>|<link rel="canonical"[^>]*>~su', '', $html);
     echo str_replace('</head>', $meta . "\n</head>", $html);
+}
+
+/** Random link code for products saved without an English name, e.g. "hx-k7m2q9". */
+function random_product_code(): string {
+    $abc = 'abcdefghjkmnpqrstuvwxyz23456789';
+    $c = 'hx-';
+    for ($i = 0; $i < 6; $i++) $c .= $abc[random_int(0, strlen($abc) - 1)];
+    return $c;
 }
 
 function sitemap_xml(): void {
