@@ -1,6 +1,10 @@
 User-agent: *
 Allow: /
+# Google must load these to render the store and its products
 Allow: /api/?r=img
+Allow: /api/?r=catalog
+Allow: /api/?r=settings
+Allow: /api/?r=reviews
 Disallow: /admin/
 Disallow: /api/
 Disallow: /o/

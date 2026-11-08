@@ -194,7 +194,7 @@ const BrandSlide: React.FC<{ settings: any; onShop: () => void }> = ({ settings,
     <div className="absolute left-16 sm:left-24 -top-16 w-32 h-32 sm:w-40 sm:h-40 rounded-full bg-gold/10" aria-hidden="true" />
     <ApplianceArt className="absolute left-1 sm:left-6 lg:left-12 bottom-8 sm:bottom-5 w-[44%] sm:w-[46%] lg:w-[42%] max-h-[78%] sm:max-h-[86%]" />
     <div className="relative px-4 min-[400px]:px-5 sm:px-12 space-y-2 min-[400px]:space-y-2.5 sm:space-y-5 w-[58%] sm:w-[54%] lg:max-w-2xl">
-      <img src={settings.logo || '/logo.webp'} alt={settings.store_name} className="h-6 min-[400px]:h-7 sm:h-10 lg:h-12 w-auto" />
+      <img src={settings.logo || '/logo.webp'} width={600} height={167} alt={settings.store_name} className="h-6 min-[400px]:h-7 sm:h-10 lg:h-12 w-auto" />
       <h2 className="text-base min-[400px]:text-xl sm:text-3xl lg:text-4xl font-extrabold leading-snug">
         {settings.brand_title || 'أجهزة بيتك بضمان حقيقي، وسعر يريحك'}
       </h2>

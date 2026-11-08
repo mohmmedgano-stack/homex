@@ -134,7 +134,7 @@ export const Navbar: React.FC = () => {
             className="shrink-0"
             aria-label="HOMEX الرئيسية"
           >
-            <img src={logo} alt={settings.store_name} className="h-8 sm:h-11 w-auto" />
+            <img src={logo} width={600} height={167} alt={settings.store_name} className="h-8 sm:h-11 w-auto" />
           </button>
 
           {searchBox('hidden md:flex flex-1 max-w-2xl mx-auto')}
@@ -248,7 +248,7 @@ export const Navbar: React.FC = () => {
           <div className="absolute inset-0 bg-black/50" onClick={() => setMenuOpen(false)} />
           <aside className="absolute top-0 right-0 bottom-0 w-[82%] max-w-xs bg-white shadow-2xl flex flex-col">
             <div className="bg-ink px-4 h-16 flex items-center justify-between">
-              <img src={logo} alt={settings.store_name} className="h-8 w-auto" />
+              <img src={logo} width={600} height={167} alt={settings.store_name} className="h-8 w-auto" />
               <button onClick={() => setMenuOpen(false)} className="text-white p-1" aria-label="إغلاق">
                 <X className="w-6 h-6" />
               </button>

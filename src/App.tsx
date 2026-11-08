@@ -271,6 +271,7 @@ const StoreContent: React.FC = () => {
         </main>
       ) : (
         <main className="flex-1 w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 space-y-8 sm:space-y-12">
+          <h1 className="sr-only">{settings.store_name || 'HOMEX'} هوم إكس | أجهزة منزلية بضمان حقيقي وشحن لكل محافظات مصر</h1>
           {!searchQuery && selectedCategory === 'all' && (
             <>
               <HeroBanner />
@@ -406,7 +407,7 @@ const StoreContent: React.FC = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-14">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
             <div className="col-span-2 md:col-span-1 space-y-4">
-              <img src={settings.logo || '/logo.webp'} alt="HOMEX" className="h-10 w-auto" />
+              <img src={settings.logo || '/logo.webp'} width={600} height={167} alt="HOMEX" className="h-10 w-auto" />
               <p className="leading-relaxed max-w-xs">كل أساسيات بيتك من أجهزة منزلية بضمان حقيقي، مع شحن لكل محافظات مصر.</p>
             </div>
             <div>

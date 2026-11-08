@@ -2416,6 +2416,29 @@ function render_product_html(int $id): void {
     echo str_replace('</head>', $meta . "\n</head>", $html);
 }
 
+/** /p/slug → index.html with that page's own title, description and canonical (not the home page's). */
+function render_page_html(string $slug): void {
+    $html = (string)@file_get_contents(dirname(__DIR__) . '/index.html');
+    header('Content-Type: text/html; charset=utf-8');
+    header('Cache-Control: no-cache');
+    $pg = preg_match('~^[a-z0-9-]+$~', $slug) ? act_row('SELECT slug, title, content FROM pages WHERE slug = ?', [$slug]) : null;
+    if (!$pg || $html === '') { http_response_code($pg ? 200 : 404); echo $html; return; }
+    $store = get_setting('store_name', 'HOMEX') ?: 'HOMEX';
+    $h = fn($v) => htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
+    $url = site_base() . '/p/' . $pg['slug'];
+    $desc = trim(preg_replace('/\s+/u', ' ', strip_tags((string)$pg['content'])));
+    $desc = mb_substr($desc !== '' ? $desc : $pg['title'] . ' — ' . $store, 0, 160);
+    $title = $pg['title'] . ' | ' . $store;
+    $meta = '<title>' . $h($title) . '</title>'
+        . '<meta name="description" content="' . $h($desc) . '" />'
+        . '<meta property="og:type" content="website" /><meta property="og:title" content="' . $h($title) . '" />'
+        . '<meta property="og:description" content="' . $h($desc) . '" /><meta property="og:url" content="' . $h($url) . '" />'
+        . '<meta property="og:image" content="' . $h(site_base() . '/og.png') . '" />'
+        . '<link rel="canonical" href="' . $h($url) . '" />';
+    $html = preg_replace('~<title>.*?</title>|<meta (name="description"|property="og:(title|description|type|url|image(:width|:height)?)")[^>]*>|<link rel="canonical"[^>]*>~su', '', $html);
+    echo str_replace('</head>', $meta . "\n</head>", $html);
+}
+
 function sitemap_xml(): void {
     header('Content-Type: application/xml; charset=utf-8');
     $b = site_base();
