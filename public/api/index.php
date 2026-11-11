@@ -50,6 +50,7 @@ try {
         case 'POST station/trader':     ok(station_save_trader(body())); break;
         case 'POST station/trader-delete': ok(station_delete_trader((int)(body()['id'] ?? 0))); break;
         case 'POST station/generate':   ok(station_generate(body())); break;
+        case 'GET station/random-number': ok(station_random_number((int)($_GET['digits'] ?? 5))); break;
         case 'POST station/reprint':    ok(station_reprint(body())); break;
         case 'POST station/product':    ok(station_save_product(body())); break;
         case 'POST station/stock':      ok(station_stock(body())); break;

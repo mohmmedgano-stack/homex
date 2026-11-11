@@ -3,7 +3,7 @@ import QRCode from 'qrcode';
 import { api, money, thumb } from '../lib/api';
 import { ToastProvider, useToast, Button, Card, Field, Input, Select, Textarea, Toggle, Modal, Spinner, Empty } from '../admin/ui';
 import {
-  QrCode, Boxes, Users, History, LogOut, Search, Plus, Pencil, Trash2, Printer, PackagePlus, ScanLine, ImagePlus, Eye, EyeOff, Minus,
+  QrCode, Boxes, Users, History, LogOut, Shuffle, Search, Plus, Pencil, Trash2, Printer, PackagePlus, ScanLine, ImagePlus, Eye, EyeOff, Minus,
 } from 'lucide-react';
 
 /* ---------------------------- types ---------------------------- */
@@ -221,12 +221,29 @@ const ProductPicker: React.FC<{ products: Product[]; value: string; onChange: (i
   );
 };
 
+/** Model number: type your own, or pull an unused random one. */
+const ModelInput: React.FC<{ value: string; onChange: (v: string) => void }> = ({ value, onChange }) => {
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  const random = async () => {
+    setBusy(true);
+    try { onChange((await api.get<{ number: string }>('station/random-number', { digits: '5' })).number); } catch (e: any) { toast(e.message, 'err'); }
+    setBusy(false);
+  };
+  return (
+    <div className="flex gap-1.5">
+      <Input dir="ltr" value={value} onChange={(e) => onChange(clean(e.target.value, 20))} placeholder="51201" className="font-mono flex-1 min-w-0" />
+      <Button type="button" variant="ghost" onClick={random} loading={busy} className="shrink-0 px-2.5" title="رقم عشوائي مش مستخدم"><Shuffle className="w-4 h-4" /> <span className="hidden sm:inline">عشوائي</span></Button>
+    </div>
+  );
+};
+
 const PrintPanel: React.FC<{ d: Data; preselect: string; onDone: (x: Partial<Data>) => void; goTraders: () => void }> = ({ d, preselect, onDone, goTraders }) => {
   const toast = useToast();
   const traders = d.traders.filter((t) => t.active);
   const [pid, setPid] = useState(preselect);
   const [tid, setTid] = useState(() => store.get('trader', ''));
-  const [version, setVersion] = useState(() => store.get('version', d.year));
+  const [version, setVersion] = useState(() => store.get('ver2', ''));
   const [model, setModel] = useState('');
   const [qty, setQty] = useState(1);
   const [serial, setSerial] = useState(() => store.get('serial', '0') === '1');
@@ -241,15 +258,14 @@ const PrintPanel: React.FC<{ d: Data; preselect: string; onDone: (x: Partial<Dat
   useEffect(() => { setPid(preselect); }, [preselect]);
   useEffect(() => { if (p) { setModel(p.modelNo || ''); setPrice(String(p.price || '')); } }, [pid]);
 
-  const base = `${t?.prefix || '??'}${version || '??'}-${model || '????'}`;
+  const base = `${t?.prefix || '??'}${version ? `${version}-` : ''}${model || '51201'}`;
   const sample = serial ? `${base}-001` : base;
 
   const go = async () => {
     if (!p) return toast('اختار المنتج', 'err');
     if (!t) return toast('اختار التاجر', 'err');
-    if (!version) return toast('اكتب السنة أو الإصدار', 'err');
-    if (!model) return toast('اكتب رقم الموديل', 'err');
-    store.set('trader', String(t.id)); store.set('version', version); store.set('serial', serial ? '1' : '0'); store.set('price', showPrice ? '1' : '0'); store.set('size', size);
+    if (!model) return toast('اكتب رقم الموديل أو اضغط «رقم عشوائي»', 'err');
+    store.set('trader', String(t.id)); store.set('ver2', version); store.set('serial', serial ? '1' : '0'); store.set('price', showPrice ? '1' : '0'); store.set('size', size);
     setBusy(true);
     try {
       const r = await api.post('station/generate', { productId: p.id, traderId: t.id, version, model, qty, serial, price: showPrice ? price : null, addStock, saveModel: true });
@@ -279,11 +295,11 @@ const PrintPanel: React.FC<{ d: Data; preselect: string; onDone: (x: Partial<Dat
                   {traders.map((x) => <option key={x.id} value={x.id}>{x.prefix} — {x.name}</option>)}
                 </Select>
               </Field>
-              <Field label="السنة / الإصدار" hint="مثلاً 26 أو V2">
-                <Input dir="ltr" value={version} onChange={(e) => setVersion(clean(e.target.value, 4))} className="font-mono" />
+              <Field label="رقم الموديل (رقمك الخاص)" hint={p?.modelNo ? 'متسجل مع المنتج' : 'بيتحفظ مع المنتج ويطلع لوحده المرة الجاية'}>
+                <ModelInput value={model} onChange={setModel} />
               </Field>
-              <Field label="رقم الموديل">
-                <Input dir="ltr" value={model} onChange={(e) => setModel(clean(e.target.value, 20))} placeholder="1520" className="font-mono" />
+              <Field label="السنة / الإصدار" hint="اختياري — سيبه فاضي لو مش محتاجه">
+                <Input dir="ltr" value={version} onChange={(e) => setVersion(clean(e.target.value, 4))} placeholder="—" className="font-mono" />
               </Field>
             </div>
           )}
@@ -318,7 +334,7 @@ const PrintPanel: React.FC<{ d: Data; preselect: string; onDone: (x: Partial<Dat
         <Card title="شكل الكود">
           <CodePreview code={sample} name={p?.name || 'اسم المنتج'} price={showPrice && price !== '' ? Number(price) : null} />
           <p className="text-xs text-steel mt-3 leading-relaxed">
-            الكود = حرف التاجر + السنة/الإصدار + رقم الموديل{serial ? ' + مسلسل القطعة' : ''}. الكاشير في لوحة التحكم بيقرأه بالسكانر ويجيب المنتج على طول.
+            الكود = حروف التاجر{version ? ' + السنة/الإصدار' : ''} + رقم الموديل{serial ? ' + مسلسل القطعة' : ''}، زي <span dir="ltr" className="font-mono font-bold text-ink">AM51201</span>. الكاشير في لوحة التحكم بيقرأه بالسكانر ويجيب المنتج على طول.
           </p>
         </Card>
         <Button onClick={go} loading={busy} disabled={!p || !t} className="w-full h-12 text-base"><Printer className="w-5 h-5" /> اطبع {qty} استيكر</Button>
@@ -484,7 +500,7 @@ const ProductForm: React.FC<{ initial: Partial<Product> & { description?: string
               {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </Select>
           </Field>
-          <Field label="رقم الموديل"><Input dir="ltr" value={p.modelNo} onChange={(e) => set('modelNo', clean(e.target.value, 20))} className="font-mono" placeholder="1520" /></Field>
+          <Field label="رقم الموديل (رقمك الخاص)"><ModelInput value={p.modelNo} onChange={(v) => set('modelNo', v)} /></Field>
           <Field label="الماركة"><Input value={p.brand} onChange={(e) => set('brand', e.target.value)} /></Field>
         </div>
         <div className="grid sm:grid-cols-3 gap-3">

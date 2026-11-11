@@ -3275,7 +3275,9 @@ function station_data(): array {
 
 /**
  * Makes the codes for one print job and remembers them.
- * Code = <trader letters><version>-<model>  e.g. AM26-1520 ; with serials: AM26-1520-001, -002 …
+ * Code = <trader letters><model number>          e.g. AM51201
+ *     or <trader letters><version>-<model>          e.g. AM26-1520 (when a year/version is given)
+ * with per-piece serials: AM51201-001, -002 …
  * Optionally adds the quantity to stock (goods received from that trader).
  */
 function station_generate(array $b): array {
@@ -3284,19 +3286,20 @@ function station_generate(array $b): array {
     if (!$p) throw new ApiError('اختار المنتج', 404);
     $t = act_row('SELECT * FROM code_traders WHERE id = ?', [(int)($b['traderId'] ?? 0)]);
     if (!$t) throw new ApiError('اختار التاجر');
-    $version = code_part((string)($b['version'] ?? ''), 4);
-    if ($version === '') throw new ApiError('اكتب السنة أو الإصدار (مثلاً 26)');
+    $version = code_part((string)($b['version'] ?? ''), 4);   // optional
     $model = code_part((string)($b['model'] ?? ''), 20);
-    if ($model === '') throw new ApiError('اكتب رقم الموديل');
+    if ($model === '') throw new ApiError('اكتب رقم الموديل أو اضغط «رقم عشوائي»');
+    $other = act_row('SELECT name FROM products WHERE model_no = ? AND id <> ? UNION ALL SELECT p.name FROM item_codes c JOIN products p ON p.id = c.product_id WHERE c.model = ? AND c.product_id <> ? LIMIT 1', [$model, $p['id'], $model, $p['id']]);
+    if ($other) throw new ApiError("رقم الموديل {$model} متسجل لـ «{$other['name']}». اختار رقم تاني");
     $qty = (int)($b['qty'] ?? 0);
     if ($qty < 1 || $qty > 500) throw new ApiError('عدد الاستيكرات من 1 لـ 500');
     $price = isset($b['price']) && $b['price'] !== '' && $b['price'] !== null ? max(0, num($b['price'])) : null;
     $serial = !empty($b['serial']);
-    $base = $t['prefix'] . $version . '-' . $model;
+    $base = $t['prefix'] . ($version !== '' ? $version . '-' . $model : $model);
 
     // The same code must never point at two different products
     $clash = act_row('SELECT c.product_id, p.name FROM item_codes c LEFT JOIN products p ON p.id = c.product_id WHERE c.base = ? AND c.product_id <> ? LIMIT 1', [$base, $p['id']]);
-    if ($clash) throw new ApiError("الكود {$base} متسجل قبل كده على «{$clash['name']}». غيّر رقم الموديل أو الإصدار");
+    if ($clash) throw new ApiError("الكود {$base} متسجل قبل كده على «{$clash['name']}». غيّر رقم الموديل");
     if (act_row('SELECT id FROM products WHERE sku = ? AND id <> ?', [$base, $p['id']])) throw new ApiError("الكود {$base} هو باركود منتج تاني");
 
     $db = db();
@@ -3337,6 +3340,18 @@ function station_generate(array $b): array {
     return ['codes' => $codes, 'base' => $base, 'stock' => $stock, 'products' => station_products(), 'history' => station_codes([])];
 }
 
+/** A model number nobody uses yet (not on a product, not in a printed code). */
+function station_random_number(int $digits): array {
+    station_need();
+    $digits = max(4, min(8, $digits ?: 5));
+    $lo = 10 ** ($digits - 1); $hi = 10 ** $digits - 1;
+    for ($i = 0; $i < 200; $i++) {
+        $n = (string)random_int($lo, $hi);
+        if (!act_row('SELECT 1 FROM products WHERE model_no = ? LIMIT 1', [$n]) && !act_row('SELECT 1 FROM item_codes WHERE model = ? LIMIT 1', [$n])) return ['number' => $n];
+    }
+    throw new ApiError('مش لاقي رقم فاضي، جرّب عدد أرقام أكبر');
+}
+
 /** Reprint labels already made (same codes, nothing added to stock). */
 function station_reprint(array $b): array {
     station_need();
@@ -3350,6 +3365,10 @@ function station_reprint(array $b): array {
 function station_save_product(array $b): array {
     $u = station_need();
     $id = (int)($b['id'] ?? 0);
+    $mn = code_part((string)($b['modelNo'] ?? ''), 20);
+    if ($mn !== '' && ($other = act_row('SELECT name FROM products WHERE model_no = ? AND id <> ? UNION ALL SELECT p.name FROM item_codes c JOIN products p ON p.id = c.product_id WHERE c.model = ? AND c.product_id <> ? LIMIT 1', [$mn, $id, $mn, $id]))) {
+        throw new ApiError("رقم الموديل {$mn} متسجل لـ «{$other['name']}». اختار رقم تاني");
+    }
     $data = [];
     if ($id) {
         $row = act_row('SELECT * FROM products WHERE id = ?', [$id]);
