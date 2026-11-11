@@ -40,6 +40,25 @@ try {
         case 'POST logout':    logout(); ok(true); break;
         case 'POST password':  ok(change_own_password(body())); break;
 
+        /* ---------- barcode station (/codes/) — its own login ---------- */
+        case 'GET station/me':          ok(station_me()); break;
+        case 'POST station/login':      ok(station_login(body())); break;
+        case 'POST station/logout':     station_logout(); ok(true); break;
+        case 'POST station/account':    ok(station_change_auth(body())); break;
+        case 'GET station/data':        ok(station_data()); break;
+        case 'GET station/codes':       station_need(); ok(station_codes($_GET)); break;
+        case 'GET station/lookup':      station_need(); ok(code_lookup((string)($_GET['code'] ?? ''))); break;
+        case 'POST station/trader':     ok(station_save_trader(body())); break;
+        case 'POST station/trader-delete': ok(station_delete_trader((int)(body()['id'] ?? 0))); break;
+        case 'POST station/generate':   ok(station_generate(body())); break;
+        case 'POST station/reprint':    ok(station_reprint(body())); break;
+        case 'POST station/product':    ok(station_save_product(body())); break;
+        case 'POST station/stock':      ok(station_stock(body())); break;
+        case 'POST station/upload':     station_need(); ok(upload_image('img')); break;
+        case 'GET admin/station':       need('owner'); ok(station_status()); break;
+        case 'POST admin/station':      ok(station_set_auth(body())); break;
+        case 'GET admin/code-lookup':   need(); ok(code_lookup((string)($_GET['code'] ?? ''))); break;
+
         /* ---------- admin: products & categories ---------- */
         case 'GET admin/products':     need(); ok(admin_products()); break;
         case 'POST admin/product':     need(); ok(save_product(body())); break;

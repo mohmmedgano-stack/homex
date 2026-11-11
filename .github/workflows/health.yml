@@ -9,7 +9,7 @@ jobs:
         run: |
           set +e
           U=https://home-x.online
-          for p in "/" "/admin/" "/p/returns" "/o/NOPE?t=x" "/robots.txt" "/sitemap.xml" "/og.png" "/logo.webp" "/fonts/eyen-ammon-bold.woff2" "/sounds/new-order.mp3" "/api/?r=settings" "/api/?r=catalog" "/api/lib.php" "/api/deploy.php?status=1" "/sitemap.xml" "/feeds/catalog.csv" "/product/1" "/r/X?t=y" "/api/?r=reviews&product=1"; do
+          for p in "/" "/admin/" "/p/returns" "/o/NOPE?t=x" "/robots.txt" "/sitemap.xml" "/og.png" "/logo.webp" "/fonts/eyen-ammon-bold.woff2" "/sounds/new-order.mp3" "/api/?r=settings" "/api/?r=catalog" "/api/lib.php" "/api/deploy.php?status=1" "/sitemap.xml" "/feeds/catalog.csv" "/product/1" "/r/X?t=y" "/api/?r=reviews&product=1" "/codes/" "/api/?r=station/me"; do
             curl -s -o /tmp/body -w "%{http_code}  %{time_total}s  %{size_download}B  $p\n" -H "Accept-Encoding: gzip" "$U$p"
           done
           echo "--- redirects"

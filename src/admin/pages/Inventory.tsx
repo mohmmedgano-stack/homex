@@ -95,7 +95,15 @@ const Cashier: React.FC<{ products: Product[]; onSold: () => void }> = ({ produc
     const exact = products.find((p) => (p.sku || '').toLowerCase() === t);
     const only = list.length === 1 ? list[0] : null;
     const hit = exact || only;
-    if (hit) { add(hit); setQ(''); } else toast('مفيش منتج بالكود ده', 'err');
+    if (hit) { add(hit); setQ(''); return; }
+    // QR labels from the barcode station (trader letters + version + model)
+    const raw = q.trim();
+    api.get('admin/code-lookup', { code: raw })
+      .then((c: { productId: string }) => {
+        const p = products.find((x) => x.id === c.productId);
+        if (p) { add(p); setQ(''); } else toast('المنتج ده مش متاح للبيع', 'err');
+      })
+      .catch(() => toast('مفيش منتج بالكود ده', 'err'));
   };
 
   const sub = lines.reduce((a, l) => a + l.price * l.qty, 0);

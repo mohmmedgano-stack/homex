@@ -263,6 +263,43 @@ function migrate(PDO $db): void {
     if (!in_array('created_by', $ecols, true)) $db->exec("ALTER TABLE expenses ADD COLUMN created_by TEXT NOT NULL DEFAULT ''");
     $ccols = array_column($db->query('PRAGMA table_info(categories)')->fetchAll(), 'name');
     if (!in_array('image', $ccols, true)) $db->exec("ALTER TABLE categories ADD COLUMN image TEXT NOT NULL DEFAULT ''");
+    if (!in_array('model_no', $pcols, true)) $db->exec("ALTER TABLE products ADD COLUMN model_no TEXT NOT NULL DEFAULT ''");
+    // Barcode station (/codes/): its own login, traders with a letter prefix, and every code it printed
+    $db->exec(<<<SQL2
+    CREATE TABLE IF NOT EXISTS station_auth (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        username TEXT NOT NULL,
+        pass_hash TEXT NOT NULL,
+        ver TEXT NOT NULL,
+        updated_at TEXT NOT NULL DEFAULT '',
+        updated_by TEXT NOT NULL DEFAULT ''
+    );
+    CREATE TABLE IF NOT EXISTS code_traders (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        prefix TEXT NOT NULL UNIQUE COLLATE NOCASE,
+        phone TEXT NOT NULL DEFAULT '',
+        note TEXT NOT NULL DEFAULT '',
+        active INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT NOT NULL DEFAULT ''
+    );
+    CREATE TABLE IF NOT EXISTS item_codes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        code TEXT NOT NULL UNIQUE COLLATE NOCASE,
+        base TEXT NOT NULL COLLATE NOCASE,
+        product_id INTEGER NOT NULL,
+        trader_id INTEGER,
+        version TEXT NOT NULL DEFAULT '',
+        model TEXT NOT NULL DEFAULT '',
+        serial INTEGER NOT NULL DEFAULT 0,
+        price REAL,
+        printed INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL DEFAULT '',
+        created_by TEXT NOT NULL DEFAULT ''
+    );
+    CREATE INDEX IF NOT EXISTS idx_item_codes_base ON item_codes(base);
+    CREATE INDEX IF NOT EXISTS idx_item_codes_product ON item_codes(product_id);
+    SQL2);
 
     // Footer pages: seed the 5 standard ones once, carrying over any text already saved in settings
     if (!(int)$db->query('SELECT COUNT(*) FROM pages')->fetchColumn()) {
@@ -760,7 +797,7 @@ function product_out(array $p, bool $admin = false): array {
         'createdAt' => $p['created_at'],
         'slug' => $p['slug'] ?? '',
     ];
-    if ($admin) { $out['cost'] = (float)$p['cost']; $out['active'] = (bool)$p['active']; $out['sku'] = $p['sku'] ?? ''; }
+    if ($admin) { $out['cost'] = (float)$p['cost']; $out['active'] = (bool)$p['active']; $out['sku'] = $p['sku'] ?? ''; $out['modelNo'] = $p['model_no'] ?? ''; }
     // Who added / last edited — visible to the owner only
     if ($admin && (current_admin()['role'] ?? '') === 'owner') {
         $out['createdBy'] = $p['created_by'] ?? '';
@@ -861,7 +898,7 @@ function save_product(array $b): array {
         min(5, max(0, num($b['rating'] ?? 0))), max(0, (int)($b['reviewsCount'] ?? 0)),
     ];
     $id = (int)($b['id'] ?? 0);
-    $by = current_admin()['name'] ?? '';
+    $by = actor_name();
     $vals[] = $by;
     if ($id) {
         $vals[] = $id;
@@ -880,6 +917,9 @@ function save_product(array $b): array {
     $slug = array_key_exists('slug', $b) ? trim((string)preg_replace('/[^a-z0-9]+/', '-', strtolower(str((string)$b['slug'], 80))), '-') : (string)(act_row('SELECT slug FROM products WHERE id = ?', [$id])['slug'] ?? '');
     if ($slug === '') $slug = random_product_code();
     db()->prepare('UPDATE products SET slug = ? WHERE id = ?')->execute([$slug, $id]);
+    if (array_key_exists('modelNo', $b)) {
+        db()->prepare('UPDATE products SET model_no = ? WHERE id = ?')->execute([code_part((string)$b['modelNo'], 20), $id]);
+    }
     if (array_key_exists('sku', $b)) {
         $sku = str((string)$b['sku'], 60);
         if ($sku !== '' && act_row('SELECT id FROM products WHERE sku = ? AND id <> ?', [$sku, $id])) throw new ApiError("الباركود/الكود «{$sku}» متسجل على منتج تاني");
@@ -2132,7 +2172,7 @@ function cairo_now(): string { return (new DateTime('now', new DateTimeZone('Afr
 function stock_move(int $pid, string $name, int $change, int $after, string $reason, string $note = '', string $ref = '', ?string $by = null): void {
     if ($change === 0) return;
     db()->prepare('INSERT INTO stock_moves (product_id, product_name, change, stock_after, reason, note, ref, admin_name, created_at) VALUES (?,?,?,?,?,?,?,?,?)')
-        ->execute([$pid, $name, $change, max(0, $after), $reason, mb_substr($note, 0, 200), $ref, $by ?? (current_admin()['name'] ?? ''), cairo_now()]);
+        ->execute([$pid, $name, $change, max(0, $after), $reason, mb_substr($note, 0, 200), $ref, $by ?? actor_name(), cairo_now()]);
 }
 
 /** Cashier sale: deducts stock right away and books the sale as a delivered (paid) order, so it shows in the accounts. */
@@ -3059,4 +3099,321 @@ function review_moderate(array $b): array {
     rating_refresh((int)$r['product_id']);
     log_activity(current_admin(), 'review.' . $status, ['approved' => 'نشر', 'hidden' => 'خفى', 'pending' => 'رجّع للمراجعة', 'delete' => 'مسح'][$status] . ' تقييم ' . $r['rating'] . '★ من ' . $r['name'] . ' على «' . ($r['product'] ?? '') . '»', 'review', (string)$r['id']);
     return reviews_admin(['status' => (string)($b['view'] ?? 'pending')]);
+}
+
+
+/* ============================================================
+   Barcode station — /codes/ (outside the store and the dashboard)
+   Own username/password, set by the owner. Prints QR labels whose code is
+   <trader letters><version>-<model>[-serial], tied to products and stock.
+   ============================================================ */
+
+/** Name written on products, stock moves and the activity log for whoever is acting. */
+function actor_name(): string {
+    $a = current_admin();
+    if ($a) return (string)$a['name'];
+    $s = station_user();
+    return $s ? (string)$s['name'] : '';
+}
+
+/** Upper-case letters/digits only — safe inside a code and for scanners. */
+function code_part(string $v, int $max): string {
+    $v = strtr($v, ['٠'=>'0','١'=>'1','٢'=>'2','٣'=>'3','٤'=>'4','٥'=>'5','٦'=>'6','٧'=>'7','٨'=>'8','٩'=>'9']);
+    return substr((string)preg_replace('/[^A-Z0-9]/', '', strtoupper($v)), 0, $max);
+}
+
+function station_auth_row(): ?array {
+    return act_row('SELECT * FROM station_auth WHERE id = 1', []);
+}
+
+function station_user(): ?array {
+    session_boot();
+    if (empty($_SESSION['station'])) return null;
+    $r = station_auth_row();
+    // Changing the username/password signs every open station out
+    if (!$r || !hash_equals($r['ver'], (string)$_SESSION['station'])) { unset($_SESSION['station']); return null; }
+    return ['id' => 0, 'name' => 'محطة الباركود (' . $r['username'] . ')', 'role' => 'station', 'username' => $r['username']];
+}
+
+function station_need(): array {
+    $u = station_user();
+    if (!$u) throw new ApiError('لازم تسجل دخول المحطة الأول', 401);
+    return $u;
+}
+
+function station_me(): array {
+    $u = station_user();
+    return ['user' => $u ? $u['username'] : null, 'configured' => station_auth_row() !== null];
+}
+
+function station_login(array $b): array {
+    $ip = $_SERVER['REMOTE_ADDR'] ?? '0';
+    $db = db();
+    $db->prepare('DELETE FROM login_attempts WHERE at < ?')->execute([time() - 900]);
+    $st = $db->prepare('SELECT COUNT(*) FROM login_attempts WHERE ip = ?');
+    $st->execute([$ip]);
+    if ((int)$st->fetchColumn() >= 8) throw new ApiError('محاولات كتير غلط. استنى 15 دقيقة وجرّب تاني', 429);
+    $r = station_auth_row();
+    if (!$r) throw new ApiError('المحطة لسه متقفلة. المالك يحدد اسم المستخدم والباسورد من لوحة التحكم ← إعدادات المتجر ← محطة الباركود', 403);
+    $user = str($b['username'] ?? '', 40);
+    if (mb_strtolower($user) !== mb_strtolower($r['username']) || !password_verify((string)($b['password'] ?? ''), $r['pass_hash'])) {
+        $db->prepare('INSERT INTO login_attempts (ip, at) VALUES (?, ?)')->execute([$ip, time()]);
+        usleep(400000);
+        throw new ApiError('اسم المستخدم أو الباسورد غلط', 401);
+    }
+    session_boot();
+    session_regenerate_id(true);
+    $_SESSION['station'] = $r['ver'];
+    log_activity(station_user(), 'station.login', 'دخل محطة الباركود', 'station', '');
+    return station_me();
+}
+
+function station_logout(): void {
+    session_boot();
+    unset($_SESSION['station']);
+}
+
+function station_write_auth(string $user, string $pass, string $by): void {
+    if (!preg_match('/^[A-Za-z0-9._-]{3,40}$/', $user)) throw new ApiError('اسم المستخدم: من 3 لـ 40 حرف إنجليزي أو أرقام (مسموح . _ -)');
+    validate_password($pass);
+    db()->prepare('INSERT INTO station_auth (id, username, pass_hash, ver, updated_at, updated_by) VALUES (1, ?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET username = excluded.username, pass_hash = excluded.pass_hash, ver = excluded.ver, updated_at = excluded.updated_at, updated_by = excluded.updated_by')
+        ->execute([$user, password_hash($pass, PASSWORD_DEFAULT), bin2hex(random_bytes(8)), cairo_now(), $by]);
+}
+
+/** Owner, from the dashboard: see / set the station login. */
+function station_status(): array {
+    $r = station_auth_row();
+    return ['configured' => (bool)$r, 'username' => $r['username'] ?? '', 'updatedAt' => $r['updated_at'] ?? '', 'updatedBy' => $r['updated_by'] ?? '', 'path' => '/codes/'];
+}
+
+function station_set_auth(array $b): array {
+    $a = need('owner');
+    station_write_auth(str($b['username'] ?? '', 40), (string)($b['password'] ?? ''), (string)$a['name']);
+    log_activity($a, 'station.auth', 'غيّر اسم مستخدم/باسورد محطة الباركود', 'station', '');
+    return station_status();
+}
+
+/** From inside the station: change its own login (needs the current password). */
+function station_change_auth(array $b): array {
+    $u = station_need();
+    $r = station_auth_row();
+    if (!password_verify((string)($b['current'] ?? ''), $r['pass_hash'])) throw new ApiError('الباسورد الحالي غلط');
+    $user = str($b['username'] ?? '', 40) ?: $r['username'];
+    station_write_auth($user, (string)($b['password'] ?? ''), $u['name']);
+    log_activity($u, 'station.auth', 'غيّر اسم مستخدم/باسورد محطة الباركود من جوه المحطة', 'station', '');
+    $_SESSION['station'] = station_auth_row()['ver'];   // stay signed in on this device
+    return station_me();
+}
+
+function trader_out(array $t): array {
+    return ['id' => (int)$t['id'], 'name' => $t['name'], 'prefix' => $t['prefix'], 'phone' => $t['phone'], 'note' => $t['note'], 'active' => (bool)$t['active'], 'codes' => (int)($t['codes'] ?? 0)];
+}
+
+function station_traders(): array {
+    $rows = db()->query('SELECT t.*, (SELECT COUNT(*) FROM item_codes c WHERE c.trader_id = t.id) AS codes FROM code_traders t ORDER BY t.active DESC, t.name')->fetchAll();
+    return array_map('trader_out', $rows);
+}
+
+function station_save_trader(array $b): array {
+    $u = station_need();
+    $name = str($b['name'] ?? '', 80);
+    if ($name === '') throw new ApiError('اكتب اسم التاجر');
+    $prefix = code_part((string)($b['prefix'] ?? ''), 2);
+    if (!preg_match('/^[A-Z]{1,2}$/', $prefix)) throw new ApiError('حرف التاجر: حرف أو حرفين إنجليزي (A-Z)');
+    $id = (int)($b['id'] ?? 0);
+    if (act_row('SELECT id FROM code_traders WHERE prefix = ? AND id <> ?', [$prefix, $id])) throw new ApiError("الحرف «{$prefix}» متاخد لتاجر تاني");
+    if ($id && ($old = act_row('SELECT prefix FROM code_traders WHERE id = ?', [$id])) && strcasecmp($old['prefix'], $prefix) !== 0
+        && act_row('SELECT id FROM item_codes WHERE trader_id = ? LIMIT 1', [$id])) {
+        throw new ApiError('التاجر ده اتطبعله أكواد بحرف «' . $old['prefix'] . '». مينفعش تغيّر حرفه عشان الأكواد القديمة متبوظش');
+    }
+    $vals = [$name, $prefix, str($b['phone'] ?? '', 30), str($b['note'] ?? '', 300), !array_key_exists('active', $b) || !empty($b['active']) ? 1 : 0];
+    if ($id) db()->prepare('UPDATE code_traders SET name=?, prefix=?, phone=?, note=?, active=? WHERE id=?')->execute([...$vals, $id]);
+    else db()->prepare('INSERT INTO code_traders (name, prefix, phone, note, active, created_at) VALUES (?,?,?,?,?,?)')->execute([...$vals, cairo_now()]);
+    log_activity($u, 'station.trader', ($id ? 'عدّل التاجر ' : 'ضاف التاجر ') . "«{$name}» بحرف {$prefix}", 'trader', (string)($id ?: db()->lastInsertId()));
+    return station_traders();
+}
+
+function station_delete_trader(int $id): array {
+    $u = station_need();
+    $t = act_row('SELECT * FROM code_traders WHERE id = ?', [$id]);
+    if (!$t) throw new ApiError('التاجر مش موجود', 404);
+    if (act_row('SELECT id FROM item_codes WHERE trader_id = ? LIMIT 1', [$id])) {
+        db()->prepare('UPDATE code_traders SET active = 0 WHERE id = ?')->execute([$id]);   // keep it: old labels point to it
+    } else {
+        db()->prepare('DELETE FROM code_traders WHERE id = ?')->execute([$id]);
+    }
+    log_activity($u, 'station.trader', 'شال التاجر «' . $t['name'] . '»', 'trader', (string)$id);
+    return station_traders();
+}
+
+function station_products(): array {
+    $rows = db()->query('SELECT p.*, (SELECT COUNT(*) FROM item_codes c WHERE c.product_id = p.id) AS codes FROM products p ORDER BY p.id DESC')->fetchAll();
+    return array_map(fn($p) => [
+        'id' => (string)$p['id'], 'name' => $p['name'], 'category' => $p['category_id'], 'price' => (float)$p['price'], 'cost' => (float)$p['cost'],
+        'stock' => (int)$p['stock'], 'image' => $p['image'], 'active' => (bool)$p['active'], 'sku' => $p['sku'] ?? '', 'modelNo' => $p['model_no'] ?? '',
+        'brand' => $p['brand'], 'codes' => (int)$p['codes'],
+    ], $rows);
+}
+
+function code_out(array $c): array {
+    return ['id' => (int)$c['id'], 'code' => $c['code'], 'productId' => (string)$c['product_id'], 'product' => $c['product'] ?? '', 'trader' => $c['trader'] ?? '', 'prefix' => $c['prefix'] ?? '',
+        'version' => $c['version'], 'model' => $c['model'], 'serial' => (int)$c['serial'], 'price' => $c['price'] !== null ? (float)$c['price'] : null,
+        'printed' => (int)$c['printed'], 'createdAt' => $c['created_at'], 'createdBy' => $c['created_by']];
+}
+
+function station_codes(array $q): array {
+    $sql = 'SELECT c.*, p.name AS product, t.name AS trader, t.prefix FROM item_codes c LEFT JOIN products p ON p.id = c.product_id LEFT JOIN code_traders t ON t.id = c.trader_id';
+    $where = []; $args = [];
+    $t = str($q['q'] ?? '', 60);
+    if ($t !== '') { $where[] = '(c.code LIKE ? OR p.name LIKE ? OR t.name LIKE ?)'; $like = "%$t%"; array_push($args, $like, $like, $like); }
+    if (!empty($q['product'])) { $where[] = 'c.product_id = ?'; $args[] = (int)$q['product']; }
+    $st = db()->prepare($sql . ($where ? ' WHERE ' . implode(' AND ', $where) : '') . ' ORDER BY c.id DESC LIMIT 150');
+    $st->execute($args);
+    return array_map('code_out', $st->fetchAll());
+}
+
+function station_data(): array {
+    station_need();
+    return ['products' => station_products(), 'categories' => categories(), 'traders' => station_traders(), 'codes' => station_codes([]), 'year' => date('y')];
+}
+
+/**
+ * Makes the codes for one print job and remembers them.
+ * Code = <trader letters><version>-<model>  e.g. AM26-1520 ; with serials: AM26-1520-001, -002 …
+ * Optionally adds the quantity to stock (goods received from that trader).
+ */
+function station_generate(array $b): array {
+    $u = station_need();
+    $p = act_row('SELECT * FROM products WHERE id = ?', [(int)($b['productId'] ?? 0)]);
+    if (!$p) throw new ApiError('اختار المنتج', 404);
+    $t = act_row('SELECT * FROM code_traders WHERE id = ?', [(int)($b['traderId'] ?? 0)]);
+    if (!$t) throw new ApiError('اختار التاجر');
+    $version = code_part((string)($b['version'] ?? ''), 4);
+    if ($version === '') throw new ApiError('اكتب السنة أو الإصدار (مثلاً 26)');
+    $model = code_part((string)($b['model'] ?? ''), 20);
+    if ($model === '') throw new ApiError('اكتب رقم الموديل');
+    $qty = (int)($b['qty'] ?? 0);
+    if ($qty < 1 || $qty > 500) throw new ApiError('عدد الاستيكرات من 1 لـ 500');
+    $price = isset($b['price']) && $b['price'] !== '' && $b['price'] !== null ? max(0, num($b['price'])) : null;
+    $serial = !empty($b['serial']);
+    $base = $t['prefix'] . $version . '-' . $model;
+
+    // The same code must never point at two different products
+    $clash = act_row('SELECT c.product_id, p.name FROM item_codes c LEFT JOIN products p ON p.id = c.product_id WHERE c.base = ? AND c.product_id <> ? LIMIT 1', [$base, $p['id']]);
+    if ($clash) throw new ApiError("الكود {$base} متسجل قبل كده على «{$clash['name']}». غيّر رقم الموديل أو الإصدار");
+    if (act_row('SELECT id FROM products WHERE sku = ? AND id <> ?', [$base, $p['id']])) throw new ApiError("الكود {$base} هو باركود منتج تاني");
+
+    $db = db();
+    $now = cairo_now();
+    $codes = [];
+    $db->beginTransaction();
+    try {
+        if ($serial) {
+            $start = (int)$db->query('SELECT COALESCE(MAX(serial), 0) FROM item_codes WHERE base = ' . $db->quote($base))->fetchColumn();
+            $ins = $db->prepare('INSERT INTO item_codes (code, base, product_id, trader_id, version, model, serial, price, printed, created_at, created_by) VALUES (?,?,?,?,?,?,?,?,1,?,?)');
+            for ($i = 1; $i <= $qty; $i++) {
+                $n = $start + $i;
+                $code = $base . '-' . str_pad((string)$n, 3, '0', STR_PAD_LEFT);
+                $ins->execute([$code, $base, $p['id'], $t['id'], $version, $model, $n, $price, $now, $u['name']]);
+                $codes[] = $code;
+            }
+        } else {
+            $db->prepare('INSERT INTO item_codes (code, base, product_id, trader_id, version, model, serial, price, printed, created_at, created_by) VALUES (?,?,?,?,?,?,0,?,?,?,?)
+                ON CONFLICT(code) DO UPDATE SET printed = printed + excluded.printed, price = excluded.price')
+                ->execute([$base, $base, $p['id'], $t['id'], $version, $model, $price, $qty, $now, $u['name']]);
+            $codes = array_fill(0, $qty, $base);
+        }
+        if (!empty($b['saveModel']) && $model !== code_part((string)$p['model_no'], 20)) {
+            $db->prepare('UPDATE products SET model_no = ? WHERE id = ?')->execute([$model, $p['id']]);
+        }
+        $stock = (int)$p['stock'];
+        if (!empty($b['addStock'])) {
+            $stock += $qty;
+            $db->prepare("UPDATE products SET stock = ?, updated_at = datetime('now') WHERE id = ?")->execute([$stock, $p['id']]);
+            stock_move((int)$p['id'], $p['name'], $qty, $stock, 'restock', 'وارد من التاجر ' . $t['name'] . ' — كود ' . $base, $base, $u['name']);
+        }
+        $db->commit();
+    } catch (Throwable $e) {
+        $db->rollBack();
+        throw $e;
+    }
+    log_activity($u, 'station.print', "طبع {$qty} استيكر QR لـ «{$p['name']}» بالكود {$base}" . (!empty($b['addStock']) ? " وزوّد المخزن +{$qty} (بقى {$stock})" : ''), 'product', (string)$p['id']);
+    return ['codes' => $codes, 'base' => $base, 'stock' => $stock, 'products' => station_products(), 'history' => station_codes([])];
+}
+
+/** Reprint labels already made (same codes, nothing added to stock). */
+function station_reprint(array $b): array {
+    station_need();
+    $c = act_row('SELECT c.*, p.name AS product FROM item_codes c LEFT JOIN products p ON p.id = c.product_id WHERE c.id = ?', [(int)($b['id'] ?? 0)]);
+    if (!$c) throw new ApiError('الكود مش موجود', 404);
+    db()->prepare('UPDATE item_codes SET printed = printed + 1 WHERE id = ?')->execute([$c['id']]);
+    return code_out($c);
+}
+
+/** Add or edit a product from the station: same table as the store, so it shows on the website when «active». */
+function station_save_product(array $b): array {
+    $u = station_need();
+    $id = (int)($b['id'] ?? 0);
+    $data = [];
+    if ($id) {
+        $row = act_row('SELECT * FROM products WHERE id = ?', [$id]);
+        if (!$row) throw new ApiError('المنتج مش موجود', 404);
+        $data = product_out($row, true);   // keep everything the station doesn't edit (gallery, specs, description …)
+        $data['id'] = $id;
+    }
+    foreach (['name', 'category', 'price', 'cost', 'image', 'brand', 'modelNo', 'description'] as $k) {
+        if (array_key_exists($k, $b)) $data[$k] = $b[$k];
+    }
+    if (array_key_exists('active', $b)) $data['active'] = !empty($b['active']);
+    if (!$id) {
+        $data['stock'] = max(0, (int)($b['stock'] ?? 0));
+        if (!empty($data['image'])) $data['gallery'] = [$data['image']];
+    } elseif (!empty($b['image']) && !in_array($b['image'], (array)($data['gallery'] ?? []), true)) {
+        $data['gallery'] = array_values(array_merge([$b['image']], (array)($data['gallery'] ?? [])));
+    }
+    unset($data['sku']);   // never touched from here
+    save_product($data);
+    $pid = $id ?: (int)db()->query('SELECT MAX(id) FROM products')->fetchColumn();
+    log_activity($u, $id ? 'product.update' : 'product.create', ($id ? 'عدّل المنتج ' : 'ضاف منتج جديد ') . '«' . str($data['name'] ?? '', 80) . '» من محطة الباركود' . (!$id ? ' — المخزن ' . (int)$data['stock'] . (!empty($data['active']) || !array_key_exists('active', $data) ? ' — ظاهر على الموقع' : ' — مخفي من الموقع') : ''), 'product', (string)$pid);
+    return station_products();
+}
+
+/** Stock from the station: received / counted / taken out. */
+function station_stock(array $b): array {
+    $u = station_need();
+    $p = act_row('SELECT id, name, stock FROM products WHERE id = ?', [(int)($b['productId'] ?? 0)]);
+    if (!$p) throw new ApiError('المنتج مش موجود', 404);
+    $mode = (string)($b['mode'] ?? '');
+    $qty = (int)($b['qty'] ?? -1);
+    if ($qty < 0 || $qty > 100000) throw new ApiError('اكتب كمية صحيحة');
+    $note = str($b['note'] ?? '', 200);
+    $old = (int)$p['stock'];
+    switch ($mode) {
+        case 'restock': if ($qty < 1) throw new ApiError('اكتب الكمية اللي وصلت'); $new = $old + $qty; break;
+        case 'out':
+        case 'damaged':
+            if ($qty < 1) throw new ApiError('اكتب الكمية');
+            if ($qty > $old) throw new ApiError("المخزن فيه $old بس");
+            $new = $old - $qty; break;
+        case 'count': $new = $qty; break;
+        default: throw new ApiError('نوع الحركة مش معروف');
+    }
+    if ($new !== $old) {
+        db()->prepare("UPDATE products SET stock = ?, updated_at = datetime('now') WHERE id = ?")->execute([$new, $p['id']]);
+        stock_move((int)$p['id'], $p['name'], $new - $old, $new, $mode, $note, '', $u['name']);
+        log_activity($u, 'stock.' . $mode, STOCK_REASONS[$mode] . ' — «' . $p['name'] . '» ' . ($new > $old ? '+' : '') . ($new - $old) . " (المخزن $old ← $new) من محطة الباركود" . ($note ? " — $note" : ''), 'product', (string)$p['id']);
+    }
+    return station_products();
+}
+
+/** Scanner lookup: a printed QR code (or a product barcode) → the product. Used by the cashier and the station. */
+function code_lookup(string $code): array {
+    $code = trim($code);
+    if ($code === '') throw new ApiError('امسح الكود', 400);
+    $hit = act_row('SELECT c.*, p.name AS product, t.name AS trader, t.prefix FROM item_codes c LEFT JOIN products p ON p.id = c.product_id LEFT JOIN code_traders t ON t.id = c.trader_id WHERE c.code = ? OR c.base = ? ORDER BY c.id DESC LIMIT 1', [$code, $code]);
+    if ($hit) return code_out($hit);
+    $p = act_row('SELECT id, name FROM products WHERE sku = ? OR model_no = ? LIMIT 1', [$code, code_part($code, 20)]);
+    if ($p) return ['id' => 0, 'code' => $code, 'productId' => (string)$p['id'], 'product' => $p['name'], 'trader' => '', 'prefix' => '', 'version' => '', 'model' => '', 'serial' => 0, 'price' => null, 'printed' => 0, 'createdAt' => '', 'createdBy' => ''];
+    throw new ApiError('مفيش منتج بالكود ده', 404);
 }

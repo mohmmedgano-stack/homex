@@ -8,10 +8,11 @@ export default defineConfig(() => ({
   resolve: { alias: { '@': path.resolve(__dirname, '.') } },
   build: {
     rollupOptions: {
-      // Two separate apps: the store (/) and the admin dashboard (/admin/)
+      // Separate apps: the store (/), the admin dashboard (/admin/) and the barcode station (/codes/)
       input: {
         store: path.resolve(__dirname, 'index.html'),
         admin: path.resolve(__dirname, 'admin/index.html'),
+        codes: path.resolve(__dirname, 'codes/index.html'),
       },
     },
   },
