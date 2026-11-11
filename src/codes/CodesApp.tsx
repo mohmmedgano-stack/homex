@@ -113,7 +113,7 @@ const Login: React.FC<{ configured: boolean; onDone: (d: any) => void }> = ({ co
         </div>
         {!configured ? (
           <p className="text-sm text-ink bg-gold/10 border border-gold/40 rounded-xl p-3 leading-relaxed">
-            المحطة لسه متقفلة. المالك يدخل لوحة التحكم ← <b>إعدادات المتجر</b> ← <b>محطة الباركود</b> ويحدد اسم المستخدم والباسورد.
+            المحطة لسه متقفلة. ادخل لوحة التحكم بحساب homex ← <b>إعدادات المتجر</b> ← <b>محطة الباركود</b> ويحدد اسم المستخدم والباسورد.
           </p>
         ) : (
           <>
@@ -661,7 +661,7 @@ const AccountPanel: React.FC<{ user: string; onUser: (u: string) => void }> = ({
         <Field label="الباسورد الجديد" hint="8 حروف أو أرقام على الأقل"><Input dir="ltr" type="password" value={p} onChange={(e) => setP(e.target.value)} autoComplete="new-password" required /></Field>
         <Field label="اكتب الباسورد الجديد تاني"><Input dir="ltr" type="password" value={p2} onChange={(e) => setP2(e.target.value)} autoComplete="new-password" required /></Field>
         <Button type="submit" loading={busy}>حفظ</Button>
-        <p className="text-xs text-steel">المالك يقدر كمان يغيّرهم من لوحة التحكم ← إعدادات المتجر ← محطة الباركود، من غير الباسورد القديم.</p>
+        <p className="text-xs text-steel">حساب homex يقدر كمان يغيّرهم من لوحة التحكم ← إعدادات المتجر ← محطة الباركود، من غير الباسورد القديم.</p>
       </form>
     </Card>
   );

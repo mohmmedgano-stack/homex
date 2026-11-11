@@ -55,7 +55,7 @@ try {
         case 'POST station/product':    ok(station_save_product(body())); break;
         case 'POST station/stock':      ok(station_stock(body())); break;
         case 'POST station/upload':     station_need(); ok(upload_image('img')); break;
-        case 'GET admin/station':       need('owner'); ok(station_status()); break;
+        case 'GET admin/station':       need_station_admin(); ok(station_status()); break;
         case 'POST admin/station':      ok(station_set_auth(body())); break;
         case 'GET admin/code-lookup':   need(); ok(code_lookup((string)($_GET['code'] ?? ''))); break;
 

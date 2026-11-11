@@ -156,6 +156,8 @@ const Shell: React.FC<{ admin: Admin; onLogout: () => void }> = ({ admin, onLogo
   const [settingsTab, setSettingsTab] = useState<SettingsTab>(() => (initial === 'pages' || initial === 'team' ? initial : 'general'));
   const [activityUser, setActivityUser] = useState<number | null>(null);
   const isOwner = admin.role === 'owner';
+  // The barcode-station tab belongs to the main account only
+  const isStationAdmin = isOwner && admin.username.toLowerCase() === 'homex';
   const toast = useToast();
   const alerts = useOrderAlerts((o, added) => {
     toast(o ? `🛒 طلب جديد ${o.code} من ${o.name} — ${Math.round(o.total).toLocaleString('en-US')} ج.م` : `🛒 وصلك ${added} طلب جديد`);
@@ -276,7 +278,7 @@ const Shell: React.FC<{ admin: Admin; onLogout: () => void }> = ({ admin, onLogo
         {page === 'settings' && (
           <div className="space-y-4">
             <div className="grid grid-cols-3 sm:flex gap-1 p-1 bg-white border border-line rounded-xl">
-              {SETTINGS_TABS.filter((t) => !['activity', 'backups', 'station'].includes(t.id) || isOwner).map((t) => (
+              {SETTINGS_TABS.filter((t) => (t.id === 'station' ? isStationAdmin : !['activity', 'backups'].includes(t.id) || isOwner)).map((t) => (
                 <button
                   key={t.id}
                   onClick={() => setSettingsTab(t.id)}
@@ -294,7 +296,7 @@ const Shell: React.FC<{ admin: Admin; onLogout: () => void }> = ({ admin, onLogo
             {settingsTab === 'team' && <Team admin={admin} onShowActivity={(id) => { setActivityUser(id); setSettingsTab('activity'); }} />}
             {settingsTab === 'activity' && isOwner && <ActivityLog initialAdmin={activityUser} />}
             {settingsTab === 'backups' && isOwner && <Backups />}
-            {settingsTab === 'station' && isOwner && <StationAccess />}
+            {settingsTab === 'station' && isStationAdmin && <StationAccess />}
           </div>
         )}
       </main>

@@ -3154,7 +3154,7 @@ function station_login(array $b): array {
     $st->execute([$ip]);
     if ((int)$st->fetchColumn() >= 8) throw new ApiError('محاولات كتير غلط. استنى 15 دقيقة وجرّب تاني', 429);
     $r = station_auth_row();
-    if (!$r) throw new ApiError('المحطة لسه متقفلة. المالك يحدد اسم المستخدم والباسورد من لوحة التحكم ← إعدادات المتجر ← محطة الباركود', 403);
+    if (!$r) throw new ApiError('المحطة لسه متقفلة. ادخل لوحة التحكم بحساب homex ← إعدادات المتجر ← محطة الباركود وحدد اسم المستخدم والباسورد', 403);
     $user = str($b['username'] ?? '', 40);
     if (mb_strtolower($user) !== mb_strtolower($r['username']) || !password_verify((string)($b['password'] ?? ''), $r['pass_hash'])) {
         $db->prepare('INSERT INTO login_attempts (ip, at) VALUES (?, ?)')->execute([$ip, time()]);
@@ -3187,8 +3187,15 @@ function station_status(): array {
     return ['configured' => (bool)$r, 'username' => $r['username'] ?? '', 'updatedAt' => $r['updated_at'] ?? '', 'updatedBy' => $r['updated_by'] ?? '', 'path' => '/codes/'];
 }
 
-function station_set_auth(array $b): array {
+/** The station's login is managed only from the main owner account «homex». */
+function need_station_admin(): array {
     $a = need('owner');
+    if (mb_strtolower((string)$a['username']) !== 'homex') throw new ApiError('الصلاحية دي لحساب homex بس', 403);
+    return $a;
+}
+
+function station_set_auth(array $b): array {
+    $a = need_station_admin();
     station_write_auth(str($b['username'] ?? '', 40), (string)($b['password'] ?? ''), (string)$a['name']);
     log_activity($a, 'station.auth', 'غيّر اسم مستخدم/باسورد محطة الباركود', 'station', '');
     return station_status();
