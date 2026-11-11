@@ -160,7 +160,7 @@ const Shell: React.FC<{ admin: Admin; onLogout: () => void }> = ({ admin, onLogo
   const isStationAdmin = isOwner && admin.username.toLowerCase() === 'homex';
   const toast = useToast();
   const alerts = useOrderAlerts((o, added) => {
-    toast(o ? `🛒 طلب جديد ${o.code} من ${o.name} — ${Math.round(o.total).toLocaleString('en-US')} ج.م` : `🛒 وصلك ${added} طلب جديد`);
+    toast(o ? `🛒 طلب جديد ${o.code} من ${o.name} — ${Math.round(o.total).toLocaleString('en-US')} ج.م` : `🛒 وصلك ${added} طلب جديد`, 'ok', { silent: true });  // the order alert has its own sound
     window.dispatchEvent(new CustomEvent('homex:new-order'));
   });
   const bell = (

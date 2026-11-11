@@ -1,31 +1,31 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { X, Loader2 } from 'lucide-react';
+import { IosBanner, BannerStack } from '../components/IosBanner';
+import { playChime } from '../lib/chime';
 
-/* ---------- toasts ---------- */
+/* ---------- toasts (phone-style banners + chime) ---------- */
 type Toast = { id: number; msg: string; kind: 'ok' | 'err' };
-const ToastCtx = createContext<(msg: string, kind?: 'ok' | 'err') => void>(() => {});
+type Push = (msg: string, kind?: 'ok' | 'err', opts?: { silent?: boolean }) => void;
+const ToastCtx = createContext<Push>(() => {});
 export const useToast = () => useContext(ToastCtx);
 
 export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [list, setList] = useState<Toast[]>([]);
-  const push = useCallback((msg: string, kind: 'ok' | 'err' = 'ok') => {
+  const close = useCallback((id: number) => setList((l) => l.filter((t) => t.id !== id)), []);
+  const push = useCallback<Push>((msg, kind = 'ok', opts) => {
     const id = Date.now() + Math.random();
-    setList((l) => [...l, { id, msg, kind }]);
-    setTimeout(() => setList((l) => l.filter((t) => t.id !== id)), 3500);
-  }, []);
+    setList((l) => [...l.slice(-2), { id, msg, kind }]);
+    if (!opts?.silent) playChime(0.45);
+    setTimeout(() => close(id), kind === 'err' ? 5000 : 4000);
+  }, [close]);
   return (
     <ToastCtx.Provider value={push}>
       {children}
-      <div className="fixed bottom-4 inset-x-4 sm:inset-x-auto sm:left-4 z-[100] flex flex-col gap-2 sm:w-80" aria-live="polite">
-        {list.map((t) => (
-          <div
-            key={t.id}
-            className={`px-4 py-3 rounded-xl shadow-lg text-sm font-bold text-white ${t.kind === 'ok' ? 'bg-ink' : 'bg-sale'}`}
-          >
-            {t.msg}
-          </div>
-        ))}
-      </div>
+      {list.length > 0 && (
+        <BannerStack>
+          {list.map((t) => <IosBanner key={t.id} message={t.msg} kind={t.kind === 'err' ? 'error' : 'success'} onClose={() => close(t.id)} />)}
+        </BannerStack>
+      )}
     </ToastCtx.Provider>
   );
 };
