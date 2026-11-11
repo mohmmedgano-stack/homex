@@ -3201,18 +3201,6 @@ function station_set_auth(array $b): array {
     return station_status();
 }
 
-/** From inside the station: change its own login (needs the current password). */
-function station_change_auth(array $b): array {
-    $u = station_need();
-    $r = station_auth_row();
-    if (!password_verify((string)($b['current'] ?? ''), $r['pass_hash'])) throw new ApiError('الباسورد الحالي غلط');
-    $user = str($b['username'] ?? '', 40) ?: $r['username'];
-    station_write_auth($user, (string)($b['password'] ?? ''), $u['name']);
-    log_activity($u, 'station.auth', 'غيّر اسم مستخدم/باسورد محطة الباركود من جوه المحطة', 'station', '');
-    $_SESSION['station'] = station_auth_row()['ver'];   // stay signed in on this device
-    return station_me();
-}
-
 function trader_out(array $t): array {
     return ['id' => (int)$t['id'], 'name' => $t['name'], 'prefix' => $t['prefix'], 'phone' => $t['phone'], 'note' => $t['note'], 'active' => (bool)$t['active'], 'codes' => (int)($t['codes'] ?? 0)];
 }

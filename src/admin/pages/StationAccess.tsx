@@ -43,7 +43,7 @@ export const StationAccess: React.FC = () => {
           <Field label="الباسورد" hint="8 حروف أو أرقام على الأقل"><Input dir="ltr" type="password" value={p} onChange={(e) => setP(e.target.value)} autoComplete="new-password" required /></Field>
           <Field label="اكتب الباسورد تاني"><Input dir="ltr" type="password" value={p2} onChange={(e) => setP2(e.target.value)} autoComplete="new-password" required /></Field>
           <Button type="submit" loading={busy}>حفظ</Button>
-          <p className="text-xs text-steel">ده منفصل عن حسابات لوحة التحكم. بعد التغيير أي جهاز فاتح المحطة بيطلب دخول من جديد.</p>
+          <p className="text-xs text-steel">ده منفصل عن حسابات لوحة التحكم، ومينفعش يتغيّر غير من هنا. بعد التغيير أي جهاز فاتح المحطة بيطلب دخول من جديد.</p>
         </form>
       </Card>
     </div>

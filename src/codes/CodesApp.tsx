@@ -3,7 +3,7 @@ import QRCode from 'qrcode';
 import { api, money, thumb } from '../lib/api';
 import { ToastProvider, useToast, Button, Card, Field, Input, Select, Textarea, Toggle, Modal, Spinner, Empty } from '../admin/ui';
 import {
-  QrCode, Boxes, Users, History, KeyRound, LogOut, Search, Plus, Pencil, Trash2, Printer, PackagePlus, ScanLine, ImagePlus, Eye, EyeOff, Minus,
+  QrCode, Boxes, Users, History, LogOut, Search, Plus, Pencil, Trash2, Printer, PackagePlus, ScanLine, ImagePlus, Eye, EyeOff, Minus,
 } from 'lucide-react';
 
 /* ---------------------------- types ---------------------------- */
@@ -18,7 +18,6 @@ const TABS = [
   { id: 'stock', label: 'المنتجات والمخزن', Icon: Boxes },
   { id: 'traders', label: 'التجار', Icon: Users },
   { id: 'history', label: 'سجل الأكواد', Icon: History },
-  { id: 'account', label: 'الحساب', Icon: KeyRound },
 ] as const;
 type Tab = (typeof TABS)[number]['id'];
 
@@ -88,7 +87,7 @@ const Shell: React.FC = () => {
   useEffect(() => { api.get('station/me').then(setMe).catch(() => setMe({ user: null, configured: true })); }, []);
   if (!me) return <div className="min-h-dvh flex items-center justify-center"><Spinner /></div>;
   if (!me.user) return <Login configured={me.configured} onDone={setMe} />;
-  return <Station user={me.user} onUser={(u) => setMe({ user: u, configured: true })} onLogout={() => setMe({ user: null, configured: true })} />;
+  return <Station user={me.user} onLogout={() => setMe({ user: null, configured: true })} />;
 };
 
 const Login: React.FC<{ configured: boolean; onDone: (d: any) => void }> = ({ configured, onDone }) => {
@@ -135,9 +134,9 @@ const Login: React.FC<{ configured: boolean; onDone: (d: any) => void }> = ({ co
   );
 };
 
-const Station: React.FC<{ user: string; onUser: (u: string) => void; onLogout: () => void }> = ({ user, onUser, onLogout }) => {
+const Station: React.FC<{ user: string; onLogout: () => void }> = ({ user, onLogout }) => {
   const toast = useToast();
-  const [tab, setTab] = useState<Tab>(() => (store.get('tab', 'print') as Tab));
+  const [tab, setTab] = useState<Tab>(() => { const t = store.get('tab', 'print'); return (TABS.some((x) => x.id === t) ? t : 'print') as Tab; });
   const [d, setD] = useState<Data | null>(null);
   const [printFor, setPrintFor] = useState<string>('');
   const load = () => api.get<Data>('station/data').then(setD).catch((e) => { if (e.status === 401) onLogout(); else toast(e.message, 'err'); });
@@ -171,7 +170,6 @@ const Station: React.FC<{ user: string; onUser: (u: string) => void; onLogout: (
             {tab === 'stock' && <StockPanel d={d} onProducts={(products) => patch({ products })} onPrint={(id) => { setPrintFor(id); setTab('print'); }} />}
             {tab === 'traders' && <TradersPanel traders={d.traders} onChange={(traders) => patch({ traders })} />}
             {tab === 'history' && <HistoryPanel d={d} />}
-            {tab === 'account' && <AccountPanel user={user} onUser={onUser} />}
           </>
         )}
       </main>
@@ -635,34 +633,5 @@ const HistoryPanel: React.FC<{ d: Data }> = ({ d }) => {
         </div>
       )}
     </div>
-  );
-};
-
-/* ---------------------------- account ---------------------------- */
-const AccountPanel: React.FC<{ user: string; onUser: (u: string) => void }> = ({ user, onUser }) => {
-  const toast = useToast();
-  const [cur, setCur] = useState('');
-  const [u, setU] = useState(user);
-  const [p, setP] = useState('');
-  const [p2, setP2] = useState('');
-  const [busy, setBusy] = useState(false);
-  const save = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (p !== p2) return toast('الباسورد الجديد مش متطابق', 'err');
-    setBusy(true);
-    try { const r = await api.post('station/account', { current: cur, username: u, password: p }); onUser(r.user); setCur(''); setP(''); setP2(''); toast('اتغيّر — أي جهاز تاني فاتح المحطة هيطلب دخول من جديد'); } catch (x: any) { toast(x.message, 'err'); }
-    setBusy(false);
-  };
-  return (
-    <Card title="تغيير اسم المستخدم والباسورد" className="max-w-lg">
-      <form onSubmit={save} className="space-y-4">
-        <Field label="الباسورد الحالي"><Input dir="ltr" type="password" value={cur} onChange={(e) => setCur(e.target.value)} autoComplete="current-password" required /></Field>
-        <Field label="اسم المستخدم" hint="حروف إنجليزي وأرقام"><Input dir="ltr" value={u} onChange={(e) => setU(e.target.value)} autoComplete="username" autoCapitalize="none" required /></Field>
-        <Field label="الباسورد الجديد" hint="8 حروف أو أرقام على الأقل"><Input dir="ltr" type="password" value={p} onChange={(e) => setP(e.target.value)} autoComplete="new-password" required /></Field>
-        <Field label="اكتب الباسورد الجديد تاني"><Input dir="ltr" type="password" value={p2} onChange={(e) => setP2(e.target.value)} autoComplete="new-password" required /></Field>
-        <Button type="submit" loading={busy}>حفظ</Button>
-        <p className="text-xs text-steel">حساب homex يقدر كمان يغيّرهم من لوحة التحكم ← إعدادات المتجر ← محطة الباركود، من غير الباسورد القديم.</p>
-      </form>
-    </Card>
   );
 };

@@ -44,7 +44,6 @@ try {
         case 'GET station/me':          ok(station_me()); break;
         case 'POST station/login':      ok(station_login(body())); break;
         case 'POST station/logout':     station_logout(); ok(true); break;
-        case 'POST station/account':    ok(station_change_auth(body())); break;
         case 'GET station/data':        ok(station_data()); break;
         case 'GET station/codes':       station_need(); ok(station_codes($_GET)); break;
         case 'GET station/lookup':      station_need(); ok(code_lookup((string)($_GET['code'] ?? ''))); break;
