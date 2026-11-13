@@ -5,6 +5,7 @@ require __DIR__ . '/lib.php';
 try {
     if (($_GET['sitemap'] ?? '') === '1') { sitemap_xml(); exit; }
     if (($_GET['feed'] ?? '') === 'catalog') { catalog_feed(); exit; }
+    if (($_GET['llms'] ?? '') === '1') { llms_txt(); exit; }
     if (isset($_GET['page'])) { render_page_html((string)$_GET['page']); exit; }
     render_product_html((int)($_GET['id'] ?? 0));
 } catch (Throwable $e) {

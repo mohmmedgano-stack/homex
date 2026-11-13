@@ -33,6 +33,18 @@ export interface PriceAlertSubscription {
   createdAt: string;
 }
 
+export interface OptionValue {
+  label: string;
+  price: number; // added to the base price (can be 0)
+  hex?: string; // color swatch
+  image?: string; // photo shown when this value is picked
+}
+export interface OptionGroup {
+  name: string; // e.g. اللون، المقاس، السعة
+  type: 'color' | 'choice';
+  values: OptionValue[];
+}
+
 export interface Product {
   id: string;
   name: string;
@@ -58,6 +70,8 @@ export interface Product {
   createdAt: string;
   slug?: string;
   sku?: string;
+  code?: string; // model code (e.g. HX-B2200)
+  options?: OptionGroup[];
 }
 
 export type AdminRole = 'super_admin' | 'product_manager' | 'orders_manager';
@@ -76,8 +90,10 @@ export interface AdminUser {
 }
 
 export interface CartItem {
-  product: Product;
+  product: Product; // already priced/named for the picked options
   quantity: number;
+  options?: Record<string, string>; // group name → picked value
+  key?: string; // product id + picked options
 }
 
 export type OrderStatus = 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled';

@@ -264,6 +264,8 @@ function migrate(PDO $db): void {
     $ccols = array_column($db->query('PRAGMA table_info(categories)')->fetchAll(), 'name');
     if (!in_array('image', $ccols, true)) $db->exec("ALTER TABLE categories ADD COLUMN image TEXT NOT NULL DEFAULT ''");
     if (!in_array('model_no', $pcols, true)) $db->exec("ALTER TABLE products ADD COLUMN model_no TEXT NOT NULL DEFAULT ''");
+    // choices the customer picks on the product page (color, size, capacity…) — see product_options_clean()
+    if (!in_array('options', $pcols, true)) $db->exec("ALTER TABLE products ADD COLUMN options TEXT NOT NULL DEFAULT '[]'");
     // Barcode station (/codes/): its own login, traders with a letter prefix, and every code it printed
     $db->exec(<<<SQL2
     CREATE TABLE IF NOT EXISTS station_auth (
@@ -316,6 +318,9 @@ function migrate(PDO $db): void {
         $st = $db->prepare('INSERT INTO categories (id, name, sort) VALUES (?, ?, ?)');
         foreach ($seed as $i => [$id, $name]) $st->execute([$id, $name, $i]);
     }
+    // one-time import of the 2026 price list (does nothing once done)
+    require_once __DIR__ . '/seed_pricelist.php';
+    seed_pricelist_2026($db);
 }
 
 function session_boot(): void {
@@ -796,6 +801,8 @@ function product_out(array $p, bool $admin = false): array {
         'reviewsCount' => (int)$p['reviews_count'],
         'createdAt' => $p['created_at'],
         'slug' => $p['slug'] ?? '',
+        'options' => json_decode((string)($p['options'] ?? '[]'), true) ?: [],
+        'code' => $p['sku'] ?? '',
     ];
     if ($admin) { $out['cost'] = (float)$p['cost']; $out['active'] = (bool)$p['active']; $out['sku'] = $p['sku'] ?? ''; $out['modelNo'] = $p['model_no'] ?? ''; }
     // Who added / last edited — visible to the owner only
@@ -871,6 +878,51 @@ function clean_list($v, int $max = 30): array {
     return array_values(array_slice(array_filter(array_map(fn($x) => str($x, 300), $v), fn($x) => $x !== ''), 0, $max));
 }
 
+/**
+ * Product options: [{name:"اللون", type:"color"|"choice", values:[{label, hex?, price (added to the base price), image?}]}]
+ * Up to 4 groups × 20 values. Empty names/labels are dropped.
+ */
+function product_options_clean($v): array {
+    $out = [];
+    foreach (array_slice(is_array($v) ? $v : [], 0, 4) as $g) {
+        $name = str($g['name'] ?? '', 40);
+        if ($name === '') continue;
+        $type = ($g['type'] ?? '') === 'color' ? 'color' : 'choice';
+        $vals = []; $seen = [];
+        foreach (array_slice((array)($g['values'] ?? []), 0, 20) as $x) {
+            $label = str($x['label'] ?? '', 60);
+            if ($label === '' || isset($seen[$label])) continue;
+            $seen[$label] = 1;
+            $val = ['label' => $label, 'price' => round(num($x['price'] ?? 0), 2)];
+            $hex = (string)($x['hex'] ?? '');
+            if ($type === 'color' && preg_match('/^#[0-9a-fA-F]{6}$/', $hex)) $val['hex'] = strtolower($hex);
+            $img = str($x['image'] ?? '', 500);
+            if ($img !== '') $val['image'] = $img;
+            $vals[] = $val;
+        }
+        if ($vals) $out[] = ['name' => $name, 'type' => $type, 'values' => $vals];
+    }
+    return $out;
+}
+
+/** Checks the customer's picks against the product's options → [extra price, "اللون: أحمر، السعة: 2 لتر", image or ''] */
+function product_options_pick(array $p, $sel): array {
+    $groups = json_decode((string)($p['options'] ?? '[]'), true) ?: [];
+    if (!$groups) return [0.0, '', ''];
+    $sel = is_array($sel) ? $sel : [];
+    $add = 0.0; $parts = []; $img = '';
+    foreach ($groups as $g) {
+        $want = (string)($sel[$g['name']] ?? '');
+        $hit = null;
+        foreach ($g['values'] as $v) if ($v['label'] === $want) { $hit = $v; break; }
+        if (!$hit) throw new ApiError("اختار {$g['name']} لـ «{$p['name']}»");
+        $add += (float)($hit['price'] ?? 0);
+        $parts[] = "{$g['name']}: {$hit['label']}";
+        if ($img === '' && !empty($hit['image'])) $img = $hit['image'];
+    }
+    return [$add, implode('، ', $parts), $img];
+}
+
 function save_product(array $b): array {
     $name = str($b['name'] ?? '', 200);
     if ($name === '') throw new ApiError('اكتب اسم المنتج');
@@ -917,6 +969,13 @@ function save_product(array $b): array {
     $slug = array_key_exists('slug', $b) ? trim((string)preg_replace('/[^a-z0-9]+/', '-', strtolower(str((string)$b['slug'], 80))), '-') : (string)(act_row('SELECT slug FROM products WHERE id = ?', [$id])['slug'] ?? '');
     if ($slug === '') $slug = random_product_code();
     db()->prepare('UPDATE products SET slug = ? WHERE id = ?')->execute([$slug, $id]);
+    if (array_key_exists('options', $b)) {
+        $opts = product_options_clean($b['options']);
+        foreach ($opts as $g) foreach ($g['values'] as $v) {
+            if ($price + $v['price'] <= 0) throw new ApiError("سعر «{$g['name']}: {$v['label']}» بيخلي المنتج بسعر صفر أو أقل");
+        }
+        db()->prepare('UPDATE products SET options = ? WHERE id = ?')->execute([json_encode($opts, JSON_UNESCAPED_UNICODE), $id]);
+    }
     if (array_key_exists('modelNo', $b)) {
         db()->prepare('UPDATE products SET model_no = ? WHERE id = ?')->execute([code_part((string)$b['modelNo'], 20), $id]);
     }
@@ -1013,12 +1072,19 @@ function create_order(array $b): array {
     try {
         $sub = 0; $cost = 0; $lines = [];
         $get = $db->prepare('SELECT * FROM products WHERE id = ? AND active = 1');
+        $want = [];   // total pieces per product (two colors of one product share its stock)
         foreach ($items as $it) {
             $qty = max(1, min(99, (int)($it['quantity'] ?? 1)));
             $get->execute([(int)($it['productId'] ?? 0)]);
             $p = $get->fetch();
             if (!$p) throw new ApiError('في منتج في السلة مبقاش متاح، حدّث الصفحة');
-            if ((int)$p['stock'] < $qty) throw new ApiError("الكمية المتاحة من «{$p['name']}» هي {$p['stock']} بس");
+            $want[$p['id']] = ($want[$p['id']] ?? 0) + $qty;
+            if ((int)$p['stock'] < $want[$p['id']]) throw new ApiError("الكمية المتاحة من «{$p['name']}» هي {$p['stock']} بس");
+            [$add, $picked, $img] = product_options_pick($p, $it['options'] ?? []);
+            $p['price'] = (float)$p['price'] + $add;
+            if ($picked !== '') $p['name'] .= ' — ' . $picked;
+            if ($img !== '') $p['image'] = $img;
+            $p['stock_left'] = (int)$p['stock'] - $want[$p['id']];
             $sub += $p['price'] * $qty;
             $cost += $p['cost'] * $qty;
             $lines[] = [$p, $qty];
@@ -1055,7 +1121,7 @@ function create_order(array $b): array {
         foreach ($lines as [$p, $qty]) {
             $ins->execute([$oid, $p['id'], $p['name'], $p['image'], $p['price'], $p['cost'], $qty]);
             $dec->execute([$qty, $p['id']]);
-            stock_move((int)$p['id'], $p['name'], -$qty, (int)$p['stock'] - $qty, 'web_order', '', $code, 'عميل الموقع');
+            stock_move((int)$p['id'], $p['name'], -$qty, $p['stock_left'], 'web_order', '', $code, 'عميل الموقع');
         }
         $db->commit();
     } catch (Throwable $e) {
@@ -2433,30 +2499,114 @@ function render_product_html(int $id): void {
     header('Cache-Control: no-cache');
     if (!$p || $html === '') { http_response_code($p ? 200 : 404); echo $html; return; }
     $store = get_setting('store_name', 'HOMEX') ?: 'HOMEX';
+    $base = site_base();
     $h = fn($v) => htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
     $url = product_url($p);
-    $img = abs_url((string)$p['image']);
-    $desc = trim(preg_replace('/\s+/u', ' ', (string)$p['description']));
-    $desc = mb_substr($desc !== '' ? $desc : $p['name'] . ' من ' . $store . ' بضمان حقيقي وشحن لكل محافظات مصر', 0, 160);
-    $title = $p['name'] . ' بسعر ' . number_format((float)$p['price']) . ' ج.م | ' . $store;
+    $code = (string)($p['sku'] ?? '');
+    $brand = $p['brand'] ?: $store;
+    $price = (float)$p['price'];
+    $inStock = (int)$p['stock'] > 0;
+    $gallery = array_values(array_unique(array_filter(array_map('abs_url', array_merge([(string)$p['image']], json_decode((string)$p['gallery'], true) ?: [])))));
+    $img = $gallery[0] ?? $base . '/og.png';
+    $specs = json_decode((string)$p['specs'], true) ?: [];
+    $features = json_decode((string)$p['features'], true) ?: [];
+    $options = json_decode((string)($p['options'] ?? '[]'), true) ?: [];
+    $cat = $p['category_id'] ? act_row('SELECT id, name FROM categories WHERE id = ?', [$p['category_id']]) : null;
+    // price range when options change the price
+    $lo = $hi = $price;
+    foreach ($options as $g) {
+        $adds = array_map(fn($v) => (float)($v['price'] ?? 0), $g['values']);
+        if ($adds) { $lo += min($adds); $hi += max($adds); }
+    }
+
+    $descText = trim(preg_replace('/\s+/u', ' ', (string)$p['description']));
+    $metaDesc = $p['name'] . ($code !== '' ? " موديل {$code}" : '') . ' بسعر ' . number_format($price) . ' ج.م من ' . $store . '. ' . ($descText !== '' ? $descText . ' ' : '') . 'شحن لكل محافظات مصر والدفع عند الاستلام.';
+    $metaDesc = mb_substr($metaDesc, 0, 160);
+    $title = $p['name'] . ($code !== '' ? " ({$code})" : '') . ' بسعر ' . number_format($price) . ' ج.م | ' . $store;
     $reviews = act_row("SELECT COUNT(*) n, AVG(rating) a FROM reviews WHERE product_id = ? AND status = 'approved'", [$id]) ?: ['n' => 0, 'a' => null];
-    $ld = [
-        '@context' => 'https://schema.org', '@type' => 'Product', 'name' => $p['name'], 'image' => [$img], 'description' => $desc,
-        'sku' => ($p['sku'] ?? '') ?: 'HX' . $p['id'], 'brand' => ['@type' => 'Brand', 'name' => $p['brand'] ?: $store],
-        'offers' => ['@type' => 'Offer', 'url' => $url, 'priceCurrency' => 'EGP', 'price' => (string)(float)$p['price'],
-            'availability' => (int)$p['stock'] > 0 ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock', 'itemCondition' => 'https://schema.org/NewCondition'],
-    ];
+
+    $offer = ['@type' => 'Offer', 'url' => $url, 'priceCurrency' => 'EGP', 'price' => (string)$price,
+        'availability' => $inStock ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
+        'itemCondition' => 'https://schema.org/NewCondition', 'seller' => ['@type' => 'Organization', 'name' => $store, 'url' => $base . '/'],
+        'areaServed' => ['@type' => 'Country', 'name' => 'Egypt']];
+    if ($hi > $lo) $offer = ['@type' => 'AggregateOffer', 'url' => $url, 'priceCurrency' => 'EGP', 'lowPrice' => (string)$lo, 'highPrice' => (string)$hi,
+        'offerCount' => array_product(array_map(fn($g) => count($g['values']), $options)), 'availability' => $offer['availability'], 'seller' => $offer['seller']];
+    $ld = ['@context' => 'https://schema.org', '@type' => 'Product', '@id' => $url . '#product', 'name' => $p['name'], 'url' => $url, 'image' => $gallery ?: [$img],
+        'description' => $descText !== '' ? $descText : $p['name'], 'brand' => ['@type' => 'Brand', 'name' => $brand], 'offers' => $offer,
+        'sku' => $code !== '' ? $code : 'HX' . $p['id']];
+    if ($code !== '') { $ld['mpn'] = $code; $ld['model'] = $code; }
+    if ($cat) $ld['category'] = $cat['name'];
+    $props = [];
+    foreach ($specs as $sp) $props[] = ['@type' => 'PropertyValue', 'name' => $sp['label'], 'value' => $sp['value']];
+    foreach ($options as $g) $props[] = ['@type' => 'PropertyValue', 'name' => $g['name'], 'value' => implode('، ', array_column($g['values'], 'label'))];
+    if ($props) $ld['additionalProperty'] = $props;
     if ((int)$reviews['n'] > 0) $ld['aggregateRating'] = ['@type' => 'AggregateRating', 'ratingValue' => round((float)$reviews['a'], 1), 'reviewCount' => (int)$reviews['n']];
+    $crumbs = [['الرئيسية', $base . '/']];
+    if ($cat) $crumbs[] = [$cat['name'], $base . '/?c=' . rawurlencode((string)$cat['id'])];
+    $crumbs[] = [$p['name'], $url];
+    $bc = ['@context' => 'https://schema.org', '@type' => 'BreadcrumbList', 'itemListElement' => array_map(fn($c, $i) => ['@type' => 'ListItem', 'position' => $i + 1, 'name' => $c[0], 'item' => $c[1]], $crumbs, array_keys($crumbs))];
+    $j = fn($x) => str_replace('</', '<\/', json_encode($x, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+
     $meta = '<title>' . $h($title) . '</title>'
-        . '<meta name="description" content="' . $h($desc) . '" />'
+        . '<meta name="description" content="' . $h($metaDesc) . '" />'
         . '<meta property="og:type" content="product" /><meta property="og:title" content="' . $h($p['name']) . '" />'
-        . '<meta property="og:description" content="' . $h($desc) . '" /><meta property="og:url" content="' . $h($url) . '" />'
-        . '<meta property="og:image" content="' . $h($img) . '" /><meta property="product:price:amount" content="' . (float)$p['price'] . '" />'
-        . '<meta property="product:price:currency" content="EGP" /><link rel="canonical" href="' . $h($url) . '" />'
-        . '<script type="application/ld+json">' . json_encode($ld, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . '</script>';
-    // drop the generic tags of the home page, then add the product's
+        . '<meta property="og:description" content="' . $h($metaDesc) . '" /><meta property="og:url" content="' . $h($url) . '" />'
+        . '<meta property="og:image" content="' . $h($img) . '" /><meta property="product:price:amount" content="' . $price . '" />'
+        . '<meta property="product:price:currency" content="EGP" /><meta property="product:availability" content="' . ($inStock ? 'in stock' : 'out of stock') . '" />'
+        . '<meta property="product:brand" content="' . $h($brand) . '" />' . ($code !== '' ? '<meta property="product:retailer_item_id" content="' . $h($code) . '" />' : '')
+        . '<link rel="canonical" href="' . $h($url) . '" />'
+        . '<script type="application/ld+json">' . $j($ld) . '</script>'
+        . '<script type="application/ld+json">' . $j($bc) . '</script>';
+
+    // The same facts as plain HTML inside #root, for search engines and AI assistants that don't run JavaScript.
+    // The app replaces it as soon as it starts.
+    $rows = [['الماركة', $brand]];
+    if ($code !== '') $rows[] = ['الموديل', $code];
+    if ($cat) $rows[] = ['القسم', $cat['name']];
+    $rows[] = ['السعر', number_format($price) . ' ج.م' . ($hi > $lo ? ' إلى ' . number_format($hi) . ' ج.م حسب الاختيار' : '')];
+    $rows[] = ['التوفر', $inStock ? 'متوفر' : 'غير متوفر حالياً'];
+    if ($p['warranty'] !== '') $rows[] = ['الضمان', $p['warranty']];
+    if ($p['capacity'] !== '' ) $rows[] = ['السعة / المقاس', $p['capacity']];
+    if ($p['wattage'] !== '') $rows[] = ['القدرة', $p['wattage']];
+    foreach ($specs as $sp) if (!in_array($sp['label'], array_column($rows, 0), true)) $rows[] = [$sp['label'], $sp['value']];
+    foreach ($options as $g) $rows[] = [$g['name'], implode('، ', array_column($g['values'], 'label'))];
+    $body = '<main dir="rtl" style="max-width:960px;margin:0 auto;padding:16px;font-family:Tajawal,system-ui,sans-serif">'
+        . '<nav aria-label="مسار الصفحة">' . implode(' / ', array_map(fn($c) => '<a href="' . $h($c[1]) . '">' . $h($c[0]) . '</a>', $crumbs)) . '</nav>'
+        . '<article><h1>' . $h($p['name']) . '</h1>'
+        . '<img src="' . $h($img) . '" alt="' . $h($p['name']) . '" width="500" height="500" style="max-width:100%;height:auto" />'
+        . '<p>' . $h($p['name']) . ($code !== '' ? ' موديل ' . $h($code) : '') . ' من ' . $h($brand) . ' متاح على ' . $h($store) . ' بسعر ' . number_format($price) . ' جنيه مصري، مع شحن لكل محافظات مصر.</p>'
+        . ($descText !== '' ? '<h2>عن المنتج</h2><p>' . nl2br($h((string)$p['description'])) . '</p>' : '')
+        . ($features ? '<h2>المميزات</h2><ul>' . implode('', array_map(fn($f) => '<li>' . $h($f) . '</li>', $features)) . '</ul>' : '')
+        . '<h2>المواصفات</h2><table><tbody>' . implode('', array_map(fn($r) => '<tr><th scope="row">' . $h($r[0]) . '</th><td>' . $h($r[1]) . '</td></tr>', $rows)) . '</tbody></table>'
+        . '</article></main>';
+
     $html = preg_replace('~<title>.*?</title>|<meta (name="description"|property="og:(title|description|type|url|image(:width|:height)?)")[^>]*>|<link rel="canonical"[^>]*>~su', '', $html);
-    echo str_replace('</head>', $meta . "\n</head>", $html);
+    $html = str_replace('</head>', $meta . "\n</head>", $html);
+    $html = preg_replace('~<div id="root">\s*</div>~', '<div id="root">' . str_replace(['\\', '$'], ['\\\\', '\\$'], $body) . '</div>', $html, 1);
+    echo $html;
+}
+
+/** /llms.txt — a plain summary of the store and every product with price and link, for AI assistants. */
+function llms_txt(): void {
+    header('Content-Type: text/plain; charset=utf-8');
+    header('Cache-Control: public, max-age=3600');
+    $store = get_setting('store_name', 'HOMEX') ?: 'HOMEX';
+    $b = site_base();
+    $cats = db()->query('SELECT id, name FROM categories ORDER BY sort, name')->fetchAll(PDO::FETCH_KEY_PAIR);
+    $out = "# {$store} (هوم إكس)\n\n> متجر أونلاين مصري للأجهزة المنزلية بماركة {$store}: شاشات، خلاطات ومحضرات طعام، كبة ومفارم، مكاوي، كاتيل وأجهزة مطبخ. شحن لكل محافظات مصر والدفع عند الاستلام أو أونلاين. الأسعار بالجنيه المصري.\n\n";
+    $out .= "- الموقع: {$b}/\n- سياسة الشحن: {$b}/p/shipping\n- الاسترجاع والاستبدال: {$b}/p/returns\n\n## المنتجات\n\n";
+    $by = [];
+    foreach (db()->query('SELECT * FROM products WHERE active = 1 ORDER BY category_id, price DESC')->fetchAll() as $p) $by[$cats[$p['category_id']] ?? 'منتجات تانية'][] = $p;
+    foreach ($by as $cname => $list) {
+        $out .= "### {$cname}\n\n";
+        foreach ($list as $p) {
+            $code = ($p['sku'] ?? '') !== '' ? " — موديل {$p['sku']}" : '';
+            $stock = (int)$p['stock'] > 0 ? 'متوفر' : 'غير متوفر حالياً';
+            $out .= "- [{$p['name']}](" . product_url($p) . "){$code}: " . number_format((float)$p['price']) . " ج.م، {$stock}\n";
+        }
+        $out .= "\n";
+    }
+    echo $out;
 }
 
 /** /p/slug → index.html with that page's own title, description and canonical (not the home page's). */

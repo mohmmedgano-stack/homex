@@ -119,7 +119,7 @@ export const CartDrawer: React.FC = () => {
             ) : (
               cart.map((item) => (
                 <div 
-                  key={item.product.id}
+                  key={item.key || item.product.id}
                   className="flex gap-3 p-3 rounded-2xl border border-slate-200/80 hover:border-slate-300 bg-white shadow-xs"
                 >
                   <img
@@ -136,7 +136,7 @@ export const CartDrawer: React.FC = () => {
                           {item.product.name}
                         </h4>
                         <button
-                          onClick={() => removeFromCart(item.product.id)}
+                          onClick={() => removeFromCart(item.key || item.product.id)}
                           className="text-slate-400 hover:text-rose-500 p-1"
                           title="حذف"
                         >
@@ -159,7 +159,7 @@ export const CartDrawer: React.FC = () => {
                       {/* Quantity Stepper */}
                       <div className="flex items-center border border-slate-200 rounded-lg bg-slate-50 p-0.5">
                         <button
-                          onClick={() => updateCartQuantity(item.product.id, item.quantity - 1)}
+                          onClick={() => updateCartQuantity(item.key || item.product.id, item.quantity - 1)}
                           className="w-6 h-6 rounded-md flex items-center justify-center hover:bg-white text-slate-700"
                         >
                           <Minus className="w-3 h-3" />
@@ -168,7 +168,7 @@ export const CartDrawer: React.FC = () => {
                           {item.quantity}
                         </span>
                         <button
-                          onClick={() => updateCartQuantity(item.product.id, item.quantity + 1)}
+                          onClick={() => updateCartQuantity(item.key || item.product.id, item.quantity + 1)}
                           className="w-6 h-6 rounded-md flex items-center justify-center hover:bg-white text-slate-700"
                           disabled={item.quantity >= item.product.stock}
                         >

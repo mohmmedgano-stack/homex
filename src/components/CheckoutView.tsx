@@ -401,7 +401,7 @@ export const CheckoutView: React.FC = () => {
             {/* Cart Items list */}
             <div className="divide-y divide-slate-100 max-h-80 overflow-y-auto space-y-2">
               {cart.map((item) => (
-                <div key={item.product.id} className="pt-2 flex items-center gap-3 text-xs">
+                <div key={item.key || item.product.id} className="pt-2 flex items-center gap-3 text-xs">
                   <img
                     src={item.product.image}
                     alt={item.product.name}

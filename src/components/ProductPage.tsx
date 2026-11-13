@@ -29,20 +29,31 @@ export const ProductPage: React.FC<{ product: Product; onBack: () => void }> = (
   const [quantity, setQuantity] = useState(1);
   const [active, setActive] = useState(0);
   const [reviews, setReviews] = useState<{ items: Review[]; avg: number; count: number } | null>(null);
+  const groups = product.options || [];
+  const firstPick = () => Object.fromEntries(groups.map((g) => [g.name, g.values[0]?.label || '']));
+  const [picked, setPicked] = useState<Record<string, string>>(firstPick);
 
   useEffect(() => {
     setQuantity(1);
     setActive(0);
+    setPicked(firstPick());
     window.scrollTo({ top: 0 });
     document.title = `${product.name} | HOMEX`;
     setReviews(null);
     api.get('reviews', { product: product.id }).then(setReviews).catch(() => setReviews({ items: [], avg: 0, count: 0 }));
   }, [product.id]);
 
-  const images = product.gallery && product.gallery.length ? product.gallery : [product.image];
-  const hasDiscount = !!product.originalPrice && product.originalPrice > product.price;
-  const pct = hasDiscount ? Math.round(((product.originalPrice! - product.price) / product.originalPrice!) * 100) : 0;
-  const saved = hasDiscount ? product.originalPrice! - product.price : 0;
+  // price and photo follow the picked options
+  const pickedVals = groups.map((g) => g.values.find((v) => v.label === picked[g.name])).filter(Boolean) as NonNullable<Product['options']>[number]['values'];
+  const extra = pickedVals.reduce((a, v) => a + (v.price || 0), 0);
+  const price = product.price + extra;
+  const before = product.originalPrice ? product.originalPrice + extra : undefined;
+  const pickedImage = pickedVals.find((v) => v.image)?.image;
+  const baseImages = product.gallery && product.gallery.length ? product.gallery : [product.image];
+  const images = pickedImage ? [pickedImage, ...baseImages.filter((i) => i !== pickedImage)] : baseImages;
+  const hasDiscount = !!before && before > price;
+  const pct = hasDiscount ? Math.round(((before! - price) / before!) * 100) : 0;
+  const saved = hasDiscount ? before! - price : 0;
   const isOut = product.stock <= 0;
   const isWished = isWishlisted(product.id);
   const inCompare = isInCompare(product.id);
@@ -50,9 +61,9 @@ export const ProductPage: React.FC<{ product: Product; onBack: () => void }> = (
   const related = products.filter((p) => p.id !== product.id && p.category === product.category && p.stock > 0).slice(0, 8);
   const more = related.length < 4 ? products.filter((p) => p.id !== product.id && p.category !== product.category && p.stock > 0).slice(0, 8 - related.length) : [];
 
-  const add = () => addToCart(product, quantity);
+  const add = () => addToCart(product, quantity, groups.length ? picked : undefined);
   const buyNow = () => {
-    addToCart(product, quantity);
+    addToCart(product, quantity, groups.length ? picked : undefined);
     setCurrentView('checkout');
   };
   const share = async () => {
@@ -121,15 +132,41 @@ export const ProductPage: React.FC<{ product: Product; onBack: () => void }> = (
 
           <div className="flex items-baseline flex-wrap gap-x-3 gap-y-1">
             <span className={`price text-3xl sm:text-4xl font-black ${hasDiscount ? 'text-sale' : 'text-ink'}`}>
-              {product.price.toLocaleString('en-US')} <span className="text-lg">ج.م</span>
+              {price.toLocaleString('en-US')} <span className="text-lg">ج.م</span>
             </span>
             {hasDiscount && (
               <>
-                <span className="price text-base text-steel line-through">{product.originalPrice!.toLocaleString('en-US')} ج.م</span>
+                <span className="price text-base text-steel line-through">{before!.toLocaleString('en-US')} ج.م</span>
                 <span className="price text-sm font-bold text-save bg-save/10 px-2 py-0.5 rounded">وفّر {saved.toLocaleString('en-US')} ج.م</span>
               </>
             )}
           </div>
+
+          {groups.map((g) => (
+            <fieldset key={g.name} className="space-y-2">
+              <legend className="text-sm font-extrabold text-ink mb-2">
+                {g.name}: <span className="font-bold text-steel">{picked[g.name]}</span>
+              </legend>
+              <div className="flex flex-wrap gap-2">
+                {g.values.map((v) => {
+                  const on = picked[g.name] === v.label;
+                  const delta = v.price ? ` ${v.price > 0 ? '+' : '−'}${Math.abs(v.price).toLocaleString('en-US')} ج.م` : '';
+                  const choose = () => { setPicked((x) => ({ ...x, [g.name]: v.label })); if (v.image) setActive(0); };
+                  return g.type === 'color' ? (
+                    <button key={v.label} type="button" onClick={choose} aria-pressed={on} title={v.label + delta} aria-label={v.label + delta}
+                      className={`w-11 h-11 rounded-full p-1 border-2 transition ${on ? 'border-gold' : 'border-line hover:border-steel'}`}>
+                      <span className="block w-full h-full rounded-full border border-black/10" style={{ background: v.hex || '#d9dde3' }} />
+                    </button>
+                  ) : (
+                    <button key={v.label} type="button" onClick={choose} aria-pressed={on}
+                      className={`min-h-11 px-4 rounded-xl border-2 text-sm font-bold transition ${on ? 'border-gold bg-gold/10 text-ink' : 'border-line text-ink hover:border-steel'}`}>
+                      {v.label}{delta && <span className="price text-xs text-steel">{delta}</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            </fieldset>
+          ))}
 
           {!isOut && product.stock <= 5 && <p className="text-sm font-bold text-sale">باقي {product.stock} قطع بس في المخزن</p>}
 
@@ -164,6 +201,22 @@ export const ProductPage: React.FC<{ product: Product; onBack: () => void }> = (
             <li className="flex items-center gap-2"><Truck className="w-4 h-4 text-gold-deep shrink-0" /> شحن لكل محافظات مصر</li>
             <li className="flex items-center gap-2"><RotateCcw className="w-4 h-4 text-steel shrink-0" /><a href="/p/returns" className="underline underline-offset-2">سياسة الاسترجاع والاستبدال</a></li>
           </ul>
+
+          <section aria-labelledby="facts">
+            <h2 id="facts" className="text-base font-extrabold text-ink mb-2">معلومات سريعة</h2>
+            <dl className="grid grid-cols-2 gap-2 text-sm">
+              {[
+                ['الماركة', product.brand || 'HOMEX'],
+                ['الموديل', product.code || ''],
+                ['القسم', cat?.name || ''],
+                ['الضمان', product.warranty ? product.warranty.replace(/^ضمان\s*/, '') : ''],
+                ['السعة / المقاس', product.capacity || ''],
+                ['القدرة', product.wattage || ''],
+              ].filter(([, v]) => v).map(([k, v]) => (
+                <div key={k} className="rounded-lg bg-shelf px-3 py-2"><dt className="text-xs text-steel">{k}</dt><dd className="font-bold text-ink break-words" dir="auto">{v}</dd></div>
+              ))}
+            </dl>
+          </section>
 
           {product.description && (
             <section>

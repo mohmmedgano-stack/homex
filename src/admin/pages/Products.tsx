@@ -6,6 +6,7 @@ import { Plus, Search, ImagePlus, Trash2, Star, X, Pencil, ChevronUp, ChevronDow
 const blank = {
   id: '', name: '', category: '', brand: '', price: '', originalPrice: '', cost: '', stock: '', sku: '', slug: '',
   image: '', gallery: [] as string[], description: '', features: [] as string[], specs: [] as { label: string; value: string }[],
+  options: [] as any[],
   warranty: '', wattage: '', capacity: '', isFeatured: false, isNewArrival: true, active: true, rating: '', reviewsCount: '',
 };
 
@@ -307,6 +308,7 @@ const ProductEditor: React.FC<{ initial: any; cats: any[]; onClose: () => void; 
           </div>
           <ListEditor label="المميزات" items={p.features} onChange={(v) => set('features', v)} placeholder="مثلاً: فصل أوتوماتيك عند الغليان" />
           <SpecsEditor specs={p.specs} onChange={(v) => set('specs', v)} />
+          <OptionsEditor groups={p.options || []} gallery={p.gallery || []} onChange={(v) => set('options', v)} />
         </section>
 
         {/* Visibility */}
@@ -339,6 +341,65 @@ const ListEditor: React.FC<{ label: string; items: string[]; onChange: (v: strin
             </li>
           ))}
         </ul>
+      )}
+    </div>
+  );
+};
+
+/** Choices the customer picks on the product page: colors (swatches), sizes, capacity… each value can add to the price and show its own photo */
+const OptionsEditor: React.FC<{ groups: any[]; gallery: string[]; onChange: (v: any[]) => void }> = ({ groups, gallery, onChange }) => {
+  const upd = (i: number, patch: any) => onChange(groups.map((g, j) => (j === i ? { ...g, ...patch } : g)));
+  const updVal = (i: number, k: number, patch: any) => upd(i, { values: groups[i].values.map((v: any, j: number) => (j === k ? { ...v, ...patch } : v)) });
+  const addGroup = (name: string, type: 'color' | 'choice') => {
+    if (groups.length >= 4 || groups.some((g) => g.name === name)) return;
+    onChange([...groups, { name, type, values: [{ label: '', price: 0, ...(type === 'color' ? { hex: '#1c1f24' } : {}) }] }]);
+  };
+  return (
+    <div className="rounded-xl border border-line p-3 sm:p-4">
+      <p className="text-sm font-bold text-ink">اختيارات المنتج (لون، مقاس، سعة…)</p>
+      <p className="text-xs text-steel mt-0.5 mb-3">العميل بيختار منها في صفحة المنتج. سيبها فاضية لو المنتج نوع واحد بس. الفرق في السعر بيتزود على سعر البيع (اكتب 0 لو نفس السعر).</p>
+      <div className="space-y-4">
+        {groups.map((g, i) => (
+          <div key={i} className="rounded-lg bg-shelf p-3 space-y-2">
+            <div className="flex gap-2 items-center">
+              <div className="flex-1 min-w-0"><Input value={g.name} onChange={(e) => upd(i, { name: e.target.value })} placeholder="اسم الاختيار: اللون / المقاس / السعة" aria-label="اسم الاختيار" /></div>
+              <div className="w-28 shrink-0">
+                <Select value={g.type} onChange={(e) => upd(i, { type: e.target.value })} aria-label="شكل الاختيار">
+                  <option value="color">ألوان</option>
+                  <option value="choice">أزرار</option>
+                </Select>
+              </div>
+              <button type="button" onClick={() => onChange(groups.filter((_, j) => j !== i))} className="w-10 h-10 shrink-0 text-steel hover:text-sale flex items-center justify-center" aria-label="شيل الاختيار"><Trash2 className="w-4 h-4" /></button>
+            </div>
+            {g.values.map((v: any, k: number) => (
+              <div key={k} className="flex flex-wrap sm:flex-nowrap gap-2 items-center">
+                {g.type === 'color' && (
+                  <input type="color" value={v.hex || '#1c1f24'} onChange={(e) => updVal(i, k, { hex: e.target.value })} className="w-11 h-11 rounded-lg border border-line bg-white p-1 shrink-0" aria-label="اللون" />
+                )}
+                <div className="flex-1 min-w-[8rem]"><Input value={v.label} onChange={(e) => updVal(i, k, { label: e.target.value })} placeholder={g.type === 'color' ? 'أحمر' : '1.5 لتر'} aria-label="الاسم" /></div>
+                <label className="w-28 shrink-0 relative">
+                  <Input type="number" inputMode="decimal" value={v.price ?? 0} onChange={(e) => updVal(i, k, { price: Number(e.target.value) || 0 })} aria-label="فرق السعر بالجنيه" title="فرق السعر (ج.م)" className="pl-10" />
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-steel pointer-events-none">+ج.م</span>
+                </label>
+                <div className="w-32 shrink-0">
+                  <Select value={v.image || ''} onChange={(e) => updVal(i, k, { image: e.target.value || undefined })} aria-label="صورة الاختيار">
+                    <option value="">بدون صورة</option>
+                    {gallery.map((img, n) => <option key={img} value={img}>صورة {n + 1}</option>)}
+                  </Select>
+                </div>
+                <button type="button" onClick={() => upd(i, { values: g.values.filter((_: any, j: number) => j !== k) })} className="w-10 h-10 shrink-0 text-steel hover:text-sale flex items-center justify-center" aria-label="شيل"><X className="w-4 h-4" /></button>
+              </div>
+            ))}
+            <button type="button" onClick={() => upd(i, { values: [...g.values, { label: '', price: 0, ...(g.type === 'color' ? { hex: '#ffffff' } : {}) }] })} className="text-sm font-bold text-gold-deep hover:underline">+ ضيف {g.type === 'color' ? 'لون' : 'اختيار'}</button>
+          </div>
+        ))}
+      </div>
+      {groups.length < 4 && (
+        <div className="flex flex-wrap gap-2 mt-3">
+          <Button variant="dark" type="button" onClick={() => addGroup('اللون', 'color')}>+ ألوان</Button>
+          <Button variant="dark" type="button" onClick={() => addGroup('المقاس', 'choice')}>+ مقاسات</Button>
+          <Button variant="dark" type="button" onClick={() => addGroup('السعة', 'choice')}>+ سعة / مساحة</Button>
+        </div>
       )}
     </div>
   );

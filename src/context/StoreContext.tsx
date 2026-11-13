@@ -71,7 +71,7 @@ interface StoreContextType {
 
   // Cart
   cart: CartItem[];
-  addToCart: (product: Product, quantity?: number) => void;
+  addToCart: (product: Product, quantity?: number, options?: Record<string, string>) => void;
   removeFromCart: (productId: string) => void;
   updateCartQuantity: (productId: string, quantity: number) => void;
   clearCart: () => void;
@@ -125,6 +125,9 @@ const STORAGE_KEYS = {
   PRICE_ALERTS: 'albayt_price_alerts_v2',
   IS_ADMIN_AUTH: 'albayt_admin_auth_v2',
 };
+
+const lineKey = (id: string, picked?: Record<string, string>) =>
+  picked && Object.keys(picked).length ? `${id}|${Object.keys(picked).sort().map((k) => `${k}=${picked[k]}`).join('|')}` : id;
 
 export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // Load initial products from localStorage or defaults
@@ -416,48 +419,74 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   // Cart Operations
-  const addToCart = (product: Product, quantity = 1) => {
+  const addToCart = (base: Product, quantity = 1, options?: Record<string, string>) => {
+    // a product with options is added as its own line per combination, priced and named for that pick
+    const groups = base.options || [];
+    if (groups.length && groups.some((g) => !options?.[g.name])) {
+      const miss = groups.find((g) => !options?.[g.name])!;
+      if (!options) {
+        // quick "add" from a card, wishlist or compare → open the product page to pick
+        setWishlistOpen(false); setCompareOpen(false); setCartOpen(false);
+        setSelectedProduct(base);
+      }
+      showToast(`اختار ${miss.name} الأول`, 'info');
+      return;
+    }
+    let product = base;
+    let picked: Record<string, string> | undefined;
+    if (groups.length) {
+      picked = {};
+      let add = 0; let img = '';
+      const parts: string[] = [];
+      for (const g of groups) {
+        const v = g.values.find((x) => x.label === options![g.name]);
+        if (!v) { showToast(`اختار ${g.name} الأول`, 'error'); return; }
+        picked[g.name] = v.label; add += v.price || 0; parts.push(`${g.name}: ${v.label}`);
+        if (!img && v.image) img = v.image;
+      }
+      product = { ...base, price: base.price + add, originalPrice: base.originalPrice ? base.originalPrice + add : base.originalPrice, name: `${base.name} — ${parts.join('، ')}`, image: img || base.image };
+    }
+    const key = lineKey(base.id, picked);
     trackAddToCart({ id: String(product.id), name: product.name, price: product.price, quantity });
     setCart(prev => {
-      const existing = prev.find(item => item.product.id === product.id);
+      const existing = prev.find(item => (item.key || item.product.id) === key);
+      const sameProduct = prev.filter(item => item.product.id === base.id).reduce((a, i) => a + i.quantity, 0);
+      if (sameProduct + quantity > base.stock) {
+        showToast(`عفواً، الكمية المتوفرة بالمخزن فقط ${base.stock} قطع`, 'error');
+        return prev;
+      }
       if (existing) {
         const newQty = existing.quantity + quantity;
-        if (newQty > product.stock) {
-          showToast(`عفواً، الكمية المتوفرة بالمخزن فقط ${product.stock} قطع`, 'error');
-          return prev;
-        }
         showToast(`تمت زيادة الكمية في سلة المشتريات (${newQty})`, 'success');
-        return prev.map(item =>
-          item.product.id === product.id ? { ...item, quantity: newQty } : item
-        );
-      } else {
-        if (product.stock < 1) {
-          showToast('عذراً، هذا المنتج غير متوفر في المخزون حالياً', 'error');
-          return prev;
-        }
-        showToast(`تمت إضافة "${product.name.slice(0, 28)}..." إلى السلة`, 'success');
-        return [...prev, { product, quantity: Math.min(quantity, product.stock) }];
+        return prev.map(item => (item.key || item.product.id) === key ? { ...item, quantity: newQty } : item);
       }
+      if (base.stock < 1) {
+        showToast('عذراً، هذا المنتج غير متوفر في المخزون حالياً', 'error');
+        return prev;
+      }
+      showToast(`تمت إضافة "${product.name.slice(0, 28)}..." إلى السلة`, 'success');
+      return [...prev, { product, quantity: Math.min(quantity, base.stock), options: picked, key }];
     });
   };
 
-  const removeFromCart = (productId: string) => {
-    setCart(prev => prev.filter(item => item.product.id !== productId));
+  /** lineId: the cart line's key (product id + picked options); plain product id works for products without options */
+  const removeFromCart = (lineId: string) => {
+    setCart(prev => prev.filter(item => (item.key || item.product.id) !== lineId));
     showToast('تم حذف المنتج من السلة', 'info');
   };
 
-  const updateCartQuantity = (productId: string, quantity: number) => {
+  const updateCartQuantity = (lineId: string, quantity: number) => {
     if (quantity <= 0) {
-      removeFromCart(productId);
+      removeFromCart(lineId);
       return;
     }
-    setCart(prev => prev.map(item => {
-      if (item.product.id === productId) {
-        const targetQty = Math.min(quantity, item.product.stock);
-        return { ...item, quantity: targetQty };
-      }
-      return item;
-    }));
+    setCart(prev => {
+      const line = prev.find(item => (item.key || item.product.id) === lineId);
+      if (!line) return prev;
+      const others = prev.filter(item => item !== line && item.product.id === line.product.id).reduce((a, i) => a + i.quantity, 0);
+      const targetQty = Math.max(1, Math.min(quantity, line.product.stock - others));
+      return prev.map(item => item === line ? { ...item, quantity: targetQty } : item);
+    });
   };
 
   const clearCart = () => {
@@ -509,7 +538,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       cartToken: cartToken(),
       couponCode: (customer as any).couponCode || '',
       paymentMethod: customer.paymentMethod,
-      items: cart.map((i) => ({ productId: Number(i.product.id), quantity: i.quantity })),
+      items: cart.map((i) => ({ productId: Number(i.product.id), quantity: i.quantity, options: i.options || {} })),
     });
     if (res.payUrl) {
       // Card payment: keep the cart until the gateway confirms, then go pay
@@ -534,8 +563,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     trackPurchase(res.code, res.total, cart.map((i) => ({ id: String(i.product.id), name: i.product.name, price: i.product.price, quantity: i.quantity })));
     // reflect the new stock locally so the page stays accurate
     setProducts((prev) => prev.map((p) => {
-      const line = cart.find((c) => c.product.id === p.id);
-      return line ? { ...p, stock: Math.max(0, p.stock - line.quantity) } : p;
+      const n = cart.filter((c) => c.product.id === p.id).reduce((a, c) => a + c.quantity, 0);
+      return n ? { ...p, stock: Math.max(0, p.stock - n) } : p;
     }));
     setCart([]);
     return order;

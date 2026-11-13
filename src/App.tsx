@@ -105,6 +105,15 @@ const StoreContent: React.FC = () => {
     if (p) setSelectedProduct(p);
     else history.replaceState(null, '', '/');
   }, [catalogLoaded]);
+  // category link from a product page's breadcrumb (/?c=<id>)
+  useEffect(() => {
+    if (!catalogLoaded) return;
+    const c = new URLSearchParams(location.search).get('c');
+    if (!c || !categories.some((x) => String(x.id) === c)) return;
+    setSelectedCategory(c as any);
+    history.replaceState(null, '', '/');
+    setTimeout(() => document.getElementById('appliances-catalog-section')?.scrollIntoView({ behavior: 'smooth' }), 300);
+  }, [catalogLoaded]);
   // clicking a product inside the store → new history entry
   // (layout effect: must remember the scroll position before the product page scrolls to the top)
   React.useLayoutEffect(() => {
