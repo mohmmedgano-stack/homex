@@ -68,6 +68,47 @@ input, select, textarea { font-family: var(--font-sans); }
 }
 .btn-gold:hover { background: #e0680f; }
 
+/* ---- storefront motion (see src/lib/fx.ts) ---- */
+/* ShinyText: a light sweep passes over the text every few seconds */
+.shiny-text {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  overflow: hidden;
+  isolation: isolate;
+}
+.shiny-text::after {
+  content: "";
+  position: absolute;
+  inset: -20% auto -20% -60%;
+  width: 45%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.55), transparent);
+  transform: skewX(-18deg) translateX(-120%);
+  animation: shiny-sweep 3.6s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes shiny-sweep {
+  0%, 55% { transform: skewX(-18deg) translateX(-160%); }
+  100% { transform: skewX(-18deg) translateX(420%); }
+}
+
+/* SpotlightCard: orange glow that follows the mouse (desktop) */
+.spotlight::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.35s;
+  background: radial-gradient(260px circle at var(--mx, 50%) var(--my, 50%), rgba(244, 122, 32, 0.13), transparent 70%);
+}
+@media (hover: hover) and (pointer: fine) {
+  .spotlight:hover::before { opacity: 1; }
+  .lift { transition: transform 0.35s cubic-bezier(.2,.8,.2,1), box-shadow 0.35s, border-color 0.2s; }
+  .lift:hover { transform: translateY(-4px); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;

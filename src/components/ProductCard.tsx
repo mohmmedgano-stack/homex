@@ -4,6 +4,7 @@ import { productPath } from './ProductPage';
 import { Product } from '../types';
 import { useStore } from '../context/StoreContext';
 import { Heart, Star, ShoppingCart, Check, ArrowLeftRight } from 'lucide-react';
+import { useSpotlight } from './fx/Effects';
 
 interface ProductCardProps {
   product: Product;
@@ -22,10 +23,11 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, compact }) =>
   const pct = hasDiscount ? Math.round((saving / product.originalPrice!) * 100) : 0;
   const isOut = product.stock <= 0;
   const isLow = product.stock > 0 && product.stock <= 5;
+  const spot = useSpotlight<HTMLElement>();
   const brand = product.brand.replace(/\s*\(.*?\)\s*/g, '');
 
   return (
-    <article className="group relative bg-white rounded-xl border border-line hover:border-gold hover:shadow-lg transition flex flex-col overflow-hidden h-full">
+    <article ref={spot} data-reveal className="spotlight lift group relative bg-white rounded-xl border border-line hover:border-gold hover:shadow-lg flex flex-col overflow-hidden h-full">
       {/* Image */}
       <div className="relative aspect-square bg-white overflow-hidden">
         <a href={productPath(product as any)} onClick={(e) => { if (e.metaKey || e.ctrlKey) return; e.preventDefault(); setSelectedProduct(product); }} className="absolute inset-0" aria-label={`تفاصيل ${product.name}`}>

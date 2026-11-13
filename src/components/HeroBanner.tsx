@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useStore, HomeBanner } from '../context/StoreContext';
 import { thumb } from '../lib/api';
 import { ApplianceArt } from './ApplianceArt';
+import { SplitWords, Magnet, GlowBlobs } from './fx/Effects';
 import { ChevronLeft, ChevronRight, Truck, ShieldCheck, Banknote, RotateCcw, Wrench } from 'lucide-react';
 
 const SLIDE_THEMES = [
@@ -45,7 +46,7 @@ export const HeroBanner: React.FC = () => {
 
 
       {/* Service strip */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 bg-white rounded-2xl border border-line divide-line [&>*]:border-line">
+      <div data-reveal className="grid grid-cols-2 lg:grid-cols-4 bg-white rounded-2xl border border-line divide-line [&>*]:border-line">
         {[
           { Icon: Wrench, t: 'مراكز صيانة معتمدة', s: 'في محافظات مصر', c: 'text-save bg-save/10' },
           { Icon: Truck, t: 'توصيل لحد البيت', s: 'لكل المحافظات', c: 'text-ink bg-ink/5' },
@@ -71,10 +72,10 @@ export const HeroBanner: React.FC = () => {
 
       {/* Category tiles — "كل أساسيات بيتك" */}
       {tiles.length > 0 && (
-      <section>
+      <section data-reveal>
         <div className="flex items-end justify-between mb-3 sm:mb-4">
           <div>
-            <h2 className="text-xl sm:text-2xl font-extrabold text-ink">{settings.hero_title || 'كل أساسيات بيتك عندنا أسهل'}</h2>
+            <SplitWords as="h2" onScroll className="text-xl sm:text-2xl font-extrabold text-ink" text={settings.hero_title || 'كل أساسيات بيتك عندنا أسهل'} />
             {settings.hero_subtitle && <p className="text-sm text-steel mt-1">{settings.hero_subtitle}</p>}
           </div>
           <button onClick={() => scrollToCatalog()} className="text-sm font-bold text-gold-deep hover:underline shrink-0">
@@ -190,20 +191,24 @@ const Slider: React.FC<{ slides: Slide[] }> = ({ slides }) => {
 
 const BrandSlide: React.FC<{ settings: any; onShop: () => void }> = ({ settings, onShop }) => (
   <div className="absolute inset-0 bg-gradient-to-l from-[#131518] via-[#1c1f24] to-[#3a414c] text-white flex items-center">
-    <div className="absolute -left-24 -bottom-24 w-64 h-64 sm:w-80 sm:h-80 rounded-full bg-gold/20" aria-hidden="true" />
-    <div className="absolute left-16 sm:left-24 -top-16 w-32 h-32 sm:w-40 sm:h-40 rounded-full bg-gold/10" aria-hidden="true" />
+    <GlowBlobs />
     <ApplianceArt className="absolute left-1 sm:left-6 lg:left-12 bottom-8 sm:bottom-5 w-[44%] sm:w-[46%] lg:w-[42%] max-h-[78%] sm:max-h-[86%]" />
     <div className="relative px-4 min-[400px]:px-5 sm:px-12 space-y-2 min-[400px]:space-y-2.5 sm:space-y-5 w-[58%] sm:w-[54%] lg:max-w-2xl">
       <img src={settings.logo || '/logo.webp'} width={600} height={167} alt={settings.store_name} className="h-6 min-[400px]:h-7 sm:h-10 lg:h-12 w-auto" />
-      <h2 className="text-base min-[400px]:text-xl sm:text-3xl lg:text-4xl font-extrabold leading-snug">
-        {settings.brand_title || 'أجهزة بيتك بضمان حقيقي، وسعر يريحك'}
-      </h2>
+      <SplitWords
+        as="h2"
+        delay={0.15}
+        className="block text-base min-[400px]:text-xl sm:text-3xl lg:text-4xl font-extrabold leading-snug"
+        text={settings.brand_title || 'أجهزة بيتك بضمان حقيقي، وسعر يريحك'}
+      />
       <p className="text-[11px] min-[400px]:text-sm sm:text-base lg:text-lg text-white/80 leading-relaxed">
         {settings.brand_subtitle || 'شحن لكل محافظات مصر، وضمان ومراكز صيانة معتمدة'}
       </p>
-      <button onClick={onShop} className="btn-gold h-8 min-[400px]:h-9 sm:h-12 px-4 min-[400px]:px-5 sm:px-8 rounded-xl text-sm sm:text-base font-extrabold shadow-lg">
-        تسوق دلوقتي
-      </button>
+      <Magnet strength={0.35}>
+        <button onClick={onShop} className="btn-gold shiny-text justify-center h-8 min-[400px]:h-9 sm:h-12 px-4 min-[400px]:px-5 sm:px-8 rounded-xl text-sm sm:text-base font-extrabold shadow-lg shadow-gold/30">
+          تسوق دلوقتي
+        </button>
+      </Magnet>
     </div>
   </div>
 );
@@ -232,7 +237,7 @@ const ProductSlide: React.FC<{ p: any; theme: (typeof SLIDE_THEMES)[number]; onO
             </span>
             {hasDisc && <span className="price text-sm sm:text-base text-white/70 line-through">{p.originalPrice.toLocaleString('en-US')}</span>}
           </div>
-          <button onClick={onOpen} className={`${th.cta} h-9 min-[360px]:h-10 sm:h-12 px-4 min-[360px]:px-5 sm:px-8 rounded-xl text-sm sm:text-base font-extrabold shadow-lg`}>
+          <button onClick={onOpen} className={`${th.cta} shiny-text justify-center h-9 min-[360px]:h-10 sm:h-12 px-4 min-[360px]:px-5 sm:px-8 rounded-xl text-sm sm:text-base font-extrabold shadow-lg`}>
             اطلب دلوقتي
           </button>
         </div>

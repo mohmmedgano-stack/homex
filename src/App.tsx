@@ -17,6 +17,8 @@ import { CompareModal } from './components/CompareModal';
 import { CheckoutView } from './components/CheckoutView';
 import { MobileBottomNav } from './components/MobileBottomNav';
 import { ToastContainer } from './components/Toast';
+import { SplitWords, PageIn } from './components/fx/Effects';
+import { initStoreMotion, revealIn } from './lib/fx';
 import { ProductCategory } from './types';
 import { 
   SlidersHorizontal, 
@@ -251,23 +253,32 @@ const StoreContent: React.FC = () => {
     },
   ];
 
+  // GSAP + Lenis: smooth scroll once, then reveal new cards/sections whenever the page content changes
+  const pageRef = React.useRef<HTMLDivElement>(null);
+  useEffect(() => { initStoreMotion(); }, []);
+  const shownKey = sortedProducts.map((p) => p.id).join(',');
+  useEffect(() => {
+    const id = requestAnimationFrame(() => revealIn(pageRef.current));
+    return () => cancelAnimationFrame(id);
+  }, [shownKey, currentView, selectedProduct?.id, catalogLoaded]);
+
   const isFiltered = selectedCategory !== 'all' || selectedBrand !== 'all' || priceFilter !== 'all' || !!searchQuery;
 
   return (
-    <div className="min-h-screen flex flex-col bg-page text-ink pb-20 md:pb-0">
+    <div ref={pageRef} className="min-h-screen flex flex-col bg-page text-ink pb-20 md:pb-0">
       <Navbar />
 
       {reviewPage && currentView === 'store' ? (
-        <ReviewPage code={reviewPage.code} t={reviewPage.t} />
+        <PageIn className="flex-1 flex flex-col"><ReviewPage code={reviewPage.code} t={reviewPage.t} /></PageIn>
       ) : selectedProduct && currentView === 'store' ? (
-        <ProductPage product={selectedProduct} onBack={closeProduct} />
+        <PageIn key={selectedProduct.id} className="flex-1 flex flex-col"><ProductPage product={selectedProduct} onBack={closeProduct} /></PageIn>
       ) : orderPage && currentView === 'store' ? (
-        <OrderPage code={orderPage.code} t={orderPage.t} fresh={new URLSearchParams(location.search).get('pay') === 'success'} />
+        <PageIn className="flex-1 flex flex-col"><OrderPage code={orderPage.code} t={orderPage.t} fresh={new URLSearchParams(location.search).get('pay') === 'success'} /></PageIn>
       ) : policyPage && currentView === 'store' ? (
-        <PolicyPage pageKey={policyPage} />
+        <PageIn className="flex-1 flex flex-col"><PolicyPage pageKey={policyPage} /></PageIn>
       ) : currentView === 'checkout' ? (
         <main className="flex-1">
-          <CheckoutView />
+          <PageIn><CheckoutView /></PageIn>
         </main>
       ) : (
         <main className="flex-1 w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 space-y-8 sm:space-y-12">
@@ -278,9 +289,9 @@ const StoreContent: React.FC = () => {
 
               {rails.map((rail) =>
                 rail.items.length === 0 ? null : (
-                  <section key={rail.title}>
+                  <section key={rail.title} data-reveal>
                     <div className={`flex items-center justify-between rounded-t-xl px-4 h-12 ${rail.head}`}>
-                      <h2 className="text-base sm:text-xl font-extrabold">{rail.title}</h2>
+                      <SplitWords as="h2" onScroll className="text-base sm:text-xl font-extrabold" text={rail.title} />
                       {rail.extra}
                     </div>
                     <div className="bg-white border border-t-0 border-line rounded-b-xl p-2.5 sm:p-4">
@@ -300,8 +311,8 @@ const StoreContent: React.FC = () => {
 
               {/* Brands */}
               {brands.length > 0 && (
-              <section className="bg-white rounded-xl border border-line p-4 sm:p-6">
-                <h2 className="text-lg sm:text-xl font-extrabold text-ink mb-4">أشهر الماركات</h2>
+              <section data-reveal className="bg-white rounded-xl border border-line p-4 sm:p-6">
+                <SplitWords as="h2" onScroll className="block text-lg sm:text-xl font-extrabold text-ink mb-4" text="أشهر الماركات" />
                 <div className="flex gap-2.5 sm:gap-3 overflow-x-auto no-scrollbar">
                   {brands.map((b) => (
                     <button
@@ -405,7 +416,7 @@ const StoreContent: React.FC = () => {
 
       <footer className="bg-ink text-white/75 text-sm mt-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-14">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-8" data-reveal>
             <div className="col-span-2 md:col-span-1 space-y-4">
               <img src={settings.logo || '/logo.webp'} width={600} height={167} alt="HOMEX" className="h-10 w-auto" />
               <p className="leading-relaxed max-w-xs">كل أساسيات بيتك من أجهزة منزلية بضمان حقيقي، مع شحن لكل محافظات مصر.</p>
