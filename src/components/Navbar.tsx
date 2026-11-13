@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { LogoMotion } from './fx/LogoMotion';
 import { useStore } from '../context/StoreContext';
 import { closeProductPage } from '../lib/nav';
 import { ShoppingCart, Heart, ArrowLeftRight, Search, ShieldCheck, X, Menu, Phone, Truck, ChevronDown, LayoutGrid } from 'lucide-react';
@@ -134,7 +135,7 @@ export const Navbar: React.FC = () => {
             className="shrink-0"
             aria-label="HOMEX الرئيسية"
           >
-            <img src={logo} width={600} height={167} alt={settings.store_name} className="h-8 sm:h-11 w-auto" />
+            <LogoMotion src={logo} alt={settings.store_name} className="h-8 sm:h-11 w-auto" />
           </button>
 
           {searchBox('hidden md:flex flex-1 max-w-2xl mx-auto')}
