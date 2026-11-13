@@ -38,7 +38,7 @@ export const ProductPage: React.FC<{ product: Product; onBack: () => void }> = (
     setActive(0);
     setPicked(firstPick());
     window.scrollTo({ top: 0 });
-    document.title = `${product.name} | HOMEX`;
+    document.title = `${product.name}${product.code ? ` (${product.code})` : ""} بسعر ${product.price.toLocaleString("en-US")} ج.م | HOMEX`;
     setReviews(null);
     api.get('reviews', { product: product.id }).then(setReviews).catch(() => setReviews({ items: [], avg: 0, count: 0 }));
   }, [product.id]);
