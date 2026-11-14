@@ -40,20 +40,30 @@ const SETTINGS_TABS: { id: SettingsTab; label: string; short: string; Icon: Reac
   { id: 'station', label: 'محطة الباركود', short: 'الباركود', Icon: QrCode },
 ];
 
-const NAV: { id: Page; label: string; Icon: React.FC<any>; owner?: boolean }[] = [
-  { id: 'overview', label: 'الرئيسية', Icon: LayoutDashboard },
-  { id: 'orders', label: 'الطلبات', Icon: ShoppingBag },
-  { id: 'returns', label: 'الاسترجاع والاستبدال', Icon: RotateCcw },
-  { id: 'products', label: 'المنتجات والأقسام', Icon: Package },
-  { id: 'carts', label: 'السلات المتروكة', Icon: ShoppingCart },
-  { id: 'coupons', label: 'كوبونات الخصم', Icon: TicketPercent },
-  { id: 'reviews', label: 'التقييمات', Icon: Star },
-  { id: 'inventory', label: 'الكاشير والمخزن', Icon: ScanBarcode },
-  { id: 'banners', label: 'البانرات', Icon: Images },
-  { id: 'dealers', label: 'التجار المعتمدين', Icon: Store },
-  { id: 'accounting', label: 'الحسابات', Icon: Calculator },
-  { id: 'settings', label: 'إعدادات المتجر', Icon: Settings },
+// Sidebar, grouped by what you're doing
+const NAV_GROUPS: { title: string; items: { id: Page; label: string; Icon: React.FC<any> }[] }[] = [
+  { title: '', items: [{ id: 'overview', label: 'الرئيسية', Icon: LayoutDashboard }] },
+  { title: 'المبيعات', items: [
+    { id: 'orders', label: 'الطلبات', Icon: ShoppingBag },
+    { id: 'returns', label: 'الاسترجاع والاستبدال', Icon: RotateCcw },
+    { id: 'carts', label: 'السلات المتروكة', Icon: ShoppingCart },
+  ] },
+  { title: 'المنتجات والمخزن', items: [
+    { id: 'products', label: 'المنتجات والأقسام', Icon: Package },
+    { id: 'inventory', label: 'الكاشير والمخزن', Icon: ScanBarcode },
+  ] },
+  { title: 'التسويق', items: [
+    { id: 'banners', label: 'البانرات', Icon: Images },
+    { id: 'coupons', label: 'كوبونات الخصم', Icon: TicketPercent },
+    { id: 'reviews', label: 'التقييمات', Icon: Star },
+    { id: 'dealers', label: 'التجار المعتمدين', Icon: Store },
+  ] },
+  { title: 'الإدارة', items: [
+    { id: 'accounting', label: 'الحسابات', Icon: Calculator },
+    { id: 'settings', label: 'إعدادات المتجر', Icon: Settings },
+  ] },
 ];
+const NAV = NAV_GROUPS.flatMap((g) => g.items);
 
 export const AdminApp: React.FC = () => (
   <ToastProvider>
@@ -189,44 +199,48 @@ const Shell: React.FC<{ admin: Admin; onLogout: () => void }> = ({ admin, onLogo
     onLogout();
   };
 
+  const badge = (n: number, tone: string) => (
+    <span className={`mr-auto min-w-6 h-6 px-1.5 rounded-full ${tone} text-white text-xs font-black flex items-center justify-center price`}>{n}</span>
+  );
   const nav = (
-    <nav className="flex-1 py-3 space-y-1 px-3">
-      {NAV.map(({ id, label, Icon }) => (
-        <button
-          key={id}
-          onClick={() => setPage(id)}
-          className={`w-full h-11 px-3 rounded-lg flex items-center gap-3 text-sm font-bold transition-colors ${
-            page === id ? 'bg-gold text-white' : 'text-white/75 hover:bg-white/10 hover:text-white'
-          }`}
-          aria-current={page === id ? 'page' : undefined}
-        >
-          <Icon className="w-5 h-5" />
-          {label}
-          {id === 'orders' && alerts.pending > 0 && (
-            <span className="mr-auto min-w-6 h-6 px-1.5 rounded-full bg-sale text-white text-xs font-black flex items-center justify-center price">{alerts.pending}</span>
-          )}
-          {id === 'returns' && alerts.returns > 0 && (
-            <span className="mr-auto min-w-6 h-6 px-1.5 rounded-full bg-sale text-white text-xs font-black flex items-center justify-center price">{alerts.returns}</span>
-          )}
-          {id === 'carts' && alerts.carts > 0 && (
-            <span className="mr-auto min-w-6 h-6 px-1.5 rounded-full bg-gold text-white text-xs font-black flex items-center justify-center price">{alerts.carts}</span>
-          )}
-        </button>
+    <nav className="flex-1 overflow-y-auto py-3 px-3" aria-label="أقسام لوحة التحكم">
+      {NAV_GROUPS.map((g) => (
+        <div key={g.title || 'home'} className={g.title ? 'mt-2 pt-2 border-t border-white/10' : ''}>
+          {g.title && <p className="px-3 pb-1 text-[11px] font-bold text-white/40">{g.title}</p>}
+          <div className="space-y-0.5">
+            {g.items.map(({ id, label, Icon }) => (
+              <button
+                key={id}
+                onClick={() => setPage(id)}
+                className={`w-full h-9 px-3 rounded-lg flex items-center gap-3 text-sm font-bold transition-colors ${
+                  page === id ? 'bg-gold text-white' : 'text-white/75 hover:bg-white/10 hover:text-white'
+                }`}
+                aria-current={page === id ? 'page' : undefined}
+              >
+                <Icon className="w-5 h-5 shrink-0" />
+                <span className="truncate">{label}</span>
+                {id === 'orders' && alerts.pending > 0 && badge(alerts.pending, 'bg-sale')}
+                {id === 'returns' && alerts.returns > 0 && badge(alerts.returns, 'bg-sale')}
+                {id === 'carts' && alerts.carts > 0 && badge(alerts.carts, 'bg-gold')}
+              </button>
+            ))}
+          </div>
+        </div>
       ))}
     </nav>
   );
 
   const sidebarFooter = (
-    <div className="p-3 border-t border-white/10 space-y-1">
-      <a href="/" target="_blank" className="h-10 px-3 rounded-lg flex items-center gap-3 text-sm font-bold text-white/75 hover:bg-white/10 hover:text-white">
-        <ExternalLink className="w-4 h-4" /> فتح المتجر
-      </a>
-      <button onClick={logout} className="w-full h-10 px-3 rounded-lg flex items-center gap-3 text-sm font-bold text-white/75 hover:bg-white/10 hover:text-white">
-        <LogOut className="w-4 h-4" /> تسجيل خروج
-      </button>
-      <p className="px-3 pt-2 text-xs text-white/50">
+    <div className="p-3 border-t border-white/10 flex items-center gap-1">
+      <p className="flex-1 min-w-0 px-2 text-xs text-white/60 truncate">
         {admin.name} · {admin.role === 'owner' ? 'المالك' : 'موظف'}
       </p>
+      <a href="/" target="_blank" title="فتح المتجر" aria-label="فتح المتجر" className="w-10 h-10 rounded-lg flex items-center justify-center text-white/75 hover:bg-white/10 hover:text-white">
+        <ExternalLink className="w-4 h-4" />
+      </a>
+      <button onClick={logout} title="تسجيل خروج" aria-label="تسجيل خروج" className="w-10 h-10 rounded-lg flex items-center justify-center text-white/75 hover:bg-white/10 hover:text-white">
+        <LogOut className="w-4 h-4" />
+      </button>
     </div>
   );
 
