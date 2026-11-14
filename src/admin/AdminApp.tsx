@@ -7,8 +7,9 @@ import { Backups } from './pages/Backups';
 import { Carts } from './pages/Carts';
 import { Coupons } from './pages/Coupons';
 import { Reviews } from './pages/Reviews';
+import { Returns } from './pages/Returns';
 import { StationAccess } from './pages/StationAccess';
-import { LayoutDashboard, Package, ShoppingBag, Calculator, Settings, Users, LogOut, Menu, X, ExternalLink, Store, Images, FileText, Bell, BellOff, History, ScanBarcode, DatabaseBackup, ShoppingCart, TicketPercent, Star, QrCode } from 'lucide-react';
+import { LayoutDashboard, Package, ShoppingBag, Calculator, Settings, Users, LogOut, Menu, X, ExternalLink, Store, Images, FileText, Bell, BellOff, History, ScanBarcode, DatabaseBackup, ShoppingCart, TicketPercent, Star, QrCode, RotateCcw } from 'lucide-react';
 import { Overview } from './pages/Overview';
 import { Products } from './pages/Products';
 import { Orders } from './pages/Orders';
@@ -27,7 +28,7 @@ export interface Admin {
   role: 'owner' | 'staff';
 }
 
-type Page = 'overview' | 'products' | 'orders' | 'carts' | 'coupons' | 'reviews' | 'inventory' | 'banners' | 'pages' | 'dealers' | 'accounting' | 'settings' | 'team';
+type Page = 'overview' | 'products' | 'orders' | 'returns' | 'carts' | 'coupons' | 'reviews' | 'inventory' | 'banners' | 'pages' | 'dealers' | 'accounting' | 'settings' | 'team';
 
 type SettingsTab = 'general' | 'pages' | 'team' | 'activity' | 'backups' | 'station';
 const SETTINGS_TABS: { id: SettingsTab; label: string; short: string; Icon: React.FC<any> }[] = [
@@ -42,6 +43,7 @@ const SETTINGS_TABS: { id: SettingsTab; label: string; short: string; Icon: Reac
 const NAV: { id: Page; label: string; Icon: React.FC<any>; owner?: boolean }[] = [
   { id: 'overview', label: 'الرئيسية', Icon: LayoutDashboard },
   { id: 'orders', label: 'الطلبات', Icon: ShoppingBag },
+  { id: 'returns', label: 'الاسترجاع والاستبدال', Icon: RotateCcw },
   { id: 'products', label: 'المنتجات والأقسام', Icon: Package },
   { id: 'carts', label: 'السلات المتروكة', Icon: ShoppingCart },
   { id: 'coupons', label: 'كوبونات الخصم', Icon: TicketPercent },
@@ -203,6 +205,9 @@ const Shell: React.FC<{ admin: Admin; onLogout: () => void }> = ({ admin, onLogo
           {id === 'orders' && alerts.pending > 0 && (
             <span className="mr-auto min-w-6 h-6 px-1.5 rounded-full bg-sale text-white text-xs font-black flex items-center justify-center price">{alerts.pending}</span>
           )}
+          {id === 'returns' && alerts.returns > 0 && (
+            <span className="mr-auto min-w-6 h-6 px-1.5 rounded-full bg-sale text-white text-xs font-black flex items-center justify-center price">{alerts.returns}</span>
+          )}
           {id === 'carts' && alerts.carts > 0 && (
             <span className="mr-auto min-w-6 h-6 px-1.5 rounded-full bg-gold text-white text-xs font-black flex items-center justify-center price">{alerts.carts}</span>
           )}
@@ -271,6 +276,7 @@ const Shell: React.FC<{ admin: Admin; onLogout: () => void }> = ({ admin, onLogo
         {page === 'carts' && <Carts />}
         {page === 'coupons' && <Coupons isOwner={isOwner} />}
         {page === 'reviews' && <Reviews isOwner={isOwner} />}
+        {page === 'returns' && <Returns />}
         {page === 'inventory' && <Inventory />}
         {page === 'banners' && <Banners />}
         {page === 'dealers' && <Dealers />}

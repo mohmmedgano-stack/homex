@@ -1,5 +1,6 @@
 <?php
 declare(strict_types=1);
+require_once __DIR__ . '/returns.php';
 
 // Store timestamps in UTC (SQLite datetime('now')); show and group them in Egypt time.
 date_default_timezone_set('Africa/Cairo');
@@ -318,6 +319,7 @@ function migrate(PDO $db): void {
         $st = $db->prepare('INSERT INTO categories (id, name, sort) VALUES (?, ?, ?)');
         foreach ($seed as $i => [$id, $name]) $st->execute([$id, $name, $i]);
     }
+    returns_migrate($db);
     // one-time import of the 2026 price list (does nothing once done)
     require_once __DIR__ . '/seed_pricelist.php';
     seed_pricelist_2026($db);
@@ -1730,7 +1732,8 @@ function orders_pulse(): array {
     $count = (int)db()->query("SELECT COUNT(*) FROM orders WHERE $real")->fetchColumn();
     $pending = (int)db()->query("SELECT COUNT(*) FROM orders WHERE status = 'pending'")->fetchColumn();
     $carts = (int)db()->query("SELECT COUNT(*) FROM carts WHERE status = 'open' AND updated_at < datetime('now', '-30 minutes')")->fetchColumn();
-    return ['count' => $count, 'pending' => $pending, 'carts' => $carts, 'last' => $last ? ['id' => (int)$last['id'], 'code' => $last['code'], 'name' => $last['customer_name'], 'total' => (float)$last['total'], 'city' => $last['city']] : null];
+    $returns = (int)db()->query("SELECT COUNT(*) FROM return_requests WHERE status = 'pending'")->fetchColumn();
+    return ['count' => $count, 'pending' => $pending, 'carts' => $carts, 'returns' => $returns, 'last' => $last ? ['id' => (int)$last['id'], 'code' => $last['code'], 'name' => $last['customer_name'], 'total' => (float)$last['total'], 'city' => $last['city']] : null];
 }
 
 /** CSV (opens in Excel with Arabic) of orders, filtered like the orders page. */

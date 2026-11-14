@@ -162,6 +162,9 @@ export const OrderPage: React.FC<{ code: string; t: string; fresh?: boolean }> =
             {o.notes && <p className="text-sm text-steel mt-4 pt-4 border-t border-line">ملاحظاتك: {o.notes}</p>}
           </section>
 
+          {o.status === 'delivered' && (
+            <a href={`/p/returns?order=${encodeURIComponent(o.code)}`} className="block rounded-2xl border border-line bg-white p-4 text-center font-bold text-ink hover:border-gold">عايز ترجّع أو تستبدل منتج؟ قدّم طلبك من هنا</a>
+          )}
           {o.reviewUrl && (
             <a href={o.reviewUrl} className="block rounded-2xl border-2 border-gold bg-gold/5 p-4 text-center font-extrabold text-ink">⭐ قيّم المنتجات اللي اشتريتها</a>
           )}

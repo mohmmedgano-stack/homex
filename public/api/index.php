@@ -32,6 +32,8 @@ try {
         case 'POST coupon-check': ok(coupon_check(body())); break;
         case 'POST cart-save':  ok(cart_save(body())); break;
         case 'POST dealer-click': ok(dealer_click(body())); break;
+        case 'POST return-lookup': ok(returns_lookup(body())); break;
+        case 'POST return-request': ok(returns_submit()); break;
 
         /* ---------- auth ---------- */
         case 'GET me':         ok(me()); break;
@@ -77,6 +79,8 @@ try {
         case 'GET admin/carts':        need(); ok(carts_admin($_GET)); break;
         case 'POST admin/cart':        need(); ok(cart_update(body())); break;
         case 'GET admin/orders-pulse': need(); ok(orders_pulse()); break;
+        case 'GET admin/returns':      need(); ok(admin_returns($_GET)); break;
+        case 'POST admin/return':      need(); ok(admin_return_update(body())); break;
         case 'POST admin/wa-test':     need('owner'); ok(wa_test()); break;
         case 'POST admin/email-test':  need('owner'); ok(test_email(body())); break;
         case 'POST admin/capi-test':   need('owner'); ok(capi_test(body())); break;

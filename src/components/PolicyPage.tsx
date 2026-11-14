@@ -1,6 +1,7 @@
 import React from 'react';
 import { useStore } from '../context/StoreContext';
 import { POLICY_PAGES } from '../lib/api';
+import { ReturnRequestButton } from './ReturnRequest';
 
 export const policyKeyFromPath = (): string | null => {
   const m = location.pathname.match(/^\/p\/([a-z0-9-]+)\/?$/);
@@ -38,6 +39,15 @@ export const PolicyPage: React.FC<{ pageKey: string }> = ({ pageKey }) => {
       </nav>
       <article className="bg-white rounded-2xl border border-line p-5 sm:p-10">
         <h1 className="text-2xl sm:text-3xl font-extrabold text-ink mb-6">{title}</h1>
+        {pageKey === 'returns' && (
+          <div className="mb-8 rounded-2xl bg-shelf p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <p className="font-extrabold text-ink">عايز ترجّع أو تستبدل منتج؟</p>
+              <p className="text-sm text-steel mt-1">قدّم طلبك هنا برقم الأوردر، واكتب المشكلة وضيف صورة للمنتج لو معاك.</p>
+            </div>
+            <ReturnRequestButton className="shrink-0" />
+          </div>
+        )}
         <div className="space-y-4 text-[15px] sm:text-base text-ink/90 leading-loose">
           {text.split(/\n{2,}/).map((para, i) => (
             <p key={i} className="whitespace-pre-line">{para}</p>
