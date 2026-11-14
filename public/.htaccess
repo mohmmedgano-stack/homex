@@ -30,6 +30,8 @@ DirectoryIndex index.html index.php
   Header always set X-Frame-Options "SAMEORIGIN"
   Header always set Referrer-Policy "strict-origin-when-cross-origin"
   Header always set Permissions-Policy "camera=(), microphone=(), geolocation=()"
+  # browsers only ever talk to the site over HTTPS (6 months)
+  Header always set Strict-Transport-Security "max-age=15552000"
 
   # Hashed bundles never change → cache for a year; pages always fresh
   <FilesMatch "\.(js|css|woff2?|ttf)$">

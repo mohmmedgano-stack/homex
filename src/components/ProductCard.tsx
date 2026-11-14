@@ -1,6 +1,6 @@
 import React from 'react';
 import { thumb } from '../lib/api';
-import { productPath } from './ProductPage';
+import { productPath } from '../lib/routes';
 import { Product } from '../types';
 import { useStore } from '../context/StoreContext';
 import { Heart, Star, ShoppingCart, Check, ArrowLeftRight } from 'lucide-react';

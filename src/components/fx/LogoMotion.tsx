@@ -69,7 +69,10 @@ export const LogoMotion: React.FC<{ src: string; alt: string; className?: string
       .to(all, { opacity: 0, duration: 0.45, ease: 'power1.in' }, 9.3)
       .set({}, {}, 10);
     paint();
-    return () => { tl.kill(); };
+    // no need to keep drawing while the header is scrolled out of view
+    const io = new IntersectionObserver(([e]) => (e.isIntersecting ? tl.resume() : tl.pause()));
+    io.observe(svg);
+    return () => { io.disconnect(); tl.kill(); };
   }, [animatable, uid]);
 
   if (!animatable) return <img src={src} width={W} height={H} alt={alt} className={className} />;

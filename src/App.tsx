@@ -5,16 +5,26 @@ import { Navbar } from './components/Navbar';
 import { HeroBanner } from './components/HeroBanner';
 import { DealersSection } from './components/DealersSection';
 import { PaymentReturn } from './components/PaymentReturn';
-import { PolicyPage, policyKeyFromPath } from './components/PolicyPage';
-import { OrderPage, orderFromPath } from './components/OrderPage';
-import { ReviewPage, reviewFromPath } from './components/ReviewPage';
+import { productPath, productIdFromPath, policyKeyFromPath, orderFromPath, reviewFromPath } from './lib/routes';
+// pages a visitor may never open load on demand, so the home page starts faster
+const PolicyPage = React.lazy(() => import('./components/PolicyPage').then((m) => ({ default: m.PolicyPage })));
+const OrderPage = React.lazy(() => import('./components/OrderPage').then((m) => ({ default: m.OrderPage })));
+const ReviewPage = React.lazy(() => import('./components/ReviewPage').then((m) => ({ default: m.ReviewPage })));
+const ProductPage = React.lazy(() => import('./components/ProductPage').then((m) => ({ default: m.ProductPage })));
+const CheckoutView = React.lazy(() => import('./components/CheckoutView').then((m) => ({ default: m.CheckoutView })));
+const Lazy: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <React.Suspense fallback={<div className="flex-1 min-h-[60vh] flex items-center justify-center" aria-label="بيحمّل"><span className="w-8 h-8 rounded-full border-[3px] border-gold border-t-transparent animate-spin" /></div>}>{children}</React.Suspense>
+);
+// warm up the product page and checkout in the background once the home page is idle
+if (typeof window !== 'undefined') {
+  const warm = () => { import('./components/ProductPage'); import('./components/CheckoutView'); };
+  'requestIdleCallback' in window ? (window as any).requestIdleCallback(warm, { timeout: 4000 }) : setTimeout(warm, 2500);
+}
+const CompareModal = React.lazy(() => import('./components/CompareModal').then((m) => ({ default: m.CompareModal })));
 import { POLICY_PAGES } from './lib/api';
 import { ProductCard } from './components/ProductCard';
-import { ProductPage, productPath, productIdFromPath } from './components/ProductPage';
 import { CartDrawer } from './components/CartDrawer';
 import { WishlistDrawer } from './components/WishlistDrawer';
-import { CompareModal } from './components/CompareModal';
-import { CheckoutView } from './components/CheckoutView';
 import { MobileBottomNav } from './components/MobileBottomNav';
 import { ToastContainer } from './components/Toast';
 import { SplitWords, PageIn } from './components/fx/Effects';
@@ -278,16 +288,16 @@ const StoreContent: React.FC = () => {
       <Navbar />
 
       {reviewPage && currentView === 'store' ? (
-        <PageIn className="flex-1 flex flex-col"><ReviewPage code={reviewPage.code} t={reviewPage.t} /></PageIn>
+        <PageIn className="flex-1 flex flex-col"><Lazy><ReviewPage code={reviewPage.code} t={reviewPage.t} /></Lazy></PageIn>
       ) : selectedProduct && currentView === 'store' ? (
-        <PageIn key={selectedProduct.id} className="flex-1 flex flex-col"><ProductPage product={selectedProduct} onBack={closeProduct} /></PageIn>
+        <PageIn key={selectedProduct.id} className="flex-1 flex flex-col"><Lazy><ProductPage product={selectedProduct} onBack={closeProduct} /></Lazy></PageIn>
       ) : orderPage && currentView === 'store' ? (
-        <PageIn className="flex-1 flex flex-col"><OrderPage code={orderPage.code} t={orderPage.t} fresh={new URLSearchParams(location.search).get('pay') === 'success'} /></PageIn>
+        <PageIn className="flex-1 flex flex-col"><Lazy><OrderPage code={orderPage.code} t={orderPage.t} fresh={new URLSearchParams(location.search).get('pay') === 'success'} /></Lazy></PageIn>
       ) : policyPage && currentView === 'store' ? (
-        <PageIn className="flex-1 flex flex-col"><PolicyPage pageKey={policyPage} /></PageIn>
+        <PageIn className="flex-1 flex flex-col"><Lazy><PolicyPage pageKey={policyPage} /></Lazy></PageIn>
       ) : currentView === 'checkout' ? (
         <main className="flex-1">
-          <PageIn><CheckoutView /></PageIn>
+          <PageIn><Lazy><CheckoutView /></Lazy></PageIn>
         </main>
       ) : (
         <main className="flex-1 w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 space-y-8 sm:space-y-12">
@@ -406,7 +416,7 @@ const StoreContent: React.FC = () => {
 
       <CartDrawer />
       <WishlistDrawer />
-      <CompareModal />
+      <React.Suspense fallback={null}><CompareModal /></React.Suspense>
       <ToastContainer />
       <PaymentReturn />
       <MobileBottomNav />

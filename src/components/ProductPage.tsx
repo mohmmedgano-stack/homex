@@ -1,3 +1,4 @@
+import { productPath } from '../lib/routes';
 import React, { useEffect, useState } from 'react';
 import { thumb, api } from '../lib/api';
 import { useStore } from '../context/StoreContext';
@@ -7,11 +8,6 @@ import {
   ShoppingBag, Heart, ArrowLeftRight, ShieldCheck, Truck, RotateCcw, Zap, Plus, Minus, Share2, CheckCircle2, ChevronRight, Star,
 } from 'lucide-react';
 
-export const productPath = (p: Pick<Product, 'id'> & { slug?: string }) => `/product/${p.id}${p.slug ? `-${p.slug}` : ''}`;
-export const productIdFromPath = (): string | null => {
-  const m = location.pathname.match(/^\/product\/(\d+)(?:-[a-z0-9-]*)?\/?$/);
-  return m ? m[1] : null;
-};
 
 type Review = { id: number; name: string; city: string; rating: number; comment: string; createdAt: string };
 

@@ -22,22 +22,15 @@ export const SplitWords: React.FC<{
     const el = ref.current;
     if (!el || reducedMotion()) return;
     const words = el.querySelectorAll<HTMLElement>('[data-w]');
+    let io: IntersectionObserver | undefined;
     const ctx = gsap.context(() => {
-      gsap.fromTo(
-        words,
-        { yPercent: 110, opacity: 0 },
-        {
-          yPercent: 0,
-          opacity: 1,
-          duration: 0.8,
-          ease: 'power4.out',
-          stagger,
-          delay,
-          scrollTrigger: onScroll ? { trigger: el, start: 'top 92%', once: true } : undefined,
-        }
-      );
+      gsap.set(words, { yPercent: 110, opacity: 0 });
+      const play = () => gsap.to(words, { yPercent: 0, opacity: 1, duration: 0.8, ease: 'power4.out', stagger, delay });
+      if (!onScroll) { play(); return; }
+      io = new IntersectionObserver((es) => { if (es.some((e) => e.isIntersecting)) { io?.disconnect(); play(); } }, { rootMargin: '0px 0px -8% 0px' });
+      io.observe(el);
     }, el);
-    return () => ctx.revert();
+    return () => { io?.disconnect(); ctx.revert(); };
   }, [text]);
 
   const Tag = as as any;
@@ -132,7 +125,10 @@ export const GlowBlobs: React.FC<{ className?: string }> = ({ className = '' }) 
         });
       });
     }, el);
-    return () => ctx.revert();
+    // big blurred shapes are costly to move: only animate while the banner is on screen
+    const io = new IntersectionObserver(([e]) => { ctx.getTweens?.().forEach((t: gsap.core.Tween) => (e.isIntersecting ? t.resume() : t.pause())); });
+    io.observe(el);
+    return () => { io.disconnect(); ctx.revert(); };
   }, []);
   return (
     <div ref={ref} className={`absolute inset-0 overflow-hidden pointer-events-none ${className}`} aria-hidden="true">

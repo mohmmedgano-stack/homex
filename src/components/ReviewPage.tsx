@@ -2,10 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { api, thumb } from '../lib/api';
 import { Star, CheckCircle2, XCircle } from 'lucide-react';
 
-export const reviewFromPath = (): { code: string; t: string } | null => {
-  const m = location.pathname.match(/^\/r\/([A-Za-z0-9-]+)\/?$/);
-  return m ? { code: m[1], t: new URLSearchParams(location.search).get('t') || '' } : null;
-};
 
 type Item = { productId: number; name: string; image: string; rated: boolean; rating: number; comment: string };
 

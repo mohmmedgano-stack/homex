@@ -97,7 +97,13 @@ export const POLICY_PAGES = [
 ] as const;
 
 /** Small version of an uploaded image (cards, lists). External URLs are returned as-is. */
-export const thumb = (url?: string) => (url && url.startsWith('/api/?r=img&f=') ? `${url}&s=1` : url || '');
+/** Small copy for cards and lists: uploads get a server-made thumbnail; built-in product photos have a ready -sm.webp next to them */
+export const thumb = (url?: string) => {
+  if (!url) return '';
+  if (url.startsWith('/api/?r=img&f=')) return `${url}&s=1`;
+  const m = url.match(/^\/products\/([a-z0-9-]+)\.webp$/);
+  return m ? `/products/${m[1]}-sm.webp` : url;
+};
 
 /** Random id for this browser's checkout (abandoned-cart follow-up). */
 export const cartToken = () => {

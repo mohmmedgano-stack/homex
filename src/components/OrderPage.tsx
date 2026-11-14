@@ -13,11 +13,6 @@ export type OrderView = {
   items: { name: string; image: string; price: number; qty: number }[];
 };
 
-export const orderFromPath = (): { code: string; t: string } | null => {
-  const m = location.pathname.match(/^\/o\/([A-Za-z0-9-]+)\/?$/);
-  if (!m) return null;
-  return { code: m[1], t: new URLSearchParams(location.search).get('t') || '' };
-};
 
 const COURIER_NAMES: Record<string, string> = { bosta: 'بوسطة', jt: 'J&T', aramex: 'أرامكس', mylerz: 'مايلرز', egypt_post: 'البريد المصري', own: 'مندوب الشركة', other: '' };
 

@@ -9,14 +9,14 @@ jobs:
         run: |
           set +e
           U=https://home-x.online
-          for p in "/" "/admin/" "/p/returns" "/o/NOPE?t=x" "/robots.txt" "/sitemap.xml" "/og.png" "/logo.webp" "/fonts/eyen-ammon-bold.woff2" "/sounds/new-order.mp3" "/api/?r=settings" "/api/?r=catalog" "/api/lib.php" "/api/deploy.php?status=1" "/sitemap.xml" "/feeds/catalog.csv" "/product/1" "/r/X?t=y" "/api/?r=reviews&product=1" "/codes/" "/api/?r=station/me"; do
+          for p in "/" "/admin/" "/p/returns" "/o/NOPE?t=x" "/robots.txt" "/sitemap.xml" "/og.png" "/logo.webp" "/fonts/eyen-ammon-bold.woff2" "/sounds/new-order.mp3" "/api/?r=settings" "/api/?r=catalog" "/api/lib.php" "/api/deploy.php?status=1" "/sitemap.xml" "/feeds/catalog.csv" "/product/1" "/r/X?t=y" "/api/?r=reviews&product=1" "/codes/" "/api/?r=station/me" "/api/returns.php" "/api/seed_pricelist.php" "/products/hx-b2200-sm.webp" "/llms.txt"; do
             curl -s -o /tmp/body -w "%{http_code}  %{time_total}s  %{size_download}B  $p\n" -H "Accept-Encoding: gzip" "$U$p"
           done
           echo "--- redirects"
           curl -s -o /dev/null -w "http://      -> %{http_code} %{redirect_url}\n" http://home-x.online/
           curl -s -o /dev/null -w "www          -> %{http_code} %{redirect_url}\n" https://www.home-x.online/
           echo "--- headers /"
-          curl -sI -H "Accept-Encoding: gzip" $U/ | grep -iE "^(content-encoding|cache-control|strict-transport|x-frame|x-content|referrer|server|content-security)"
+          curl -sI -H "Accept-Encoding: gzip" $U/ | grep -iE "^(content-encoding|cache-control|strict-transport|x-frame|x-content|referrer|server|content-security|permissions-policy)"
           echo "--- headers asset"
           A=$(curl -s $U/ | grep -oE '/assets/[^"]+\.js' | head -1); echo "$A"
           curl -sI -H "Accept-Encoding: gzip" "$U$A" | grep -iE "^(content-encoding|cache-control|content-length)"

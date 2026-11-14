@@ -3,10 +3,6 @@ import { useStore } from '../context/StoreContext';
 import { POLICY_PAGES } from '../lib/api';
 import { ReturnRequestButton } from './ReturnRequest';
 
-export const policyKeyFromPath = (): string | null => {
-  const m = location.pathname.match(/^\/p\/([a-z0-9-]+)\/?$/);
-  return m ? m[1] : null;
-};
 
 /** Pages managed from the dashboard («صفحات الموقع»); falls back to the built-in titles while settings load. */
 export const PolicyPage: React.FC<{ pageKey: string }> = ({ pageKey }) => {

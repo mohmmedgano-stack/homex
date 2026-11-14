@@ -4,13 +4,10 @@
  * Everything is skipped when the visitor asked the OS for reduced motion.
  */
 import gsap from 'gsap';
-import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import Lenis from 'lenis';
 import 'lenis/dist/lenis.css';
 
-gsap.registerPlugin(ScrollTrigger);
-
-export { gsap, ScrollTrigger };
+export { gsap };
 
 export const reducedMotion = () =>
   typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -30,7 +27,6 @@ export function initStoreMotion() {
       allowNestedScroll: true, // drawers, menus and modals keep their own scrolling
       prevent: (node) => !!node.closest?.('[data-lenis-prevent], [role="dialog"], .fixed'),
     });
-    lenis.on('scroll', ScrollTrigger.update);
     gsap.ticker.add((t) => lenis?.raf(t * 1000));
     gsap.ticker.lagSmoothing(0);
 
@@ -43,14 +39,6 @@ export function initStoreMotion() {
       lenis.scrollTo(this as HTMLElement, { duration: 1.1 }); // Lenis already honours scroll-margin-top
     };
   }
-
-  // Images loading in change page height → keep the scroll triggers in the right place
-  let t: ReturnType<typeof setTimeout> | undefined;
-  const ro = new ResizeObserver(() => {
-    clearTimeout(t);
-    t = setTimeout(() => ScrollTrigger.refresh(), 180);
-  });
-  ro.observe(document.body);
 
   initClickSpark();
 }

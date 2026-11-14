@@ -76,7 +76,7 @@ try {
     if (preg_match('/^[a-f0-9]{40}$/', $want) && $want !== $sha) { @unlink($lock); out(['ok' => false, 'waiting' => true, 'branch' => $sha]); }
 
     $current = is_file($shaFile) ? trim((string)file_get_contents($shaFile)) : '';
-    if ($current === $sha && empty($_GET['force'])) out(['ok' => true, 'unchanged' => true, 'sha' => $sha]);
+    if ($current === $sha) out(['ok' => true, 'unchanged' => true, 'sha' => $sha]);
 
     // Download that exact build
     $zipPath = "$data/release.zip";
