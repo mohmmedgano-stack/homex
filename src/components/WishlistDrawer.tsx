@@ -1,3 +1,4 @@
+import { useScrollLock } from './fx/useScrollLock';
 import React from 'react';
 import { useStore } from '../context/StoreContext';
 import { X, Heart, ShoppingBag, Trash2 } from 'lucide-react';
@@ -13,14 +14,15 @@ export const WishlistDrawer: React.FC = () => {
     setSelectedProduct 
   } = useStore();
 
+  useScrollLock(wishlistOpen, () => setWishlistOpen(false));
   if (!wishlistOpen) return null;
 
   const wishedProducts = products.filter(p => wishlist.includes(p.id));
 
   return (
     <div className="fixed inset-0 z-50 overflow-hidden">
-      <div 
-        className="absolute inset-0 bg-slate-900/60 backdrop-blur-xs transition-opacity"
+      <button type="button" tabIndex={-1} aria-label="إغلاق"
+        className="absolute inset-0 w-full h-full cursor-pointer bg-slate-900/60 backdrop-blur-xs transition-opacity"
         onClick={() => setWishlistOpen(false)}
       />
 

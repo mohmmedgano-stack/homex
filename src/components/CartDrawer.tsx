@@ -1,3 +1,4 @@
+import { useScrollLock } from './fx/useScrollLock';
 import React, { useState } from 'react';
 import { thumb } from '../lib/api';
 import { useStore } from '../context/StoreContext';
@@ -27,6 +28,7 @@ export const CartDrawer: React.FC = () => {
     settings,
   } = useStore();
 
+  useScrollLock(cartOpen, () => setCartOpen(false));
   if (!cartOpen) return null;
 
   // Same rules as the server (dashboard → store settings)
@@ -46,8 +48,8 @@ export const CartDrawer: React.FC = () => {
   return (
     <div className="fixed inset-0 z-50 overflow-hidden">
       {/* Backdrop */}
-      <div 
-        className="absolute inset-0 bg-slate-900/60 backdrop-blur-xs transition-opacity"
+      <button type="button" tabIndex={-1} aria-label="إغلاق"
+        className="absolute inset-0 w-full h-full cursor-pointer bg-slate-900/60 backdrop-blur-xs transition-opacity"
         onClick={() => setCartOpen(false)}
       />
 

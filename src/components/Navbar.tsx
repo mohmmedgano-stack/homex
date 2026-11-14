@@ -1,4 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { useScrollLock } from './fx/useScrollLock';
 import { LogoMotion } from './fx/LogoMotion';
 import { useStore } from '../context/StoreContext';
 import { closeProductPage } from '../lib/nav';
@@ -40,6 +42,7 @@ export const Navbar: React.FC = () => {
   const [menuOpen, setMenuOpen] = useState(false); // mobile drawer
   const [shopOpen, setShopOpen] = useState(false); // "تسوق الآن" dropdown
   const shopRef = useRef<HTMLDivElement>(null);
+  useScrollLock(menuOpen, () => setMenuOpen(false));
 
   useEffect(() => {
     const close = (e: MouseEvent) => {
@@ -256,10 +259,10 @@ export const Navbar: React.FC = () => {
       )}
 
       {/* Mobile drawer */}
-      {menuOpen && (
-        <div className="lg:hidden fixed inset-0 z-50">
-          <div className="absolute inset-0 bg-black/50" onClick={() => setMenuOpen(false)} />
-          <aside className="absolute top-0 right-0 bottom-0 w-[82%] max-w-xs bg-white shadow-2xl flex flex-col">
+      {menuOpen && createPortal((
+        <div className="lg:hidden fixed inset-0 z-[60]" role="dialog" aria-modal="true" aria-label="القائمة">
+          <button type="button" tabIndex={-1} aria-label="اقفل القائمة" className="absolute inset-0 w-full h-full bg-black/50 cursor-pointer" onClick={() => setMenuOpen(false)} />
+          <aside className="absolute top-0 right-0 bottom-0 w-[82%] max-w-xs bg-white shadow-2xl flex flex-col overscroll-contain" data-lenis-prevent>
             <div className="bg-ink px-4 h-16 flex items-center justify-between">
               <img src={logo} width={600} height={167} alt={settings.store_name} className="h-8 w-auto" />
               <button onClick={() => setMenuOpen(false)} className="text-white p-1" aria-label="إغلاق">
@@ -288,7 +291,7 @@ export const Navbar: React.FC = () => {
             </div>
           </aside>
         </div>
-      )}
+      ), document.body)}
     </header>
 
     {/* Floating glass bar: once the full header scrolls away, a compact frosted bar slides in */}

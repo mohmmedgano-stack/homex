@@ -124,3 +124,24 @@ function initClickSpark() {
     { passive: true }
   );
 }
+
+/**
+ * Freeze the page behind an open drawer/menu (works on iPhone too: the body is pinned in place
+ * and put back at the same scroll position on close). Nested locks are counted.
+ */
+let locks = 0;
+let savedY = 0;
+export function lockScroll() {
+  if (locks++ > 0) return;
+  savedY = window.scrollY;
+  lenis?.stop();
+  const b = document.body.style;
+  b.position = 'fixed'; b.top = `-${savedY}px`; b.left = '0'; b.right = '0'; b.width = '100%'; b.overflow = 'hidden';
+}
+export function unlockScroll() {
+  if (locks === 0 || --locks > 0) return;
+  const b = document.body.style;
+  b.position = ''; b.top = ''; b.left = ''; b.right = ''; b.width = ''; b.overflow = '';
+  window.scrollTo(0, savedY);
+  lenis?.start();
+}
