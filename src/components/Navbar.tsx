@@ -26,6 +26,17 @@ export const Navbar: React.FC = () => {
   } = useStore();
   const logo = settings.logo || '/logo.webp';
 
+  // glass bar shows once the real header is out of view
+  const headerRef = useRef<HTMLElement>(null);
+  const [floating, setFloating] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  useEffect(() => {
+    const el = headerRef.current;
+    if (!el) return;
+    const io = new IntersectionObserver(([e]) => { setFloating(!e.isIntersecting); if (e.isIntersecting) setSearchOpen(false); }, { rootMargin: '-40px 0px 0px 0px' });
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
   const [menuOpen, setMenuOpen] = useState(false); // mobile drawer
   const [shopOpen, setShopOpen] = useState(false); // "تسوق الآن" dropdown
   const shopRef = useRef<HTMLDivElement>(null);
@@ -100,7 +111,8 @@ export const Navbar: React.FC = () => {
   const counter = 'absolute -top-1.5 -left-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-sale text-white text-[11px] font-bold flex items-center justify-center';
 
   return (
-    <header className="sticky top-0 z-40 bg-ink shadow-md">
+    <>
+    <header ref={headerRef} className="relative z-40 bg-ink shadow-md">
       {/* Top bar */}
       <div className="bg-ink-deep text-white/85 text-xs sm:text-[13px]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-9 flex items-center justify-between gap-4">
@@ -278,5 +290,44 @@ export const Navbar: React.FC = () => {
         </div>
       )}
     </header>
+
+    {/* Floating glass bar: once the full header scrolls away, a compact frosted bar slides in */}
+    <div
+      className={`fixed inset-x-0 top-0 z-40 px-3 sm:px-6 pt-2 sm:pt-3 pointer-events-none transition-all duration-500 ease-[cubic-bezier(.2,.8,.2,1)] ${
+        floating ? 'translate-y-0 opacity-100' : '-translate-y-[130%] opacity-0'
+      }`}
+      aria-hidden={!floating}
+      inert={!floating ? true : undefined}
+    >
+      <div className="glass-bar pointer-events-auto max-w-6xl mx-auto rounded-2xl px-3 sm:px-5">
+        <div className="flex items-center gap-2 sm:gap-5 h-14 sm:h-16">
+          <button onClick={() => setMenuOpen(true)} className="lg:hidden p-1.5 text-white" aria-label="القائمة">
+            <Menu className="w-6 h-6" />
+          </button>
+          <button
+            onClick={() => { if (leavePolicyPage()) return; setCurrentView('store'); setSelectedCategory('all'); setSearchQuery(''); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+            className="shrink-0"
+            aria-label="HOMEX الرئيسية"
+          >
+            <img src={logo} width={600} height={167} alt={settings.store_name} className="h-7 sm:h-9 w-auto" />
+          </button>
+          {searchBox('hidden md:flex flex-1 max-w-xl mx-auto !h-10 sm:!h-11')}
+          <div className="flex items-center gap-0.5 sm:gap-2 mr-auto md:mr-0">
+            <button onClick={() => setSearchOpen((o) => !o)} className="md:hidden p-2 text-white" aria-label="بحث" aria-expanded={searchOpen}>
+              <Search className="w-[22px] h-[22px]" />
+            </button>
+            <button onClick={() => setWishlistOpen(true)} className="p-2 text-white hover:text-gold-hi" aria-label="المفضلة">
+              <span className="relative block"><Heart className="w-[22px] h-[22px]" />{wishlist.length > 0 && <span className={counter}>{wishlist.length}</span>}</span>
+            </button>
+            <button onClick={() => setCartOpen(true)} className="p-2 text-white hover:text-gold-hi flex items-center gap-2" aria-label="السلة">
+              <span className="relative block"><ShoppingCart className="w-[22px] h-[22px]" />{cartCount > 0 && <span className={counter}>{cartCount}</span>}</span>
+              {cartTotal > 0 && <span className="hidden sm:block price text-xs font-bold">{cartTotal.toLocaleString('en-US')} ج.م</span>}
+            </button>
+          </div>
+        </div>
+        {searchOpen && searchBox('md:hidden mb-3 !h-11')}
+      </div>
+    </div>
+    </>
   );
 };

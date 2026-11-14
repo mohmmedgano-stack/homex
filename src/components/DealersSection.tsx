@@ -51,7 +51,7 @@ export const DealersSection: React.FC = () => {
   const track = (d: Dealer, kind: 'call' | 'whatsapp' | 'map') => api.post('dealer-click', { id: d.id, kind }).catch(() => {});
 
   return (
-    <section id="dealers-section" data-reveal className="scroll-mt-40">
+    <section id="dealers-section" data-reveal className="scroll-mt-24">
       <div className="bg-ink rounded-2xl p-5 sm:p-8 text-white">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div className="max-w-xl">

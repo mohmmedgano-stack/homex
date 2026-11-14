@@ -344,7 +344,7 @@ const StoreContent: React.FC = () => {
           )}
 
           {/* Full catalog */}
-          <section id="appliances-catalog-section" className="scroll-mt-44">
+          <section id="appliances-catalog-section" className="scroll-mt-24">
             <div className="bg-white rounded-xl border border-line p-3 sm:p-4 mb-3 sm:mb-4 flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h2 className="text-lg sm:text-2xl font-extrabold text-ink">
