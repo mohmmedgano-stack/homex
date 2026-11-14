@@ -1,0 +1,48 @@
+# HOMEX — Apache / LiteSpeed (Hostinger)
+Options -Indexes
+DirectoryIndex index.html index.php
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+
+  # Always HTTPS, and no "www."
+  RewriteCond %{HTTPS} off
+  RewriteCond %{HTTP:X-Forwarded-Proto} !https
+  RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+  RewriteCond %{HTTP_HOST} ^www\.(.+)$ [NC]
+  RewriteRule ^ https://%1%{REQUEST_URI} [L,R=301]
+
+  # Never serve hidden files (.git, .env ...)
+  RewriteRule (^|/)\.(?!well-known/) - [F]
+
+  # Store pages rendered by the app
+  RewriteRule ^p/([a-z0-9-]+)/?$ api/page.php?page=$1 [L,QSA]
+  RewriteRule ^o/[A-Za-z0-9-]+/?$ index.html [L]
+  RewriteRule ^r/[A-Za-z0-9-]+/?$ index.html [L]
+  RewriteRule ^product/([0-9]+)(-[a-z0-9-]*)?/?$ api/page.php?id=$1 [L,QSA]
+  RewriteRule ^sitemap\.xml$ api/page.php?sitemap=1 [L]
+  RewriteRule ^llms\.txt$ api/page.php?llms=1 [L]
+  RewriteRule ^feeds/catalog\.csv$ api/page.php?feed=catalog [L]
+</IfModule>
+
+<IfModule mod_headers.c>
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set X-Frame-Options "SAMEORIGIN"
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+  Header always set Permissions-Policy "camera=(), microphone=(), geolocation=()"
+
+  # Hashed bundles never change → cache for a year; pages always fresh
+  <FilesMatch "\.(js|css|woff2?|ttf)$">
+    Header set Cache-Control "public, max-age=31536000, immutable"
+  </FilesMatch>
+  <FilesMatch "\.(png|jpe?g|webp|svg|ico)$">
+    Header set Cache-Control "public, max-age=604800"
+  </FilesMatch>
+  <FilesMatch "\.html$">
+    Header set Cache-Control "no-cache"
+  </FilesMatch>
+</IfModule>
+
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE text/html text/css application/javascript application/json image/svg+xml
+</IfModule>
