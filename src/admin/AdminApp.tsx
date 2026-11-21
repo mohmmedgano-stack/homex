@@ -95,10 +95,11 @@ const Gate: React.FC = () => {
 };
 
 const AuthShell: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <div className="min-h-screen bg-ink flex items-center justify-center p-4">
-    <div className="w-full max-w-sm">
-      <img src="/logo.png" alt="HOMEX" className="h-12 w-auto mx-auto mb-8" />
-      <div className="bg-white rounded-2xl p-6 shadow-2xl">{children}</div>
+  <div className="ag flex items-center justify-center p-4">
+    <div className="ag-bg" aria-hidden="true"><i /><i /><i /></div>
+    <div className="w-full max-w-sm ag-stagger">
+      <img src="/logo-dark.png" alt="HOMEX" className="h-11 w-auto mx-auto mb-8" />
+      <div className="glass-strong rounded-3xl p-6 shadow-2xl">{children}</div>
     </div>
   </div>
 );
@@ -178,7 +179,7 @@ const Shell: React.FC<{ admin: Admin; onLogout: () => void }> = ({ admin, onLogo
   const bell = (
     <button
       onClick={() => (alerts.perm === 'default' ? alerts.askPermission() : alerts.setSound(!alerts.sound))}
-      className="relative text-white/80 hover:text-white p-1.5 rounded-lg hover:bg-white/10"
+      className="relative text-ink/70 hover:text-ink p-1.5 rounded-lg hover:bg-white/50"
       title={alerts.perm === 'default' ? 'فعّل إشعارات الطلبات الجديدة' : alerts.sound ? 'صوت الطلبات شغال — اضغط عشان تكتمه' : 'صوت الطلبات مكتوم — اضغط عشان تشغله'}
       aria-label="إشعارات الطلبات"
     >
@@ -205,23 +206,23 @@ const Shell: React.FC<{ admin: Admin; onLogout: () => void }> = ({ admin, onLogo
   const nav = (
     <nav className="flex-1 overflow-y-auto py-3 px-3" aria-label="أقسام لوحة التحكم">
       {NAV_GROUPS.map((g) => (
-        <div key={g.title || 'home'} className={g.title ? 'mt-2 pt-2 border-t border-white/10' : ''}>
-          {g.title && <p className="px-3 pb-1 text-[11px] font-bold text-white/40">{g.title}</p>}
+        <div key={g.title || 'home'} className={g.title ? 'mt-2 pt-2 border-t border-ink/10' : ''}>
+          {g.title && <p className="ag-lbl px-3 pb-1 text-[11px] font-bold text-ink/45 whitespace-nowrap">{g.title}</p>}
           <div className="space-y-0.5">
             {g.items.map(({ id, label, Icon }) => (
               <button
                 key={id}
                 onClick={() => setPage(id)}
-                className={`w-full h-9 px-3 rounded-lg flex items-center gap-3 text-sm font-bold transition-colors ${
-                  page === id ? 'bg-gold text-white' : 'text-white/75 hover:bg-white/10 hover:text-white'
+                className={`w-full h-9 px-3 rounded-xl flex items-center gap-3 text-sm font-bold transition-all duration-300 ${
+                  page === id ? 'bg-white text-ink shadow-[0_6px_16px_-6px_rgba(80,30,10,.35)]' : 'text-ink/70 hover:bg-white/45 hover:text-ink'
                 }`}
                 aria-current={page === id ? 'page' : undefined}
               >
-                <Icon className="w-5 h-5 shrink-0" />
-                <span className="truncate">{label}</span>
+                <Icon className={`w-5 h-5 shrink-0 ${page === id ? 'text-gold-deep' : ''}`} />
+                <span className="ag-lbl truncate" style={{ ['--i' as any]: NAV.findIndex((n) => n.id === id) }}>{label}</span>
                 {id === 'orders' && alerts.pending > 0 && badge(alerts.pending, 'bg-sale')}
                 {id === 'returns' && alerts.returns > 0 && badge(alerts.returns, 'bg-sale')}
-                {id === 'carts' && alerts.carts > 0 && badge(alerts.carts, 'bg-gold')}
+                {id === 'carts' && alerts.carts > 0 && badge(alerts.carts, 'bg-gold-deep')}
               </button>
             ))}
           </div>
@@ -231,25 +232,26 @@ const Shell: React.FC<{ admin: Admin; onLogout: () => void }> = ({ admin, onLogo
   );
 
   const sidebarFooter = (
-    <div className="p-3 border-t border-white/10 flex items-center gap-1">
-      <p className="flex-1 min-w-0 px-2 text-xs text-white/60 truncate">
+    <div className="p-3 border-t border-ink/10 flex items-center gap-1">
+      <p className="ag-lbl flex-1 min-w-0 px-2 text-xs text-ink/60 truncate">
         {admin.name} · {admin.role === 'owner' ? 'المالك' : 'موظف'}
       </p>
-      <a href="/" target="_blank" title="فتح المتجر" aria-label="فتح المتجر" className="w-10 h-10 rounded-lg flex items-center justify-center text-white/75 hover:bg-white/10 hover:text-white">
+      <a href="/" target="_blank" title="فتح المتجر" aria-label="فتح المتجر" className="w-10 h-10 rounded-lg flex items-center justify-center text-ink/60 hover:bg-white/50 hover:text-ink">
         <ExternalLink className="w-4 h-4" />
       </a>
-      <button onClick={logout} title="تسجيل خروج" aria-label="تسجيل خروج" className="w-10 h-10 rounded-lg flex items-center justify-center text-white/75 hover:bg-white/10 hover:text-white">
+      <button onClick={logout} title="تسجيل خروج" aria-label="تسجيل خروج" className="w-10 h-10 rounded-lg flex items-center justify-center text-ink/60 hover:bg-white/50 hover:text-ink">
         <LogOut className="w-4 h-4" />
       </button>
     </div>
   );
 
   return (
-    <div className="min-h-screen lg:pr-64">
-      {/* Desktop sidebar */}
-      <aside className="hidden lg:flex fixed top-0 right-0 bottom-0 w-64 bg-ink flex-col">
-        <div className="h-16 flex items-center justify-between px-5 border-b border-white/10">
-          <img src="/logo.png" alt="HOMEX" className="h-8 w-auto" />
+    <div className="ag lg:pr-[17rem]">
+      <div className="ag-bg" aria-hidden="true"><i /><i /><i /></div>
+      {/* Desktop sidebar: a floating glass panel that opens out of an icon rail */}
+      <aside className="ag-side glass hidden lg:flex fixed top-3 right-3 bottom-3 w-64 rounded-3xl flex-col overflow-hidden z-30">
+        <div className="h-16 flex items-center justify-between px-5 border-b border-ink/10 shrink-0">
+          <img src="/logo-dark.png" alt="HOMEX" className="ag-lbl h-7 w-auto" />
           {bell}
         </div>
         {nav}
@@ -257,23 +259,23 @@ const Shell: React.FC<{ admin: Admin; onLogout: () => void }> = ({ admin, onLogo
       </aside>
 
       {/* Mobile top bar */}
-      <header className="lg:hidden sticky top-0 z-30 bg-ink h-14 px-4 flex items-center justify-between">
-        <button onClick={() => setOpen(true)} className="text-white p-1" aria-label="القائمة">
+      <header className="lg:hidden sticky top-0 z-30 glass-strong h-14 px-4 flex items-center justify-between border-x-0 border-t-0">
+        <button onClick={() => setOpen(true)} className="text-ink p-1" aria-label="القائمة">
           <Menu className="w-6 h-6" />
         </button>
-        <span className="text-white font-extrabold">{NAV.find((n) => n.id === page)?.label}</span>
+        <span className="text-ink font-extrabold">{NAV.find((n) => n.id === page)?.label}</span>
         <div className="flex items-center gap-1">
           {bell}
-          <img src="/logo.png" alt="HOMEX" className="h-6 w-auto" />
+          <img src="/logo-dark.png" alt="HOMEX" className="h-6 w-auto" />
         </div>
       </header>
       {open && (
         <div className="lg:hidden fixed inset-0 z-40">
-          <div className="absolute inset-0 bg-black/50" onClick={() => setOpen(false)} />
-          <aside className="absolute top-0 right-0 bottom-0 w-72 max-w-[85%] bg-ink flex flex-col">
-            <div className="h-14 flex items-center justify-between px-4 border-b border-white/10">
-              <img src="/logo.png" alt="HOMEX" className="h-7 w-auto" />
-              <button onClick={() => setOpen(false)} className="text-white p-1" aria-label="إغلاق">
+          <button type="button" tabIndex={-1} aria-label="إغلاق القائمة" className="absolute inset-0 w-full h-full bg-black/30 backdrop-blur-[2px] cursor-pointer" onClick={() => setOpen(false)} />
+          <aside className="glass-strong absolute top-2 right-2 bottom-2 w-72 max-w-[85%] rounded-3xl flex flex-col overflow-hidden">
+            <div className="h-14 flex items-center justify-between px-4 border-b border-ink/10">
+              <img src="/logo-dark.png" alt="HOMEX" className="h-7 w-auto" />
+              <button onClick={() => setOpen(false)} className="text-ink p-1" aria-label="إغلاق">
                 <X className="w-6 h-6" />
               </button>
             </div>
@@ -283,8 +285,9 @@ const Shell: React.FC<{ admin: Admin; onLogout: () => void }> = ({ admin, onLogo
         </div>
       )}
 
-      <main className="p-3 sm:p-6 max-w-6xl mx-auto">
-        {page === 'overview' && <Overview go={setPage} />}
+      <main className="ag-lens p-3 sm:p-6 max-w-6xl mx-auto">
+       <div key={page + (page === 'settings' ? settingsTab : '')} className="ag-page">
+        {page === 'overview' && <Overview go={setPage} name={admin.name} />}
         {page === 'orders' && <Orders isOwner={isOwner} />}
         {page === 'products' && <Products />}
         {page === 'carts' && <Carts />}
@@ -319,6 +322,7 @@ const Shell: React.FC<{ admin: Admin; onLogout: () => void }> = ({ admin, onLogo
             {settingsTab === 'station' && isStationAdmin && <StationAccess />}
           </div>
         )}
+       </div>
       </main>
     </div>
   );

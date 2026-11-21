@@ -210,7 +210,7 @@ export const StoreSettingsPage: React.FC<{ admin: Admin }> = ({ admin }) => {
       </fieldset>
 
       {owner && (
-        <div className="fixed bottom-0 inset-x-0 lg:right-64 bg-white/95 backdrop-blur border-t border-line p-3 flex justify-end z-20">
+        <div className="fixed bottom-0 inset-x-0 lg:right-[17rem] bg-white/90 z-20 backdrop-blur border-t border-line p-3 flex justify-end z-20">
           <Button onClick={save} loading={busy} className="h-12 px-8 text-base w-full sm:w-auto">حفظ الإعدادات</Button>
         </div>
       )}

@@ -1,4 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Loader2 } from 'lucide-react';
 import { IosBanner, BannerStack } from '../components/IosBanner';
 import { playChime } from '../lib/chime';
@@ -103,7 +104,7 @@ export const Card: React.FC<{ title?: React.ReactNode; action?: React.ReactNode;
   children,
   className = '',
 }) => (
-  <section className={`bg-white rounded-2xl border border-line ${className}`}>
+  <section className={`glass lift rounded-2xl ${className}`}>
     {(title || action) && (
       <div className="flex items-center justify-between gap-3 px-4 sm:px-5 pt-4 sm:pt-5">
         {title && <h2 className="text-base sm:text-lg font-extrabold text-ink">{title}</h2>}
@@ -133,7 +134,8 @@ export const Modal: React.FC<{ open: boolean; onClose: () => void; title: string
     };
   }, [open, onClose]);
   if (!open) return null;
-  return (
+  // rendered at the end of <body> so glass cards (backdrop blur) never box it in
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
       <div
@@ -150,22 +152,50 @@ export const Modal: React.FC<{ open: boolean; onClose: () => void; title: string
         <div className="overflow-y-auto p-5 flex-1">{children}</div>
         {footer && <div className="px-5 py-3 border-t border-line flex gap-2 justify-end shrink-0 bg-shelf rounded-b-2xl">{footer}</div>}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 
-export const Stat: React.FC<{ label: string; value: React.ReactNode; sub?: React.ReactNode; tone?: 'default' | 'good' | 'bad' | 'brand' }> = ({
+/** Counts the first number inside a text up from zero (e.g. "4,248 ج.م", "98%") */
+export const CountUp: React.FC<{ text: React.ReactNode; ms?: number }> = ({ text, ms = 1100 }) => {
+  const str = typeof text === 'string' || typeof text === 'number' ? String(text) : null;
+  const m = str ? str.match(/-?[\d,]*\.?\d+/) : null;
+  const target = m ? parseFloat(m[0].replace(/,/g, '')) : NaN;
+  const decimals = m && m[0].includes('.') ? m[0].split('.')[1].length : 0;
+  const [v, setV] = useState(0);
+  useEffect(() => {
+    if (!isFinite(target) || matchMedia('(prefers-reduced-motion: reduce)').matches) { setV(target); return; }
+    let raf = 0; const t0 = performance.now();
+    const tick = (t: number) => {
+      const p = Math.min(1, (t - t0) / ms);
+      setV(target * (1 - Math.pow(1 - p, 4)));
+      if (p < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [target, ms]);
+  if (!m || !str) return <>{text}</>;
+  const shown = v.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+  return <>{str.slice(0, m.index)}{shown}{str.slice((m.index || 0) + m[0].length)}</>;
+};
+
+export const Stat: React.FC<{ label: string; value: React.ReactNode; sub?: React.ReactNode; tone?: 'default' | 'good' | 'bad' | 'brand'; icon?: React.ReactNode }> = ({
   label,
   value,
   sub,
   tone = 'default',
+  icon,
 }) => {
   const c = { default: 'text-ink', good: 'text-save', bad: 'text-sale', brand: 'text-gold-deep' }[tone];
   return (
-    <div className="bg-white rounded-2xl border border-line p-4">
-      <p className="text-xs sm:text-sm text-steel font-bold">{label}</p>
-      <p className={`price text-xl sm:text-2xl font-black mt-1.5 ${c}`}>{value}</p>
-      {sub && <p className="text-xs text-steel mt-1">{sub}</p>}
+    <div className="glass lift rounded-2xl p-4">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs sm:text-sm text-ink/60 font-bold">{label}</p>
+        {icon && <span className="w-8 h-8 rounded-full bg-white/70 flex items-center justify-center text-ink/70 shrink-0">{icon}</span>}
+      </div>
+      <p className={`price text-xl sm:text-2xl font-black mt-1.5 ${c}`}><CountUp text={value} /></p>
+      {sub && <p className="text-xs text-ink/55 mt-1">{sub}</p>}
     </div>
   );
 };
