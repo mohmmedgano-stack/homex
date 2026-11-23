@@ -1,4 +1,4 @@
-<FilesMatch "^(lib|returns|seed_pricelist)\.php$">
+<FilesMatch "^(lib|returns|registry|seed_pricelist)\.php$">
   Require all denied
 </FilesMatch>
 Options -Indexes

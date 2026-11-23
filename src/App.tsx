@@ -3,10 +3,12 @@ import React, { useEffect, useState } from 'react';
 import { StoreProvider, useStore } from './context/StoreContext';
 import { Navbar } from './components/Navbar';
 import { HeroBanner } from './components/HeroBanner';
+import { FinderBanner, RegistryBanner } from './components/FinderBanner';
+const ProductFinder = React.lazy(() => import('./components/ProductFinder').then((m) => ({ default: m.ProductFinder })));
 import { DealersSection } from './components/DealersSection';
 import { PaymentReturn } from './components/PaymentReturn';
 import { searchProducts } from './lib/search';
-import { productPath, productIdFromPath, policyKeyFromPath, orderFromPath, reviewFromPath } from './lib/routes';
+import { productPath, productIdFromPath, policyKeyFromPath, orderFromPath, reviewFromPath, registryFromPath } from './lib/routes';
 // pages a visitor may never open load on demand, so the home page starts faster
 const PolicyPage = React.lazy(() => import('./components/PolicyPage').then((m) => ({ default: m.PolicyPage })));
 const OrderPage = React.lazy(() => import('./components/OrderPage').then((m) => ({ default: m.OrderPage })));
@@ -21,6 +23,7 @@ if (typeof window !== 'undefined') {
   const warm = () => { import('./components/ProductPage'); import('./components/CheckoutView'); };
   'requestIdleCallback' in window ? (window as any).requestIdleCallback(warm, { timeout: 4000 }) : setTimeout(warm, 2500);
 }
+const RegistryPage = React.lazy(() => import('./components/RegistryPage').then((m) => ({ default: m.RegistryPage })));
 const CompareModal = React.lazy(() => import('./components/CompareModal').then((m) => ({ default: m.CompareModal })));
 import { POLICY_PAGES } from './lib/api';
 import { ProductCard } from './components/ProductCard';
@@ -116,6 +119,13 @@ const StoreContent: React.FC = () => {
     if (p) setSelectedProduct(p);
     else history.replaceState(null, '', '/');
   }, [catalogLoaded]);
+  // «اختار جهازك المناسب»: from the home banner, the menu (event) or a #finder link
+  const [finderOpen, setFinderOpen] = useState(() => typeof location !== 'undefined' && location.hash === '#finder');
+  useEffect(() => {
+    const open = () => setFinderOpen(true);
+    window.addEventListener('homex:finder', open);
+    return () => window.removeEventListener('homex:finder', open);
+  }, []);
   // search link from Google's sitelinks search box (/?q=…)
   useEffect(() => {
     const q = new URLSearchParams(location.search).get('q');
@@ -198,6 +208,13 @@ const StoreContent: React.FC = () => {
   const [policyPage] = useState(policyKeyFromPath);
   const [orderPage] = useState(orderFromPath);
   const [reviewPage] = useState(reviewFromPath);
+  // the bride's gift-list pages move between /w, /w/new and /w/CODE without reloading
+  const [registry, setRegistry] = useState(registryFromPath);
+  useEffect(() => {
+    const on = () => setRegistry(registryFromPath());
+    window.addEventListener('popstate', on);
+    return () => window.removeEventListener('popstate', on);
+  }, []);
   useEffect(() => {
     const target = { '#catalog': 'appliances-catalog-section', '#dealers': 'dealers-section' }[location.hash];
     if (!target) return;
@@ -290,7 +307,9 @@ const StoreContent: React.FC = () => {
     <div ref={pageRef} className="min-h-screen flex flex-col bg-page text-ink pb-20 md:pb-0">
       <Navbar />
 
-      {reviewPage && currentView === 'store' ? (
+      {registry && currentView === 'store' ? (
+        <PageIn key={(registry.code || '') + registry.k} className="flex-1 flex flex-col"><Lazy><RegistryPage code={registry.code} k={registry.k} /></Lazy></PageIn>
+      ) : reviewPage && currentView === 'store' ? (
         <PageIn className="flex-1 flex flex-col"><Lazy><ReviewPage code={reviewPage.code} t={reviewPage.t} /></Lazy></PageIn>
       ) : selectedProduct && currentView === 'store' ? (
         <PageIn key={selectedProduct.id} className="flex-1 flex flex-col"><Lazy><ProductPage product={selectedProduct} onBack={closeProduct} /></Lazy></PageIn>
@@ -308,6 +327,8 @@ const StoreContent: React.FC = () => {
           {!searchQuery && selectedCategory === 'all' && (
             <>
               <HeroBanner />
+
+              <FinderBanner onOpen={() => setFinderOpen(true)} />
 
               {rails.map((rail) =>
                 rail.items.length === 0 ? null : (
@@ -328,6 +349,8 @@ const StoreContent: React.FC = () => {
                   </section>
                 )
               )}
+
+              <RegistryBanner />
 
               <DealersSection />
 
@@ -420,11 +443,13 @@ const StoreContent: React.FC = () => {
       <CartDrawer />
       <WishlistDrawer />
       <React.Suspense fallback={null}><CompareModal /></React.Suspense>
+      {finderOpen && <React.Suspense fallback={null}><ProductFinder onClose={() => { setFinderOpen(false); if (location.hash === '#finder') history.replaceState(null, '', location.pathname + location.search); }} /></React.Suspense>}
       <ToastContainer />
       <PaymentReturn />
       <MobileBottomNav />
 
-      {STORE_INFO.whatsapp && (
+      {/* pages with their own sticky action bar (product, checkout, gift list) don't need the floating button on top of it */}
+      {STORE_INFO.whatsapp && currentView === 'store' && !selectedProduct && !registry && (
         <a
           href={`https://wa.me/${waNumber(STORE_INFO.whatsapp)}`}
           target="_blank"

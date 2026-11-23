@@ -4,6 +4,8 @@ import { api, cartToken } from '../lib/api';
 import { useStore } from '../context/StoreContext';
 import { CustomerDetails, Order } from '../types';
 import { EGYPT_GOVERNORATES, isEgyptMobile, isTripleName, normalizePhone } from '../data/governorates';
+import { getGift, clearGift } from '../lib/gift';
+import { Gift as GiftIcon } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { 
   ArrowRight, 
@@ -31,6 +33,10 @@ export const CheckoutView: React.FC = () => {
     showToast 
   } = useStore();
 
+  // buying a gift from a bride's list: deliver to her saved address (default) or to the buyer
+  const [gift, setGiftState] = useState(getGift);
+  const [toBride, setToBride] = useState(true);
+  const giftToBride = !!gift && toBride;
   const [form, setForm] = useState<CustomerDetails>({
     name: '',
     phone: '',
@@ -109,11 +115,11 @@ export const CheckoutView: React.FC = () => {
       return;
     }
 
-    if (form.address.trim().length < 10) {
+    if (!giftToBride && form.address.trim().length < 10) {
       showToast('اكتب العنوان بالتفصيل: المنطقة والشارع ورقم العمارة والدور', 'error');
       return;
     }
-    if (!form.name.trim() || !form.phone.trim() || !form.address.trim() || !form.city) {
+    if (!form.name.trim() || !form.phone.trim() || (!giftToBride && (!form.address.trim() || !form.city))) {
       showToast('اكتب الاسم والموبايل والمحافظة والعنوان', 'error');
       return;
     }
@@ -125,8 +131,9 @@ export const CheckoutView: React.FC = () => {
 
     setIsSubmitting(true);
 
-    submitOrder({ ...form, couponCode: coupon?.code || '', name: form.name.trim().replace(/\s+/g, ' '), phone: normalizePhone(form.phone), altPhone: form.altPhone ? normalizePhone(form.altPhone) : '' }).then((order) => {
+    submitOrder({ ...form, ...({ registry: gift?.code || '', toRegistry: giftToBride } as any), couponCode: coupon?.code || '', name: form.name.trim().replace(/\s+/g, ' '), phone: normalizePhone(form.phone), altPhone: form.altPhone ? normalizePhone(form.altPhone) : '' }).then((order) => {
       setCompletedOrder(order);
+      if (gift) clearGift();
       try { localStorage.removeItem('homex_coupon'); } catch { /* ignore */ }
       try { history.replaceState(null, '', `/o/${order.id}?t=${(order as any).token || ''}`); } catch { /* ignore */ }
       setIsSubmitting(false);
@@ -221,6 +228,21 @@ export const CheckoutView: React.FC = () => {
             </h1>
             <p className="text-xs text-slate-500 mb-6">يرجى كتابة عنوانك بدقة ليصلك الجهاز في أسرع وقت</p>
 
+            {gift && (
+              <div className="mb-5 rounded-2xl border-2 border-gold/40 bg-gold/5 p-4">
+                <p className="font-extrabold text-ink flex items-center gap-2"><GiftIcon className="w-5 h-5 text-gold-deep" /> الطلب ده هدية لقايمة «{gift.title}»</p>
+                <div className="grid grid-cols-1 gap-2 mt-3">
+                  {[[true, `وصّلها لعنوان ${gift.bride || 'العروسة'}`, 'العنوان محفوظ عندنا ومش هيظهرلك'], [false, 'وصّلها لعنواني أنا', 'هتسلّمها بنفسك']].map(([v, t, d]) => (
+                    <label key={String(v)} className={`flex items-start gap-3 rounded-xl border-2 p-3 cursor-pointer ${toBride === v ? 'border-gold bg-white' : 'border-line bg-white/60'}`}>
+                      <input type="radio" name="giftto" className="mt-1 w-5 h-5 accent-[#f47a20]" checked={toBride === v} onChange={() => setToBride(v as boolean)} />
+                      <span><b className="block text-sm text-ink">{t as string}</b><span className="text-xs text-steel">{d as string}</span></span>
+                    </label>
+                  ))}
+                </div>
+                <button type="button" onClick={() => { clearGift(); setGiftState(null); }} className="mt-2 text-xs font-bold text-steel underline">مش هدية، ده طلب عادي</button>
+              </div>
+            )}
+
             <form onSubmit={handleSubmitOrder} className="space-y-4">
               
               {/* Name */}
@@ -291,7 +313,8 @@ export const CheckoutView: React.FC = () => {
                 />
               </div>
 
-              {/* Governorate / City */}
+              {/* Governorate / City (not needed when the gift goes to the bride's saved address) */}
+              {!giftToBride && (<>
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1.5">
                   المحافظة <span className="text-rose-500">*</span>
@@ -322,6 +345,8 @@ export const CheckoutView: React.FC = () => {
                   className="w-full bg-slate-50 text-slate-900 text-sm rounded-xl px-4 py-2.5 border border-slate-200 focus:outline-hidden focus:border-amber-500 focus:bg-white resize-none"
                 />
               </div>
+
+              </>)}
 
               {/* Delivery notes */}
               <div>

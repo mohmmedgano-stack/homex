@@ -8,8 +8,9 @@ import { Carts } from './pages/Carts';
 import { Coupons } from './pages/Coupons';
 import { Reviews } from './pages/Reviews';
 import { Returns } from './pages/Returns';
+import { Registries } from './pages/Registries';
 import { StationAccess } from './pages/StationAccess';
-import { LayoutDashboard, Package, ShoppingBag, Calculator, Settings, Users, LogOut, Menu, X, ExternalLink, Store, Images, FileText, Bell, BellOff, History, ScanBarcode, DatabaseBackup, ShoppingCart, TicketPercent, Star, QrCode, RotateCcw } from 'lucide-react';
+import { LayoutDashboard, Package, ShoppingBag, Calculator, Settings, Users, LogOut, Menu, X, ExternalLink, Store, Images, FileText, Bell, BellOff, History, ScanBarcode, DatabaseBackup, ShoppingCart, TicketPercent, Star, QrCode, RotateCcw, Gift } from 'lucide-react';
 import { Overview } from './pages/Overview';
 import { Products } from './pages/Products';
 import { Orders } from './pages/Orders';
@@ -28,7 +29,7 @@ export interface Admin {
   role: 'owner' | 'staff';
 }
 
-type Page = 'overview' | 'products' | 'orders' | 'returns' | 'carts' | 'coupons' | 'reviews' | 'inventory' | 'banners' | 'pages' | 'dealers' | 'accounting' | 'settings' | 'team';
+type Page = 'overview' | 'products' | 'orders' | 'returns' | 'registries' | 'carts' | 'coupons' | 'reviews' | 'inventory' | 'banners' | 'pages' | 'dealers' | 'accounting' | 'settings' | 'team';
 
 type SettingsTab = 'general' | 'pages' | 'team' | 'activity' | 'backups' | 'station';
 const SETTINGS_TABS: { id: SettingsTab; label: string; short: string; Icon: React.FC<any> }[] = [
@@ -47,6 +48,7 @@ const NAV_GROUPS: { title: string; items: { id: Page; label: string; Icon: React
     { id: 'orders', label: 'الطلبات', Icon: ShoppingBag },
     { id: 'returns', label: 'الاسترجاع والاستبدال', Icon: RotateCcw },
     { id: 'carts', label: 'السلات المتروكة', Icon: ShoppingCart },
+    { id: 'registries', label: 'قوايم العرايس', Icon: Gift },
   ] },
   { title: 'المنتجات والمخزن', items: [
     { id: 'products', label: 'المنتجات والأقسام', Icon: Package },
@@ -294,6 +296,7 @@ const Shell: React.FC<{ admin: Admin; onLogout: () => void }> = ({ admin, onLogo
         {page === 'coupons' && <Coupons isOwner={isOwner} />}
         {page === 'reviews' && <Reviews isOwner={isOwner} />}
         {page === 'returns' && <Returns />}
+        {page === 'registries' && <Registries />}
         {page === 'inventory' && <Inventory />}
         {page === 'banners' && <Banners />}
         {page === 'dealers' && <Dealers />}

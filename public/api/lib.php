@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__ . '/returns.php';
+require_once __DIR__ . '/registry.php';
 
 // Store timestamps in UTC (SQLite datetime('now')); show and group them in Egypt time.
 date_default_timezone_set('Africa/Cairo');
@@ -320,6 +321,7 @@ function migrate(PDO $db): void {
         foreach ($seed as $i => [$id, $name]) $st->execute([$id, $name, $i]);
     }
     returns_migrate($db);
+    registry_migrate($db);
     // one-time import of the 2026 price list (does nothing once done)
     require_once __DIR__ . '/seed_pricelist.php';
     seed_pricelist_2026($db);
@@ -1069,6 +1071,18 @@ function create_order(array $b): array {
     if (count($words) < 3) throw new ApiError('اكتب الاسم ثلاثي');
     if ($phone === null) throw new ApiError('رقم الموبايل لازم يكون رقم مصري صحيح من 11 رقم');
     if ($alt === null) throw new ApiError('رقم الموبايل الإضافي مش صحيح');
+    // a gift for a bride's list: optionally delivered to her saved address (the buyer never sees it)
+    $registry = null; $giftNote = '';
+    if (trim((string)($b['registry'] ?? '')) !== '') {
+        $registry = registry_row((string)$b['registry']);
+        if (!$registry) throw new ApiError('قايمة الهدايا دي مبقتش متاحة، شيلها من السلة وكمّل عادي');
+        if (!empty($b['toRegistry'])) {
+            $city = $registry['city']; $address = $registry['address']; $alt = $registry['phone'];
+            $giftNote = "🎁 هدية لقايمة «{$registry['title']}» ({$registry['code']}) — توصيل لعنوان العروسة {$registry['bride_name']}";
+        } else {
+            $giftNote = "🎁 هدية لقايمة «{$registry['title']}» ({$registry['code']}) — توصيل لعنوان المشتري";
+        }
+    }
     if (!in_array($city, GOVERNORATES, true)) throw new ApiError('اختار المحافظة');
     if (mb_strlen($address) < 10) throw new ApiError('اكتب العنوان بالتفصيل');
 
@@ -1122,8 +1136,9 @@ function create_order(array $b): array {
             'url' => mb_substr((string)($_SERVER['HTTP_REFERER'] ?? ''), 0, 300),
         ]);
         $db->prepare('INSERT INTO orders (code, customer_name, phone, alt_phone, city, address, notes, payment_method, subtotal, shipping_fee, total, cost_total, status, email, token, client_meta, coupon_code, discount) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
-            ->execute([$code, $name, $phone, $alt, $city, $address, str($c['notes'] ?? '', 500), $pm, $sub, $fee, $total, $cost, $pm === 'card' ? 'awaiting_payment' : 'pending', $email, $token, $clientMeta, $couponCode, $discount]);
+            ->execute([$code, $name, $phone, $alt, $city, $address, trim($giftNote . ($giftNote !== '' ? "\n" : '') . str($c['notes'] ?? '', 500)), $pm, $sub, $fee, $total, $cost, $pm === 'card' ? 'awaiting_payment' : 'pending', $email, $token, $clientMeta, $couponCode, $discount]);
         $oid = (int)$db->lastInsertId();
+        if ($registry) $db->prepare('UPDATE orders SET registry_id = ? WHERE id = ?')->execute([$registry['id'], $oid]);
         $ins = $db->prepare('INSERT INTO order_items (order_id, product_id, name, image, price, cost, qty) VALUES (?,?,?,?,?,?,?)');
         $dec = $db->prepare('UPDATE products SET stock = stock - ? WHERE id = ?');
         foreach ($lines as [$p, $qty]) {
@@ -2006,13 +2021,20 @@ function order_link(array $o, bool $absolute = true): string {
 }
 
 /** Public order page data — needs the secret token from the confirmation link. */
+/** A gift sent to a bride's address: the buyer sees that it goes to her, never the address or her phone */
+function gift_safe(array $o): array {
+    $toBride = !empty($o['registry_id']) && str_contains((string)$o['notes'], 'توصيل لعنوان العروسة');
+    return $toBride ? ['address' => 'عنوان العروسة (محفوظ عندنا)', 'city' => 'محافظة العروسة', 'alt' => '']
+                    : ['address' => (string)$o['address'], 'city' => (string)$o['city'], 'alt' => (string)($o['alt_phone'] ?? '')];
+}
+
 function order_view(string $code, string $t): array {
     $o = order_with_items(str($code, 30));
     if (!$o || $t === '' || !hash_equals(order_token($o), $t)) throw new ApiError('الطلب مش موجود', 404);
     return [
         'code' => $o['code'], 'status' => $o['status'], 'createdAt' => utc_to_cairo($o['created_at']),
-        'name' => $o['customer_name'], 'phone' => $o['phone'], 'altPhone' => $o['alt_phone'], 'email' => $o['email'] ?? '',
-        'city' => $o['city'], 'address' => $o['address'], 'notes' => $o['notes'],
+        'name' => $o['customer_name'], 'phone' => $o['phone'], 'altPhone' => gift_safe($o)['alt'], 'email' => $o['email'] ?? '',
+        'city' => gift_safe($o)['city'], 'address' => gift_safe($o)['address'], 'notes' => $o['notes'],
         'paymentMethod' => $o['payment_method'], 'paid' => ($o['payment_status'] ?? '') === 'paid',
         'subtotal' => (float)$o['subtotal'] + (float)($o['discount'] ?? 0), 'discount' => (float)($o['discount'] ?? 0), 'coupon' => $o['coupon_code'] ?? '',
         'courier' => $o['courier'] ?? '', 'tracking' => $o['tracking'] ?? '', 'trackingUrl' => tracking_url($o['courier'] ?? '', $o['tracking'] ?? ''),
@@ -2135,7 +2157,7 @@ function order_email_html(array $o): array {
         . '<tr><td style="padding:10px 0;border-top:1px solid #eceef1;font-size:17px"><b>الإجمالي</b></td><td style="padding:10px 0;border-top:1px solid #eceef1;text-align:left;font-size:19px"><b>' . money_ar($o['total']) . '</b></td></tr>'
         . $paidLine . '</table>'
         . '<h2 style="margin:28px 0 10px;font-size:17px;color:#1c1f24">بيانات التوصيل</h2>'
-        . '<p style="margin:0;color:#374151;font-size:15px;line-height:1.9">' . $h($o['customer_name']) . '<br>' . $h($o['address']) . '<br>' . $h($o['city']) . '، مصر<br><span dir="ltr">' . $h($o['phone']) . '</span></p>'
+        . '<p style="margin:0;color:#374151;font-size:15px;line-height:1.9">' . $h($o['customer_name']) . '<br>' . $h(gift_safe($o)['address']) . '<br>' . $h(gift_safe($o)['city']) . '، مصر<br><span dir="ltr">' . $h($o['phone']) . '</span></p>'
         . '<h2 style="margin:22px 0 6px;font-size:17px;color:#1c1f24">طريقة الدفع</h2><p style="margin:0;color:#374151;font-size:15px">' . $h($pay) . '</p>'
         . '</td></tr>'
         . '<tr><td style="background:#f9fafb;padding:18px 28px;color:#6b7280;font-size:13px;line-height:1.8;border-top:1px solid #eceef1">'
@@ -2143,7 +2165,7 @@ function order_email_html(array $o): array {
         . '<a href="' . $h(site_base()) . '" style="color:#c4580a">' . $h($store) . '</a></td></tr>'
         . '</table></td></tr></table></body></html>';
     $text = "شكراً يا {$first}، طلبك {$o['code']} وصلنا.\n\n" . implode("\n", array_map(fn($i) => "- {$i['name']} × {$i['qty']}", $o['items']))
-        . "\n\nالإجمالي: " . money_ar($o['total']) . "\nالدفع: $pay\nالعنوان: {$o['address']}، {$o['city']}\n\nتابع طلبك: $link\n";
+        . "\n\nالإجمالي: " . money_ar($o['total']) . "\nالدفع: $pay\nالعنوان: " . gift_safe($o)['address'] . '، ' . gift_safe($o)['city'] . "\n\nتابع طلبك: $link\n";
     return [$html, $text];
 }
 

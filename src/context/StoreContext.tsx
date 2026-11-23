@@ -537,6 +537,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       website: (document.getElementById('hp-website') as HTMLInputElement | null)?.value || '',
       cartToken: cartToken(),
       couponCode: (customer as any).couponCode || '',
+      registry: (customer as any).registry || '',
+      toRegistry: !!(customer as any).toRegistry,
       paymentMethod: customer.paymentMethod,
       items: cart.map((i) => ({ productId: Number(i.product.id), quantity: i.quantity, options: i.options || {} })),
     });

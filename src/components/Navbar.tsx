@@ -55,7 +55,7 @@ export const Navbar: React.FC = () => {
 
   // On a policy page (/p/...) the store lives at "/", so store actions go home first
   const leavePolicyPage = (hash = '') => {
-    if (/^\/(p|o|r)\//.test(location.pathname)) {
+    if (/^\/(p|o|r|w)(\/|$)/.test(location.pathname)) {
       location.href = '/' + hash;
       return true;
     }
@@ -259,6 +259,8 @@ export const Navbar: React.FC = () => {
               <p className="px-4 pt-5 pb-2 text-xs font-bold text-steel">تسوق</p>
               <button onClick={() => toCatalog('all', 'price-asc')} className="w-full text-right px-4 h-12 border-b border-line font-bold text-sale">العروض</button>
               <button onClick={() => toCatalog('all', 'newest')} className="w-full text-right px-4 h-12 border-b border-line font-bold text-ink">وصل حديثاً</button>
+              <button onClick={() => { setMenuOpen(false); window.dispatchEvent(new Event('homex:finder')); }} className="w-full text-right px-4 h-12 border-b border-line font-bold text-gold-deep">اختار جهازك المناسب</button>
+              <button onClick={() => { setMenuOpen(false); history.pushState(null, '', '/w'); window.dispatchEvent(new PopStateEvent('popstate')); window.scrollTo({ top: 0 }); }} className="w-full text-right px-4 h-12 border-b border-line font-bold text-ink">قايمة جهاز العروسة</button>
               <button onClick={toDealers} className="w-full text-right px-4 h-12 border-b border-line font-bold text-ink">اشتري من أقرب تاجر</button>
               <button onClick={() => { setCompareOpen(true); setMenuOpen(false); }} className="w-full text-right px-4 h-12 border-b border-line font-bold text-ink">
                 مقارنة الأجهزة ({compareList.length})

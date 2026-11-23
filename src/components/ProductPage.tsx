@@ -1,4 +1,6 @@
 import { productPath } from '../lib/routes';
+import { waLink } from '../lib/whatsapp';
+import { FaWhatsapp } from 'react-icons/fa';
 import React, { useEffect, useState } from 'react';
 import { thumb, api } from '../lib/api';
 import { useStore } from '../context/StoreContext';
@@ -21,7 +23,7 @@ const Stars: React.FC<{ value: number; size?: string }> = ({ value, size = 'w-4 
 
 /** Full product page at /product/ID-slug — shareable, used as ad landing page, and indexed by Google. */
 export const ProductPage: React.FC<{ product: Product; onBack: () => void }> = ({ product, onBack }) => {
-  const { products, categories, addToCart, isWishlisted, toggleWishlist, isInCompare, toggleCompare, setCurrentView, showToast, setSelectedCategory } = useStore();
+  const { products, categories, addToCart, isWishlisted, toggleWishlist, isInCompare, toggleCompare, setCurrentView, showToast, setSelectedCategory, settings } = useStore();
   const [quantity, setQuantity] = useState(1);
   const [active, setActive] = useState(0);
   const [reviews, setReviews] = useState<{ items: Review[]; avg: number; count: number } | null>(null);
@@ -58,6 +60,19 @@ export const ProductPage: React.FC<{ product: Product; onBack: () => void }> = (
   const more = related.length < 4 ? products.filter((p) => p.id !== product.id && p.category !== product.category && p.stock > 0).slice(0, 8 - related.length) : [];
 
   const add = () => addToCart(product, quantity, groups.length ? picked : undefined);
+  // order (or ask) on WhatsApp with everything already written in the message
+  const waNum = settings.whatsapp || settings.phone || '';
+  const waText = () => [
+    isOut ? 'السلام عليكم، عايز أسأل على المنتج ده إمتى هيتوفر:' : 'السلام عليكم، عايز أطلب:',
+    `• ${product.name}${product.code ? ` (موديل ${product.code})` : ''}`,
+    ...groups.map((g) => `• ${g.name}: ${picked[g.name]}`),
+    ...(isOut ? [] : [`• الكمية: ${quantity}`, `• السعر: ${(price * quantity).toLocaleString('en-US')} ج.م`]),
+    `${location.origin}${productPath(product)}`,
+  ].join('\n');
+  const orderOnWhatsApp = () => {
+    try { (window as any).fbq?.('track', 'Contact', { content_name: product.name }); (window as any).gtag?.('event', 'contact', { method: 'whatsapp', item_id: product.id }); } catch { /* tracking is optional */ }
+    window.open(waLink(waNum, waText()), '_blank', 'noopener');
+  };
   const buyNow = () => {
     addToCart(product, quantity, groups.length ? picked : undefined);
     setCurrentView('checkout');
@@ -184,6 +199,11 @@ export const ProductPage: React.FC<{ product: Product; onBack: () => void }> = (
                 <button onClick={buyNow} className="flex-1 h-12 rounded-xl btn-gold font-extrabold">اطلب دلوقتي</button>
               </div>
             )}
+            {waNum && (
+              <button onClick={orderOnWhatsApp} className="mt-2 w-full h-12 rounded-xl bg-[#25D366] hover:bg-[#1fb857] text-white font-extrabold flex items-center justify-center gap-2 transition-colors">
+                <FaWhatsapp className="w-5 h-5" /> {isOut ? 'اسأل عليه على الواتساب' : 'اطلب على الواتساب'}
+              </button>
+            )}
           </div>
 
           <div className="flex gap-2">
@@ -280,10 +300,14 @@ export const ProductPage: React.FC<{ product: Product; onBack: () => void }> = (
       {/* Sticky buy bar (phones) */}
       <div className="md:hidden fixed bottom-16 inset-x-0 z-30 bg-white border-t border-line px-3 py-2 shadow-[0_-6px_20px_rgba(0,0,0,0.06)]">
         {isOut ? (
-          <p className="h-11 flex items-center justify-center rounded-xl bg-shelf text-steel font-bold text-sm">المنتج ده خلص حالياً</p>
+          <div className="flex gap-2">
+            <p className="flex-1 h-11 flex items-center justify-center rounded-xl bg-shelf text-steel font-bold text-sm">المنتج ده خلص حالياً</p>
+            {waNum && <button onClick={orderOnWhatsApp} className="h-11 px-4 rounded-xl bg-[#25D366] text-white font-bold text-sm flex items-center gap-1.5"><FaWhatsapp className="w-5 h-5" /> اسأل عليه</button>}
+          </div>
         ) : (
           <div className="flex items-center gap-2">
             <QtyBox q={quantity} max={product.stock} set={setQuantity} small />
+            {waNum && <button onClick={orderOnWhatsApp} className="w-11 h-11 shrink-0 rounded-xl bg-[#25D366] text-white flex items-center justify-center" aria-label="اطلب على الواتساب"><FaWhatsapp className="w-6 h-6" /></button>}
             <button onClick={add} className="flex-1 min-w-0 h-11 rounded-xl border-2 border-ink text-ink font-extrabold text-sm flex items-center justify-center gap-1"><ShoppingBag className="w-4 h-4 shrink-0" /> <span className="truncate">للسلة</span></button>
             <button onClick={buyNow} className="flex-[1.4] min-w-0 h-11 rounded-xl btn-gold font-extrabold text-sm"><span className="truncate">اطلب دلوقتي</span></button>
           </div>

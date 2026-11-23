@@ -19,3 +19,8 @@ export const reviewFromPath = (): { code: string; t: string } | null => {
   const m = location.pathname.match(/^\/r\/([A-Za-z0-9-]+)\/?$/);
   return m ? { code: m[1], t: new URLSearchParams(location.search).get('t') || '' } : null;
 };
+export const registryFromPath = (): { code: string | null; k: string } | null => {
+  const m = location.pathname.match(/^\/w(?:\/([A-Za-z0-9-]+))?\/?$/);
+  if (!m) return null;
+  return { code: m[1] ? (m[1] === 'new' ? 'new' : m[1].toUpperCase()) : null, k: new URLSearchParams(location.search).get('k') || '' };
+};
