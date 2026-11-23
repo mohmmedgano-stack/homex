@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useScrollLock } from './fx/useScrollLock';
 import { LogoMotion } from './fx/LogoMotion';
+import { SmartSearch } from './SmartSearch';
 import { useStore } from '../context/StoreContext';
 import { closeProductPage } from '../lib/nav';
 import { ShoppingCart, Heart, ArrowLeftRight, Search, ShieldCheck, X, Menu, Phone, Truck, ChevronDown, LayoutGrid } from 'lucide-react';
@@ -88,28 +89,7 @@ export const Navbar: React.FC = () => {
     if (currentView !== 'store') setCurrentView('store');
   };
 
-  const searchBox = (className = '') => (
-    <form
-      onSubmit={(e) => {
-        e.preventDefault();
-        document.getElementById('appliances-catalog-section')?.scrollIntoView({ behavior: 'smooth' });
-      }}
-      className={`flex h-11 sm:h-12 rounded-xl overflow-hidden border-2 border-transparent focus-within:border-gold bg-white ${className}`}
-      role="search"
-    >
-      <input
-        type="search"
-        placeholder="بتدور على إيه؟ كاتيل، مكواة، خلاط..."
-        value={searchQuery}
-        onChange={(e) => onSearch(e.target.value)}
-        className="flex-1 min-w-0 px-4 text-[15px] text-ink placeholder-steel/80 focus:outline-hidden bg-transparent"
-        aria-label="ابحث في المنتجات"
-      />
-      <button type="submit" className="btn-gold w-12 sm:w-14 flex items-center justify-center shrink-0" aria-label="بحث">
-        <Search className="w-5 h-5" />
-      </button>
-    </form>
-  );
+  const searchBox = (className = '', inputClass = '') => <SmartSearch className={className} inputClass={inputClass} onSearch={onSearch} />;
 
   const counter = 'absolute -top-1.5 -left-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-sale text-white text-[11px] font-bold flex items-center justify-center';
 
@@ -314,7 +294,7 @@ export const Navbar: React.FC = () => {
           >
             <img src={logo} width={600} height={167} alt={settings.store_name} className="h-7 sm:h-9 w-auto" />
           </button>
-          {searchBox('hidden md:flex flex-1 max-w-xl mx-auto !h-10 sm:!h-11')}
+          {searchBox('hidden md:flex flex-1 max-w-xl mx-auto', '!h-10 sm:!h-11')}
           <div className="flex items-center gap-0.5 sm:gap-2 mr-auto md:mr-0">
             <button onClick={() => setSearchOpen((o) => !o)} className="md:hidden p-2 text-white" aria-label="بحث" aria-expanded={searchOpen}>
               <Search className="w-[22px] h-[22px]" />
@@ -328,7 +308,7 @@ export const Navbar: React.FC = () => {
             </button>
           </div>
         </div>
-        {searchOpen && searchBox('md:hidden mb-3 !h-11')}
+        {searchOpen && searchBox('md:hidden mb-3', '!h-11')}
       </div>
     </div>
     </>

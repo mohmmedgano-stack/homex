@@ -5,6 +5,7 @@ import { Navbar } from './components/Navbar';
 import { HeroBanner } from './components/HeroBanner';
 import { DealersSection } from './components/DealersSection';
 import { PaymentReturn } from './components/PaymentReturn';
+import { searchProducts } from './lib/search';
 import { productPath, productIdFromPath, policyKeyFromPath, orderFromPath, reviewFromPath } from './lib/routes';
 // pages a visitor may never open load on demand, so the home page starts faster
 const PolicyPage = React.lazy(() => import('./components/PolicyPage').then((m) => ({ default: m.PolicyPage })));
@@ -202,19 +203,12 @@ const StoreContent: React.FC = () => {
   // Extract unique brands
   const brands = Array.from(new Set(products.map(p => p.brand)));
 
-  // Filter products
-  const filteredProducts = products.filter(p => {
+  // Filter products — search first (ranked, understands spelling variants, synonyms and typos)
+  const searched = searchQuery.trim() ? searchProducts(products, categories, searchQuery) : products;
+  const rank = new Map(searched.map((p, i) => [p.id, i]));
+  const filteredProducts = searched.filter(p => {
     // Category match
     const matchesCategory = selectedCategory === 'all' || p.category === selectedCategory;
-
-    // Search query match (name, description, brand, wattage, capacity)
-    const q = searchQuery.toLowerCase().trim();
-    const matchesSearch = !q || 
-      p.name.toLowerCase().includes(q) ||
-      p.brand.toLowerCase().includes(q) ||
-      p.description.toLowerCase().includes(q) ||
-      (p.wattage && p.wattage.toLowerCase().includes(q)) ||
-      (p.capacity && p.capacity.toLowerCase().includes(q));
 
     // Brand match
     const matchesBrand = selectedBrand === 'all' || p.brand === selectedBrand;
@@ -226,7 +220,7 @@ const StoreContent: React.FC = () => {
     else if (priceFilter === '6k-15k') matchesPrice = p.price > 6000 && p.price <= 15000;
     else if (priceFilter === 'above15k') matchesPrice = p.price > 15000;
 
-    return matchesCategory && matchesSearch && matchesBrand && matchesPrice;
+    return matchesCategory && matchesBrand && matchesPrice;
   });
 
   // Sort products
@@ -235,7 +229,8 @@ const StoreContent: React.FC = () => {
     if (sortBy === 'price-desc') return b.price - a.price;
     if (sortBy === 'rating') return b.rating - a.rating;
     if (sortBy === 'newest') return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-    // Default: featured first
+    // Default: best search match first, otherwise featured first
+    if (searchQuery.trim()) return (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0);
     return (b.isFeatured ? 1 : 0) - (a.isFeatured ? 1 : 0);
   });
 
