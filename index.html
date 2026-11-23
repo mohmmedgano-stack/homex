@@ -24,6 +24,14 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&display=swap" rel="stylesheet">
     <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"Organization","@id":"https://home-x.online/#org","name":"HOMEX","alternateName":"هوم إكس","url":"https://home-x.online/","logo":"https://home-x.online/logo.png","email":"homex.eg.office@gmail.com","contactPoint":{"@type":"ContactPoint","telephone":"+201004311640","contactType":"customer service","areaServed":"EG","availableLanguage":"ar"}},{"@type":"WebSite","@id":"https://home-x.online/#website","name":"HOMEX","alternateName":"هوم إكس","url":"https://home-x.online/","inLanguage":"ar-EG","publisher":{"@id":"https://home-x.online/#org"}}]}</script>
+    <style>
+      /* The page's facts are written into #root as plain HTML for Google and AI crawlers (see render_*_html in
+         api/lib.php). People never see that copy: it stays out of view, and the dark bar below stands in for the
+         header for the moment before the app replaces it. */
+      .seo-prerender { position: absolute !important; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
+      #root:has(> .seo-prerender)::before { content: ""; display: block; height: 152px; background: #1c1f24; }
+      @media (min-width: 1024px) { #root:has(> .seo-prerender)::before { height: 164px; } }
+    </style>
   </head>
   <body class="bg-page text-ink antialiased font-sans selection:bg-amber-200">
     <div id="root"></div>

@@ -2601,7 +2601,7 @@ function render_product_html(int $id): void {
     if ($p['wattage'] !== '') $rows[] = ['القدرة', $p['wattage']];
     foreach ($specs as $sp) if (!in_array($sp['label'], array_column($rows, 0), true)) $rows[] = [$sp['label'], $sp['value']];
     foreach ($options as $g) $rows[] = [$g['name'], implode('، ', array_column($g['values'], 'label'))];
-    $body = '<main dir="rtl" style="max-width:960px;margin:0 auto;padding:16px;font-family:Tajawal,system-ui,sans-serif">'
+    $body = '<main dir="rtl" class="seo-prerender">'
         . '<nav aria-label="مسار الصفحة">' . implode(' / ', array_map(fn($c) => '<a href="' . $h($c[1]) . '">' . $h($c[0]) . '</a>', $crumbs)) . '</nav>'
         . '<article><h1>' . $h($p['name']) . '</h1>'
         . '<img src="' . $h($img) . '" alt="' . $h($p['name']) . '" width="500" height="500" style="max-width:100%;height:auto" />'
@@ -2647,7 +2647,7 @@ function render_home_html(): void {
 
     $by = [];
     foreach ($products as $p) $by[$p['category_id']][] = $p;
-    $body = '<main dir="rtl" style="max-width:1100px;margin:0 auto;padding:16px;font-family:Tajawal,system-ui,sans-serif">'
+    $body = '<main dir="rtl" class="seo-prerender">'
         . '<h1>HOMEX هوم إكس — أجهزة منزلية بضمان حقيقي في مصر</h1>'
         . '<p>HOMEX (هوم إكس) براند أجهزة منزلية مصري. على home-x.online تقدر تطلب شاشات وخلاطات ومحضرات طعام وكبة وكاتيل ومكاوي وأجهزة مطبخ، مع شحن لكل محافظات مصر والدفع عند الاستلام.</p>';
     foreach ($cats as $c) {
