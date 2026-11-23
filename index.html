@@ -22,18 +22,63 @@
     <link rel="preload" href="/fonts/eyen-ammon-bold.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&display=swap" rel="stylesheet">
+    <!-- Loaded without holding up the first paint; text shows in the fallback font for a moment, then swaps. -->
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&display=swap" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&display=swap" rel="stylesheet"></noscript>
+    <link rel="preload" as="image" href="/logo.webp">
     <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"Organization","@id":"https://home-x.online/#org","name":"HOMEX","alternateName":"هوم إكس","url":"https://home-x.online/","logo":"https://home-x.online/logo.png","email":"homex.eg.office@gmail.com","contactPoint":{"@type":"ContactPoint","telephone":"+201004311640","contactType":"customer service","areaServed":"EG","availableLanguage":"ar"}},{"@type":"WebSite","@id":"https://home-x.online/#website","name":"HOMEX","alternateName":"هوم إكس","url":"https://home-x.online/","inLanguage":"ar-EG","publisher":{"@id":"https://home-x.online/#org"}}]}</script>
     <style>
       /* The page's facts are written into #root as plain HTML for Google and AI crawlers (see render_*_html in
-         api/lib.php). People never see that copy: it stays out of view, and the dark bar below stands in for the
-         header for the moment before the app replaces it. */
+         api/lib.php). People never see that copy: it stays out of view. Until the app starts, #boot paints a
+         skeleton of the store (header, logo, search, banner, cards) straight from this HTML, with no wait for
+         scripts or the stylesheet; main.tsx removes it once the app has drawn. */
       .seo-prerender { position: absolute !important; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
-      #root:has(> .seo-prerender)::before { content: ""; display: block; height: 152px; background: #1c1f24; }
-      @media (min-width: 1024px) { #root:has(> .seo-prerender)::before { height: 164px; } }
+      body { margin: 0; background: #f3f4f7; }
+      body:has(#root > :not(.seo-prerender)) #boot { display: none; }
+      #boot .bh { background: #1c1f24; padding-top: 36px; border-top: 0; box-shadow: inset 0 36px #15181c; }
+      #boot .bw { max-width: 1216px; margin: 0 auto; padding: 0 12px; box-sizing: border-box; }
+      #boot .br { height: 64px; display: flex; align-items: center; justify-content: flex-start; }
+      #boot .br img { height: 34px; width: auto; }
+      #boot .bs { height: 46px; border-radius: 12px; background: #fff; box-shadow: inset 50px 0 #f47b20; }
+      #boot .bs.desk { display: none; }
+      #boot .bc { display: flex; gap: 8px; padding: 12px 0; overflow: hidden; }
+      #boot .bc i { flex: 0 0 84px; height: 30px; border-radius: 99px; background: #2a2e35; }
+      #boot .bc i:first-child { background: #f47b20; flex-basis: 52px; }
+      #boot .bb { padding-top: 16px; }
+      #boot .sk { border-radius: 20px; background: linear-gradient(100deg, #e4e6ea 40%, #f1f2f5 50%, #e4e6ea 60%) 0 0 / 300% 100%; animation: boot-sh 1.3s linear infinite; }
+      #boot .bhero { height: 244px; background: linear-gradient(100deg, #262a31 40%, #343942 50%, #262a31 60%) 0 0 / 300% 100%; }
+      #boot .bg { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 16px; }
+      #boot .bg i { height: 210px; border-radius: 16px; }
+      @keyframes boot-sh { from { background-position: 100% 0; } to { background-position: 0 0; } }
+      @media (min-width: 1024px) {
+        #boot .br { height: 80px; gap: 28px; }
+        #boot .br img { height: 44px; }
+        #boot .bs.desk { display: block; flex: 0 1 672px; }
+        #boot .bs.mob { display: none; }
+        #boot .bc { background: #2a2e35; margin: 0 calc(50% - 50vw); padding: 0 calc(50vw - 50% + 12px); height: 48px; align-items: center; }
+        #boot .bc i { background: #3a3f47; height: 14px; }
+        #boot .bc i:first-child { flex-basis: 142px; height: 48px; border-radius: 0; }
+        #boot .bb { padding-top: 24px; }
+        #boot .bhero { height: 405px; }
+        #boot .bg { grid-template-columns: repeat(6, 1fr); margin-top: 24px; }
+        #boot .bg i { height: 280px; }
+      }
+      @media (max-width: 1023px) { #boot .bg i:nth-child(n+5) { display: none; } }
+      @media (prefers-reduced-motion: reduce) { #boot .sk { animation: none; } }
     </style>
   </head>
   <body class="bg-page text-ink antialiased font-sans selection:bg-amber-200">
+    <div id="boot" aria-hidden="true">
+      <div class="bh"><div class="bw">
+        <div class="br"><img src="/logo.webp" alt="" width="122" height="34"><div class="bs desk"></div></div>
+        <div class="bs mob"></div>
+        <div class="bc"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+      </div></div>
+      <div class="bw bb">
+        <div class="sk bhero"></div>
+        <div class="bg"><i class="sk"></i><i class="sk"></i><i class="sk"></i><i class="sk"></i><i class="sk"></i><i class="sk"></i></div>
+      </div>
+    </div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
