@@ -110,11 +110,13 @@ try {
         $copied++;
     }
 
-    // Remove old hashed bundles the new build no longer references
+    // Remove old hashed bundles the new build no longer references, but only once they are two weeks old: a page
+    // opened before this deploy still loads its own bundles when the visitor opens a product or the cart.
     $removed = 0;
+    $keepUntil = time() - 14 * 86400;
     foreach (glob("$webroot/assets/*") ?: [] as $old) {
         $rel = 'assets/' . basename($old);
-        if (is_file($old) && !isset($newFiles[$rel])) { @unlink($old); $removed++; }
+        if (is_file($old) && !isset($newFiles[$rel]) && filemtime($old) < $keepUntil) { @unlink($old); $removed++; }
     }
 
     file_put_contents($shaFile, $sha);
