@@ -183,6 +183,11 @@ export const StoreSettingsPage: React.FC<{ admin: Admin }> = ({ admin }) => {
             </Field>
           </div>
           <MetaServerSide s={s} set={set} />
+          <div className="mt-5 pt-4 border-t border-line">
+            <Field label="Google Search Console — كود التحقق" hint="من Search Console ← إضافة موقع ← HTML tag. الصق الـ meta tag كله أو الكود بس، واحفظ، وبعدين دوس Verify في جوجل.">
+              <Input dir="ltr" value={s.google_verification || ''} onChange={(e) => set('google_verification', e.target.value.trim())} placeholder='<meta name="google-site-verification" content="…" />' />
+            </Field>
+          </div>
         </Card>
 
         <Card title="صفحات الموقع (من نحن والسياسات)">

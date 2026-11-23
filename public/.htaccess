@@ -16,6 +16,8 @@ DirectoryIndex index.html index.php
   RewriteRule (^|/)\.(?!well-known/) - [F]
 
   # Store pages rendered by the app
+  # home page with the brand's facts prerendered for Google
+  RewriteRule ^$ api/page.php?home=1 [L,QSA]
   RewriteRule ^p/([a-z0-9-]+)/?$ api/page.php?page=$1 [L,QSA]
   RewriteRule ^o/[A-Za-z0-9-]+/?$ index.html [L]
   RewriteRule ^r/[A-Za-z0-9-]+/?$ index.html [L]

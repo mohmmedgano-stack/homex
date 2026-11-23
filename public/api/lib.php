@@ -525,6 +525,7 @@ const PUBLIC_SETTINGS = [
     'page_about' => '', 'page_shipping' => '', 'page_returns' => '', 'page_privacy' => '', 'page_terms' => '',
     // Tracking
     'meta_pixel_id' => '', 'tiktok_pixel_id' => '', 'ga4_id' => '',
+    'google_verification' => '', // Google Search Console HTML-tag code
 ];
 
 /** Starting text for the policy pages. The brand edits them from the dashboard. */
@@ -673,6 +674,11 @@ function save_settings(array $b): array {
         if (!array_key_exists($k, $b)) continue;
         $v = str($b[$k], str_starts_with($k, 'page_') ? 20000 : 500);
         if (in_array($k, ['meta_pixel_id', 'tiktok_pixel_id', 'ga4_id'], true) && $v !== '' && !preg_match('/^[A-Za-z0-9\-]{4,40}$/', $v)) throw new ApiError('رقم البيكسل/التتبع فيه حروف مش مسموحة');
+        if ($k === 'google_verification' && $v !== '') {
+            // accept the whole <meta …> tag Google gives, keep only the code
+            if (preg_match('/content=["\']([^"\']+)/', $v, $m)) $v = $m[1];
+            if (!preg_match('/^[A-Za-z0-9_\-]{10,100}$/', $v)) throw new ApiError('كود جوجل مش مظبوط — انسخ الـ meta tag اللي جوجل بيديهولك زي ما هو');
+        }
         $st->execute([$k, $v]);
     }
     foreach (PAYMENT_SETTINGS as $k => $_) {
@@ -1788,7 +1794,7 @@ const ACTIVITY_SETTING_LABELS = [
     'shipping_fee' => 'مصاريف الشحن', 'free_shipping_over' => 'الشحن المجاني', 'pay_cod' => 'الدفع عند الاستلام',
     'hero_title' => 'عنوان الأقسام', 'hero_subtitle' => 'جملة الأقسام', 'brand_title' => 'عنوان بانر HOMEX', 'brand_subtitle' => 'جملة بانر HOMEX',
     'brand_banner_desktop' => 'بانر HOMEX على الكمبيوتر', 'brand_banner_mobile' => 'بانر HOMEX على الموبايل', 'footer_pages_title' => 'عنوان عمود الفوتر',
-    'meta_pixel_id' => 'بيكسل فيسبوك', 'tiktok_pixel_id' => 'بيكسل تيك توك', 'ga4_id' => 'جوجل أناليتكس',
+    'meta_pixel_id' => 'بيكسل فيسبوك', 'tiktok_pixel_id' => 'بيكسل تيك توك', 'ga4_id' => 'جوجل أناليتكس', 'google_verification' => 'تحقق جوجل',
     'pay_card_provider' => 'شركة الدفع بالكارت', 'pay_card_test' => 'وضع التجربة للدفع', 'notify_email' => 'إيميل تنبيه الطلبات',
 ];
 
@@ -2585,6 +2591,57 @@ function render_product_html(int $id): void {
 
     $html = preg_replace('~<title>.*?</title>|<meta (name="description"|property="og:(title|description|type|url|image(:width|:height)?)")[^>]*>|<link rel="canonical"[^>]*>~su', '', $html);
     $html = str_replace('</head>', $meta . "\n</head>", $html);
+    $html = preg_replace('~<div id="root">\s*</div>~', '<div id="root">' . str_replace(['\\', '$'], ['\\\\', '\\$'], $body) . '</div>', $html, 1);
+    echo $html;
+}
+
+/**
+ * Home page for search engines: the brand clearly named (HOMEX / هوم إكس, Egypt), its categories and every product
+ * with price and link as plain HTML inside #root (the app replaces it on start), plus Organization, WebSite
+ * (with site search) and ItemList data. Helps Google tell this HOMEX apart from other companies with the same name.
+ */
+function render_home_html(): void {
+    $html = (string)@file_get_contents(dirname(__DIR__) . '/index.html');
+    header('Content-Type: text/html; charset=utf-8');
+    header('Cache-Control: no-cache');
+    if ($html === '') { http_response_code(500); return; }
+    $h = fn($v) => htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
+    $b = site_base();
+    $store = get_setting('store_name', 'HOMEX') ?: 'HOMEX';
+    $cats = db()->query('SELECT id, name FROM categories ORDER BY sort, name')->fetchAll();
+    $products = db()->query('SELECT * FROM products WHERE active = 1 ORDER BY is_featured DESC, id DESC LIMIT 60')->fetchAll();
+    $same = array_values(array_filter(array_map(fn($k) => trim((string)get_setting($k, '')), ['facebook', 'instagram', 'tiktok']), fn($u) => preg_match('~^https?://~', $u)));
+    $org = ['@type' => 'Organization', '@id' => $b . '/#org', 'name' => $store,
+        'alternateName' => ['هوم إكس', 'هوم اكس', 'HOMEX Egypt', 'هوم إكس مصر', 'Home X', 'HOMEX Home Appliances'],
+        'url' => $b . '/', 'logo' => $b . '/logo.png', 'description' => 'HOMEX (هوم إكس) براند أجهزة منزلية مصري: شاشات، خلاطات ومحضرات طعام، كبة، كاتيل، مكاوي وأجهزة مطبخ، بيبيع أونلاين لكل محافظات مصر.',
+        'areaServed' => ['@type' => 'Country', 'name' => 'Egypt'], 'brand' => ['@type' => 'Brand', 'name' => 'HOMEX']];
+    if ($same) $org['sameAs'] = $same;
+    $email = trim((string)get_setting('email', '')); $phone = trim((string)get_setting('whatsapp', '') ?: get_setting('phone', ''));
+    if ($email !== '' || $phone !== '') $org['contactPoint'] = array_filter(['@type' => 'ContactPoint', 'contactType' => 'customer service', 'areaServed' => 'EG', 'availableLanguage' => 'ar', 'email' => $email ?: null, 'telephone' => $phone ?: null]);
+    $site = ['@type' => 'WebSite', '@id' => $b . '/#website', 'name' => $store, 'alternateName' => 'هوم إكس', 'url' => $b . '/', 'inLanguage' => 'ar-EG', 'publisher' => ['@id' => $b . '/#org'],
+        'potentialAction' => ['@type' => 'SearchAction', 'target' => ['@type' => 'EntryPoint', 'urlTemplate' => $b . '/?q={search_term_string}'], 'query-input' => 'required name=search_term_string']];
+    $list = ['@type' => 'ItemList', 'name' => 'منتجات HOMEX', 'itemListElement' => array_map(fn($p, $i) => ['@type' => 'ListItem', 'position' => $i + 1, 'url' => product_url($p), 'name' => $p['name']], $products, array_keys($products))];
+    $ld = str_replace('</', '<\/', json_encode(['@context' => 'https://schema.org', '@graph' => [$org, $site, $list]], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+
+    $by = [];
+    foreach ($products as $p) $by[$p['category_id']][] = $p;
+    $body = '<main dir="rtl" style="max-width:1100px;margin:0 auto;padding:16px;font-family:Tajawal,system-ui,sans-serif">'
+        . '<h1>HOMEX هوم إكس — أجهزة منزلية بضمان حقيقي في مصر</h1>'
+        . '<p>HOMEX (هوم إكس) براند أجهزة منزلية مصري. على home-x.online تقدر تطلب شاشات وخلاطات ومحضرات طعام وكبة وكاتيل ومكاوي وأجهزة مطبخ، مع شحن لكل محافظات مصر والدفع عند الاستلام.</p>';
+    foreach ($cats as $c) {
+        if (empty($by[$c['id']])) continue;
+        $body .= '<section><h2>' . $h($c['name']) . '</h2><ul>';
+        foreach ($by[$c['id']] as $p) $body .= '<li><a href="' . $h(product_url($p)) . '">' . $h($p['name']) . '</a>' . (($p['sku'] ?? '') !== '' ? ' — موديل ' . $h($p['sku']) : '') . ' — ' . number_format((float)$p['price']) . ' ج.م</li>';
+        $body .= '</ul></section>';
+    }
+    $body .= '<p><a href="' . $h($b) . '/p/about">من نحن</a> · <a href="' . $h($b) . '/p/shipping">الشحن</a> · <a href="' . $h($b) . '/p/returns">الاسترجاع والاستبدال</a></p></main>';
+
+    $verify = trim((string)get_setting('google_verification', ''));
+    $head = ($verify !== '' ? '<meta name="google-site-verification" content="' . $h($verify) . '" />' : '')
+        . '<script type="application/ld+json">' . $ld . '</script>';
+    // replace the static Organization/WebSite block with the full one
+    $html = preg_replace('~<script type="application/ld\+json">.*?</script>~s', '', $html, 1);
+    $html = str_replace('</head>', $head . "\n</head>", $html);
     $html = preg_replace('~<div id="root">\s*</div>~', '<div id="root">' . str_replace(['\\', '$'], ['\\\\', '\\$'], $body) . '</div>', $html, 1);
     echo $html;
 }

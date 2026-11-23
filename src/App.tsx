@@ -116,6 +116,14 @@ const StoreContent: React.FC = () => {
     if (p) setSelectedProduct(p);
     else history.replaceState(null, '', '/');
   }, [catalogLoaded]);
+  // search link from Google's sitelinks search box (/?q=…)
+  useEffect(() => {
+    const q = new URLSearchParams(location.search).get('q');
+    if (!q) return;
+    setSearchQuery(q.slice(0, 80));
+    history.replaceState(null, '', '/');
+    setTimeout(() => document.getElementById('appliances-catalog-section')?.scrollIntoView({ behavior: 'smooth' }), 400);
+  }, []);
   // category link from a product page's breadcrumb (/?c=<id>)
   useEffect(() => {
     if (!catalogLoaded) return;
