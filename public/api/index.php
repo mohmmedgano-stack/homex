@@ -37,6 +37,7 @@ try {
         case 'GET registry':       ok(registry_get($_GET)); break;
         case 'POST registry/update': ok(registry_update(body())); break;
         case 'POST return-request': ok(returns_submit()); break;
+        case 'POST visit':         visit_record(body()); break;
 
         /* ---------- auth ---------- */
         case 'GET me':         ok(me()); break;
@@ -80,6 +81,7 @@ try {
         case 'POST admin/coupon':      need('owner'); ok(save_coupon(body())); break;
         case 'POST admin/coupon-delete': need('owner'); ok(delete_coupon((int)(body()['id'] ?? 0))); break;
         case 'GET admin/carts':        need(); ok(carts_admin($_GET)); break;
+        case 'GET admin/visitors':     need(); ok(admin_visitors($_GET)); break;
         case 'POST admin/cart':        need(); ok(cart_update(body())); break;
         case 'GET admin/orders-pulse': need(); ok(orders_pulse()); break;
         case 'GET admin/returns':      need(); ok(admin_returns($_GET)); break;

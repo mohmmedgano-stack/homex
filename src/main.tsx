@@ -1,6 +1,7 @@
 import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
+import { recordVisit } from './lib/visit';
 
 const root = document.getElementById('root')!;
 
@@ -31,3 +32,4 @@ window.addEventListener('unhandledrejection', (e) => {
 });
 
 createRoot(root).render(<App />);
+recordVisit();

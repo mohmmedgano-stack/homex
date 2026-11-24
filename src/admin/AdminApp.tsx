@@ -9,8 +9,9 @@ import { Coupons } from './pages/Coupons';
 import { Reviews } from './pages/Reviews';
 import { Returns } from './pages/Returns';
 import { Registries } from './pages/Registries';
+import { Visitors } from './pages/Visitors';
 import { StationAccess } from './pages/StationAccess';
-import { LayoutDashboard, Package, ShoppingBag, Calculator, Settings, Users, LogOut, Menu, X, ExternalLink, Store, Images, FileText, Bell, BellOff, History, ScanBarcode, DatabaseBackup, ShoppingCart, TicketPercent, Star, QrCode, RotateCcw, Gift } from 'lucide-react';
+import { LayoutDashboard, Package, ShoppingBag, Calculator, Settings, Users, LogOut, Menu, X, ExternalLink, Store, Images, FileText, Bell, BellOff, History, ScanBarcode, DatabaseBackup, ShoppingCart, TicketPercent, Star, QrCode, RotateCcw, Gift, ChartNoAxesColumn } from 'lucide-react';
 import { Overview } from './pages/Overview';
 import { Products } from './pages/Products';
 import { Orders } from './pages/Orders';
@@ -29,7 +30,7 @@ export interface Admin {
   role: 'owner' | 'staff';
 }
 
-type Page = 'overview' | 'products' | 'orders' | 'returns' | 'registries' | 'carts' | 'coupons' | 'reviews' | 'inventory' | 'banners' | 'pages' | 'dealers' | 'accounting' | 'settings' | 'team';
+type Page = 'overview' | 'visitors' | 'products' | 'orders' | 'returns' | 'registries' | 'carts' | 'coupons' | 'reviews' | 'inventory' | 'banners' | 'pages' | 'dealers' | 'accounting' | 'settings' | 'team';
 
 type SettingsTab = 'general' | 'pages' | 'team' | 'activity' | 'backups' | 'station';
 const SETTINGS_TABS: { id: SettingsTab; label: string; short: string; Icon: React.FC<any> }[] = [
@@ -55,6 +56,7 @@ const NAV_GROUPS: { title: string; items: { id: Page; label: string; Icon: React
     { id: 'inventory', label: 'الكاشير والمخزن', Icon: ScanBarcode },
   ] },
   { title: 'التسويق', items: [
+    { id: 'visitors', label: 'الزوار', Icon: ChartNoAxesColumn },
     { id: 'banners', label: 'البانرات', Icon: Images },
     { id: 'coupons', label: 'كوبونات الخصم', Icon: TicketPercent },
     { id: 'reviews', label: 'التقييمات', Icon: Star },
@@ -297,6 +299,7 @@ const Shell: React.FC<{ admin: Admin; onLogout: () => void }> = ({ admin, onLogo
         {page === 'reviews' && <Reviews isOwner={isOwner} />}
         {page === 'returns' && <Returns />}
         {page === 'registries' && <Registries />}
+        {page === 'visitors' && <Visitors />}
         {page === 'inventory' && <Inventory />}
         {page === 'banners' && <Banners />}
         {page === 'dealers' && <Dealers />}

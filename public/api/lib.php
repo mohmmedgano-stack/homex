@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__ . '/returns.php';
+require_once __DIR__ . '/visits.php';
 require_once __DIR__ . '/registry.php';
 
 // Store timestamps in UTC (SQLite datetime('now')); show and group them in Egypt time.
@@ -322,6 +323,7 @@ function migrate(PDO $db): void {
     }
     returns_migrate($db);
     registry_migrate($db);
+    visits_migrate($db);
     // one-time import of the 2026 price list (does nothing once done)
     require_once __DIR__ . '/seed_pricelist.php';
     seed_pricelist_2026($db);
