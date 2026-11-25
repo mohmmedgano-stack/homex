@@ -132,6 +132,19 @@ function mon_disk(): array {
     return ['free' => $free === false ? null : (float)$free, 'total' => $total === false ? null : (float)$total, 'db' => $dbSize];
 }
 
+/** Everything the store keeps: database, product photos and uploads, backups. */
+function mon_used_bytes(): int {
+    $total = 0;
+    try {
+        $it = new RecursiveIteratorIterator(new RecursiveDirectoryIterator(data_dir(), FilesystemIterator::SKIP_DOTS));
+        foreach ($it as $f) if ($f->isFile()) $total += $f->getSize();
+    } catch (Throwable $e) { /* unreadable folder: count what we got */ }
+    return $total;
+}
+
+/** Requests from the store's visitors, not from the dashboard, the barcode station or our own health checks. */
+const MON_STORE_ONLY = "route NOT LIKE '% admin/%' AND route NOT LIKE '% station/%' AND route NOT IN ('GET me', 'POST login', 'POST logout', 'GET ping')";
+
 function mon_last_backup(): int {
     $last = 0;
     foreach (glob(backup_dir() . '/homex-*.sqlite') ?: [] as $f) $last = max($last, (int)filemtime($f));
@@ -258,6 +271,7 @@ function admin_health(array $q): array {
 
     monitor_tick(true);
     $total = (int)$one('SELECT COUNT(*) FROM req_log WHERE at >= ?', [$since]);
+    $store = (int)$one('SELECT COUNT(*) FROM req_log WHERE at >= ? AND ' . MON_STORE_ONLY, [$since]);
     $e5 = (int)$one('SELECT COUNT(*) FROM req_log WHERE at >= ? AND status >= 500', [$since]);
     $e4 = (int)$one('SELECT COUNT(*) FROM req_log WHERE at >= ? AND status >= 400 AND status < 500', [$since]);
 
@@ -265,9 +279,9 @@ function admin_health(array $q): array {
     $step = $hours <= 6 ? 900 : 3600;
     $start = (int)(floor($since / $step) * $step);
     $byB = [];
-    foreach ($rows("SELECT (at / $step) * $step AS b, COUNT(*) AS n, SUM(status >= 500) AS e, CAST(AVG(ms) AS INTEGER) AS avg FROM req_log WHERE at >= ? GROUP BY b", [$start]) as $r) $byB[(int)$r['b']] = $r;
+    foreach ($rows("SELECT (at / $step) * $step AS b, COUNT(*) AS n, SUM(status >= 500) AS e, CAST(AVG(ms) AS INTEGER) AS avg, SUM(CASE WHEN " . MON_STORE_ONLY . " THEN 1 ELSE 0 END) AS s FROM req_log WHERE at >= ? GROUP BY b", [$start]) as $r) $byB[(int)$r['b']] = $r;
     $series = [];
-    for ($b = $start; $b <= $now; $b += $step) $series[] = ['t' => $b, 'n' => (int)($byB[$b]['n'] ?? 0), 'e' => (int)($byB[$b]['e'] ?? 0), 'avg' => (int)($byB[$b]['avg'] ?? 0)];
+    for ($b = $start; $b <= $now; $b += $step) $series[] = ['t' => $b, 's' => (int)($byB[$b]['s'] ?? 0), 'n' => (int)($byB[$b]['n'] ?? 0), 'e' => (int)($byB[$b]['e'] ?? 0), 'avg' => (int)($byB[$b]['avg'] ?? 0)];
 
     // Slowest routes by p95
     $routes = [];
@@ -299,6 +313,7 @@ function admin_health(array $q): array {
     return [
         'hours' => $hours,
         'total' => $total,
+        'store' => $store,
         'errors5' => $e5,
         'errors4' => $e4,
         'errorRate' => $total ? round(100 * $e5 / $total, 2) : 0,
@@ -310,7 +325,7 @@ function admin_health(array $q): array {
         'alerts' => $alerts,
         'logs' => $logs,
         'logCounts' => array_column($rows('SELECT level, COUNT(*) AS n FROM app_logs WHERE at >= ? GROUP BY level', [$now - MON_KEEP_DAYS * 86400]), 'n', 'level'),
-        'disk' => ['free' => $d['free'], 'total' => $d['total'], 'db' => $d['db']],
+        'disk' => ['free' => $d['free'], 'total' => $d['total'], 'db' => $d['db'], 'used' => mon_used_bytes()],
         'lastBackup' => mon_last_backup(),
         'php' => PHP_VERSION,
         'memoryPeak' => memory_get_peak_usage(true),

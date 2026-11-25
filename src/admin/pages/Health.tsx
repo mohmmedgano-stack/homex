@@ -1,16 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '../../lib/api';
 import { Card, Spinner, Stat, useToast } from '../ui';
-import { Activity, AlertTriangle, CheckCircle2, Gauge, HardDrive, Database, Archive, Search, ServerCrash, Mail, RefreshCw } from 'lucide-react';
+import { Activity, AlertTriangle, CheckCircle2, Gauge, HardDrive, Archive, Search, ServerCrash, Mail, RefreshCw, ShoppingBag } from 'lucide-react';
 
 interface Alert { rule: string; severity: 'critical' | 'warning'; title: string; desc: string; firing: boolean; since: number; value: string }
 interface Log { id: number; at: number; level: string; source: string; message: string; ctx: string }
 interface Data {
-  hours: number; total: number; errors5: number; errors4: number; errorRate: number; p95: number | null; avg: number;
-  series: { t: number; n: number; e: number; avg: number }[]; step: number;
+  hours: number; total: number; store: number; errors5: number; errors4: number; errorRate: number; p95: number | null; avg: number;
+  series: { t: number; s: number; n: number; e: number; avg: number }[]; step: number;
   routes: { route: string; n: number; avg: number; max: number; errors: number }[];
   alerts: Alert[]; logs: Log[]; logCounts: Record<string, number>;
-  disk: { free: number | null; total: number | null; db: number }; lastBackup: number; php: string; memoryPeak: number;
+  disk: { free: number | null; total: number | null; db: number; used: number }; lastBackup: number; php: string; memoryPeak: number;
   notifyEmail: boolean; lastTick: number;
 }
 
@@ -61,7 +61,6 @@ export const Health: React.FC = () => {
   const firing = d.alerts.filter((a) => a.firing);
   const critical = firing.some((a) => a.severity === 'critical');
   const peak = Math.max(1, ...d.series.map((s) => s.n));
-  const freePct = d.disk.free != null && d.disk.total ? Math.round((100 * d.disk.free) / d.disk.total) : null;
   const backupAge = d.lastBackup ? (Date.now() / 1000 - d.lastBackup) / 3600 : null;
 
   return (
@@ -101,25 +100,28 @@ export const Health: React.FC = () => {
         </div>
       )}
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <Stat label="طلبات على السيرفر" value={fmt(d.total)} icon={<Activity className="w-4 h-4" />} />
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+        <Stat label="طلبات المتجر" value={fmt(d.store)} sub="من العملاء بس" icon={<ShoppingBag className="w-4 h-4" />} tone="brand" />
+        <Stat label="كل الطلبات على السيرفر" value={fmt(d.total)} sub="ومعاها لوحة التحكم" icon={<Activity className="w-4 h-4" />} />
         <Stat label="أخطاء السيرفر" value={`${d.errorRate}%`} sub={`${fmt(d.errors5)} خطأ 500`} icon={<ServerCrash className="w-4 h-4" />} tone={d.errors5 ? 'bad' : 'good'} />
-        <Stat label="أبطأ 5% (p95)" value={sec(d.p95)} sub={`المتوسط ${sec(d.avg)}`} icon={<Gauge className="w-4 h-4" />} tone={d.p95 != null && d.p95 > 2000 ? 'bad' : 'default'} />
-        <Stat label="المساحة الفاضية" value={freePct == null ? '—' : `${freePct}%`} sub={`قاعدة البيانات ${size(d.disk.db)}`} icon={<HardDrive className="w-4 h-4" />} tone={freePct != null && freePct < 10 ? 'bad' : 'default'} />
+        <Stat label="سرعة الرد (أبطأ 5%)" value={sec(d.p95)} sub={d.p95 == null ? 'لسه بيتقاس' : d.p95 < 500 ? `سريع جداً · المتوسط ${sec(d.avg)}` : d.p95 < 2000 ? `كويس · المتوسط ${sec(d.avg)}` : `بطيء · المتوسط ${sec(d.avg)}`} icon={<Gauge className="w-4 h-4" />} tone={d.p95 != null && d.p95 > 2000 ? 'bad' : 'good'} />
+        <Stat label="مساحة المتجر" value={size(d.disk.used)} sub={`قاعدة البيانات ${size(d.disk.db)} والباقي صور ونسخ`} icon={<HardDrive className="w-4 h-4" />} />
+        <Stat label="آخر نسخة احتياطية" value={d.lastBackup ? ago(d.lastBackup).replace('من ', '') : 'مفيش'} icon={<Archive className="w-4 h-4" />} tone={backupAge != null && backupAge > 48 ? 'bad' : 'good'} />
       </div>
 
       <Card title="الطلبات على السيرفر">
         <div className="flex items-end gap-[2px] h-36" dir="ltr">
           {d.series.map((s) => (
-            <div key={s.t} className="flex-1 h-full flex flex-col justify-end" title={`${clock(s.t)}: ${s.n} طلب · ${s.e} خطأ · متوسط ${sec(s.avg)}`}>
+            <div key={s.t} className="flex-1 h-full flex flex-col justify-end" title={`${clock(s.t)}: ${s.s} من المتجر · ${s.n} الكل · ${s.e} خطأ · متوسط ${sec(s.avg)}`}>
               {s.e > 0 && <div className="bg-sale rounded-t" style={{ height: `${Math.max(3, (s.e / peak) * 100)}%` }} />}
-              <div className={`bg-gold/80 ${s.e ? '' : 'rounded-t'}`} style={{ height: `${((s.n - s.e) / peak) * 100}%`, minHeight: s.n ? 2 : 0 }} />
+              <div className={`bg-ink/15 ${s.e ? '' : 'rounded-t'}`} style={{ height: `${(Math.max(0, s.n - s.s - s.e) / peak) * 100}%` }} />
+              <div className={`bg-gold ${s.e || s.n - s.s ? '' : 'rounded-t'}`} style={{ height: `${(Math.min(s.s, s.n - s.e) / peak) * 100}%`, minHeight: s.s ? 2 : 0 }} />
             </div>
           ))}
         </div>
         <div className="flex justify-between text-xs text-steel mt-2" dir="ltr">
           <span>{d.series[0] && clock(d.series[0].t)}</span>
-          <span className="flex items-center gap-3"><span className="flex items-center gap-1"><i className="w-2.5 h-2.5 rounded-sm bg-gold/80" /> طلبات</span><span className="flex items-center gap-1"><i className="w-2.5 h-2.5 rounded-sm bg-sale" /> أخطاء</span></span>
+          <span className="flex items-center gap-3"><span className="flex items-center gap-1"><i className="w-2.5 h-2.5 rounded-sm bg-gold" /> المتجر</span><span className="flex items-center gap-1"><i className="w-2.5 h-2.5 rounded-sm bg-ink/15" /> لوحة التحكم</span><span className="flex items-center gap-1"><i className="w-2.5 h-2.5 rounded-sm bg-sale" /> أخطاء</span></span>
           <span>دلوقتي</span>
         </div>
       </Card>
@@ -156,10 +158,6 @@ export const Health: React.FC = () => {
               </ul>
             )}
           </Card>
-          <div className="grid grid-cols-2 gap-3">
-            <Stat label="آخر نسخة احتياطية" value={d.lastBackup ? ago(d.lastBackup).replace('من ', '') : 'مفيش'} icon={<Archive className="w-4 h-4" />} tone={backupAge != null && backupAge > 48 ? 'bad' : 'good'} />
-            <Stat label="PHP" value={d.php} sub={`ذاكرة ${size(d.memoryPeak)}`} icon={<Database className="w-4 h-4" />} />
-          </div>
         </div>
       </div>
 
