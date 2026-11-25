@@ -85,7 +85,7 @@ try {
         case 'POST admin/coupon-delete': need('owner'); ok(delete_coupon((int)(body()['id'] ?? 0))); break;
         case 'GET admin/carts':        need(); ok(carts_admin($_GET)); break;
         case 'GET admin/visitors':     need(); ok(admin_visitors($_GET)); break;
-        case 'GET admin/health':       need('owner'); ok(admin_health($_GET)); break;
+        case 'GET admin/health':       need_station_admin(); ok(admin_health($_GET)); break;
         case 'POST admin/cart':        need(); ok(cart_update(body())); break;
         case 'GET admin/orders-pulse': need(); ok(orders_pulse()); break;
         case 'GET admin/returns':      need(); ok(admin_returns($_GET)); break;

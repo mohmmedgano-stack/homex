@@ -1758,7 +1758,8 @@ function orders_pulse(): array {
     $pending = (int)db()->query("SELECT COUNT(*) FROM orders WHERE status = 'pending'")->fetchColumn();
     $carts = (int)db()->query("SELECT COUNT(*) FROM carts WHERE status = 'open' AND updated_at < datetime('now', '-30 minutes')")->fetchColumn();
     $returns = (int)db()->query("SELECT COUNT(*) FROM return_requests WHERE status = 'pending'")->fetchColumn();
-    $health = (int)db()->query("SELECT COUNT(*) FROM alerts WHERE state = 'firing'")->fetchColumn();
+    $me = current_admin();
+    $health = $me && mb_strtolower((string)$me['username']) === 'homex' ? (int)db()->query("SELECT COUNT(*) FROM alerts WHERE state = 'firing'")->fetchColumn() : 0;
     return ['count' => $count, 'pending' => $pending, 'carts' => $carts, 'returns' => $returns, 'health' => $health, 'last' => $last ? ['id' => (int)$last['id'], 'code' => $last['code'], 'name' => $last['customer_name'], 'total' => (float)$last['total'], 'city' => $last['city']] : null];
 }
 

@@ -65,7 +65,7 @@ const NAV_GROUPS: { title: string; items: { id: Page; label: string; Icon: React
   ] },
   { title: 'الإدارة', items: [
     { id: 'accounting', label: 'الحسابات', Icon: Calculator },
-    { id: 'health', label: 'صحة الموقع', Icon: Activity, owner: true },
+    { id: 'health', label: 'صحة الموقع', Icon: Activity, owner: true },  // the homex account only (see isStationAdmin)
     { id: 'settings', label: 'إعدادات المتجر', Icon: Settings },
   ] },
 ];
@@ -215,7 +215,7 @@ const Shell: React.FC<{ admin: Admin; onLogout: () => void }> = ({ admin, onLogo
         <div key={g.title || 'home'} className={g.title ? 'mt-2 pt-2 border-t border-ink/10' : ''}>
           {g.title && <p className="ag-lbl px-3 pb-1 text-[11px] font-bold text-ink/45 whitespace-nowrap">{g.title}</p>}
           <div className="space-y-0.5">
-            {g.items.filter((it: any) => !it.owner || isOwner).map(({ id, label, Icon }) => (
+            {g.items.filter((it: any) => !it.owner || isStationAdmin).map(({ id, label, Icon }) => (
               <button
                 key={id}
                 onClick={() => setPage(id)}
@@ -303,7 +303,7 @@ const Shell: React.FC<{ admin: Admin; onLogout: () => void }> = ({ admin, onLogo
         {page === 'returns' && <Returns />}
         {page === 'registries' && <Registries />}
         {page === 'visitors' && <Visitors />}
-        {page === 'health' && isOwner && <Health />}
+        {page === 'health' && isStationAdmin && <Health />}
         {page === 'inventory' && <Inventory />}
         {page === 'banners' && <Banners />}
         {page === 'dealers' && <Dealers />}
