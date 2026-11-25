@@ -119,6 +119,9 @@ try {
         if (is_file($old) && !isset($newFiles[$rel]) && filemtime($old) < $keepUntil) { @unlink($old); $removed++; }
     }
 
+    // Page copies hold the old index.html (old bundle names): drop them so the next visitor gets fresh ones
+    try { pagecache_clear(); } catch (Throwable $e) {}
+
     file_put_contents($shaFile, $sha);
     @unlink($zipPath);
     rrmdir($tmp);

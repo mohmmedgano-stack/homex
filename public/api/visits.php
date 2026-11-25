@@ -32,6 +32,8 @@ function visits_migrate(PDO $db): void {
     CREATE INDEX IF NOT EXISTS idx_visits_at ON visits(at);
     CREATE TABLE IF NOT EXISTS ip_geo (h TEXT PRIMARY KEY, country TEXT, country_code TEXT, region TEXT, city TEXT, at INTEGER NOT NULL);
     CREATE TABLE IF NOT EXISTS visit_attempts (h TEXT NOT NULL, at INTEGER NOT NULL);
+    CREATE TABLE IF NOT EXISTS geo_queue (visit_id INTEGER NOT NULL, ip TEXT NOT NULL, h TEXT NOT NULL, at INTEGER NOT NULL);
+    CREATE INDEX IF NOT EXISTS idx_visit_attempts ON visit_attempts(h, at);
     ");
 }
 
@@ -60,10 +62,12 @@ function visit_record(array $b): array {
     $db = db();
 
     // At most 40 beacons an hour from one address
-    $db->prepare('DELETE FROM visit_attempts WHERE at < ?')->execute([time() - 3600]);
+    if (random_int(1, 50) === 1) $db->prepare('DELETE FROM visit_attempts WHERE at < ?')->execute([time() - 3600]);
     $st = $db->prepare('SELECT COUNT(*) FROM visit_attempts WHERE h = ? AND at > ?');
     $st->execute([$ipHash, time() - 3600]);
-    if ((int)$st->fetchColumn() >= 40) return ['skipped' => true];
+    $recent = (int)$st->fetchColumn();
+    $st->closeCursor();  // an open read would block this request's own write below when others are writing
+    if ($recent >= 40) return ['skipped' => true];
     $db->prepare('INSERT INTO visit_attempts (h, at) VALUES (?, ?)')->execute([$ipHash, time()]);
 
     $dev = visit_device($ua, str($b['model'] ?? '', 60), str($b['osv'] ?? '', 20), (int)($b['sw'] ?? 0), (int)($b['sh'] ?? 0), (int)($b['tp'] ?? 0));
@@ -80,23 +84,65 @@ function visit_record(array $b): array {
         ->execute([$now, $day, $vid, $path, $source, $dev['device'], $dev['os'], $dev['osVer'], $dev['brand'], $dev['model'], $dev['browser'], $sw && $sh ? "{$sw}x{$sh}" : '']);
     $id = (int)$db->lastInsertId();
 
-    // Answer the visitor first; the place lookup happens after the response has gone.
-    header('Content-Type: application/json; charset=utf-8');
-    header('Cache-Control: no-store');
-    echo json_encode(['ok' => true, 'data' => ['id' => $id]]);
-    if (function_exists('fastcgi_finish_request')) fastcgi_finish_request();
-    elseif (function_exists('litespeed_finish_request')) litespeed_finish_request();
-
+    // The place: straight from the cache when this address was seen in the last 30 days. Otherwise the address
+    // waits in geo_queue (minutes at most) and the next health tick looks up to 100 of them in one request,
+    // so a rush of visitors never holds the server waiting on the lookup service.
     try {
-        $geo = visit_geo($ip, $ipHash);
-        if ($geo) $db->prepare('UPDATE visits SET country = ?, country_code = ?, region = ?, city = ? WHERE id = ?')
-            ->execute([$geo['country'], $geo['country_code'], $geo['region'], $geo['city'], $id]);
-        if (random_int(1, 200) === 1) {
-            $db->prepare('DELETE FROM visits WHERE at < ?')->execute([time() - 400 * 86400]);
-            $db->prepare('DELETE FROM ip_geo WHERE at < ?')->execute([time() - 30 * 86400]);
+        $st = $db->prepare('SELECT country, country_code, region, city FROM ip_geo WHERE h = ? AND at > ?');
+        $st->execute([$ipHash, time() - 30 * 86400]);
+        $g = $st->fetch();
+        $st->closeCursor();
+        if ($g) {
+            $db->prepare('UPDATE visits SET country = ?, country_code = ?, region = ?, city = ? WHERE id = ?')->execute([$g['country'], $g['country_code'], $g['region'], $g['city'], $id]);
+        } elseif (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
+            $db->prepare('INSERT INTO geo_queue (visit_id, ip, h, at) VALUES (?, ?, ?, ?)')->execute([$id, $ip, $ipHash, time()]);
         }
     } catch (Throwable $e) { error_log('[homex] visit geo: ' . $e->getMessage()); }
-    exit;
+    if (random_int(1, 200) === 1) {
+        $db->prepare('DELETE FROM visits WHERE at < ?')->execute([time() - 400 * 86400]);
+        $db->prepare('DELETE FROM ip_geo WHERE at < ?')->execute([time() - 30 * 86400]);
+    }
+    return ['id' => $id];
+}
+
+/** Looks up queued visitor addresses in one batch request, then forgets the addresses. Called by monitor_tick. */
+function visit_geo_flush(): void {
+    $db = db();
+    $rows = $db->query('SELECT rowid, visit_id, ip, h, at FROM geo_queue ORDER BY rowid LIMIT 100')->fetchAll();
+    if (!$rows) return;
+    $ips = array_values(array_unique(array_column($rows, 'ip')));
+    $found = [];
+    $c = curl_init('http://ip-api.com/batch?fields=status,query,country,countryCode,regionName,city');
+    curl_setopt_array($c, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 8, CURLOPT_CONNECTTIMEOUT => 4, CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => json_encode($ips), CURLOPT_HTTPHEADER => ['Content-Type: application/json'], CURLOPT_USERAGENT => 'HOMEX/1.0']);
+    $raw = curl_exec($c);
+    $code = (int)curl_getinfo($c, CURLINFO_HTTP_CODE);
+    curl_close($c);
+    if (is_string($raw) && $code === 200 && is_array($list = json_decode($raw, true))) {
+        foreach ($list as $j) if (($j['status'] ?? '') === 'success') {
+            $found[$j['query']] = visit_arabic_place(['country' => (string)$j['country'], 'country_code' => (string)$j['countryCode'], 'region' => (string)($j['regionName'] ?? ''), 'city' => (string)($j['city'] ?? '')]);
+        }
+    } else {
+        // Batch service unavailable: fall back to one-by-one for a few, the rest wait for the next tick
+        foreach (array_slice($ips, 0, 5) as $ip) {
+            $h = $rows[array_search($ip, array_column($rows, 'ip'))]['h'];
+            if ($g = visit_geo($ip, $h)) $found[$ip] = $g;
+        }
+    }
+    $upd = $db->prepare('UPDATE visits SET country = ?, country_code = ?, region = ?, city = ? WHERE id = ?');
+    $cache = $db->prepare('INSERT INTO ip_geo (h, country, country_code, region, city, at) VALUES (?,?,?,?,?,?) ON CONFLICT(h) DO UPDATE SET country=excluded.country, country_code=excluded.country_code, region=excluded.region, city=excluded.city, at=excluded.at');
+    $del = $db->prepare('DELETE FROM geo_queue WHERE rowid = ?');
+    $db->beginTransaction();
+    foreach ($rows as $r) {
+        $g = $found[$r['ip']] ?? null;
+        if ($g) {
+            $upd->execute([$g['country'], $g['country_code'], $g['region'], $g['city'], $r['visit_id']]);
+            $cache->execute([$r['h'], $g['country'], $g['country_code'], $g['region'], $g['city'], time()]);
+        }
+        // Resolved, or tried long enough: the address is never kept beyond this
+        if ($g || $r['at'] < time() - 3600 || count($found) > 0) $del->execute([$r['rowid']]);
+    }
+    $db->commit();
 }
 
 /* ---------------- Place ---------------- */

@@ -9,14 +9,20 @@ require __DIR__ . '/lib.php';
 $r = $_GET['r'] ?? '';
 $m = $_SERVER['REQUEST_METHOD'];
 try { monitor_begin("$m $r"); } catch (Throwable $e) { error_log('[homex] monitor: ' . $e->getMessage()); }
+// Anything saved may change what visitors see (products, prices, stock, banners, settings): drop the ready-made copies
+if ($m === 'POST' && !in_array($r, ['visit', 'log-client', 'return-lookup'], true)) {
+    register_shutdown_function(function () {
+        if ((int)(http_response_code() ?: 200) < 400) pagecache_clear();
+    });
+}
 
 try {
     if ($m === 'GET' && in_array($r, ['catalog', 'settings', 'me'], true)) daily_backup();
     try { activity_begin("$m $r"); } catch (ApiError $e) { throw $e; } catch (Throwable $e) { error_log("[homex] activity: " . $e->getMessage()); }
     switch ("$m $r") {
         /* ---------- public ---------- */
-        case 'GET settings':   ok(public_settings()); break;
-        case 'GET catalog':    ok(catalog()); break;
+        case 'GET settings':   $d = public_settings(); pagecache_json('settings', $d); ok($d); break;
+        case 'GET catalog':    $d = catalog(); pagecache_json('catalog', $d); ok($d); break;
         case 'POST order':     ok(create_order(body())); break;
         case 'GET img':        serve_image($_GET['f'] ?? ''); break;
         case 'GET dealers':    ok(dealers_public()); break;
@@ -38,7 +44,7 @@ try {
         case 'GET registry':       ok(registry_get($_GET)); break;
         case 'POST registry/update': ok(registry_update(body())); break;
         case 'POST return-request': ok(returns_submit()); break;
-        case 'POST visit':         visit_record(body()); break;
+        case 'POST visit':         ok(visit_record(body())); break;
         case 'POST log-client':    ok(client_log(body())); break;
         case 'GET ping':           ok(monitor_ping()); break;
 

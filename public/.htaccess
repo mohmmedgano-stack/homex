@@ -1,6 +1,8 @@
 # HOMEX — Apache / LiteSpeed (Hostinger)
 Options -Indexes
 DirectoryIndex index.html index.php
+AddDefaultCharset utf-8
+AddCharset utf-8 .json
 
 <IfModule mod_rewrite.c>
   RewriteEngine On
@@ -14,6 +16,17 @@ DirectoryIndex index.html index.php
 
   # Never serve hidden files (.git, .env ...)
   RewriteRule (^|/)\.(?!well-known/) - [F]
+
+  # Ready-made copies (api/pagecache.php): served straight from disk, no PHP. Missing copy → the rules below.
+  RewriteCond %{QUERY_STRING} ^r=(catalog|settings)$
+  RewriteCond %{DOCUMENT_ROOT}/cache/%1.json -f
+  RewriteRule ^api/?$ cache/%1.json [L]
+  RewriteCond %{DOCUMENT_ROOT}/cache/home.html -f
+  RewriteRule ^$ cache/home.html [L]
+  RewriteCond %{DOCUMENT_ROOT}/cache/product-$1.html -f
+  RewriteRule ^product/([0-9]+)(-[a-z0-9-]*)?/?$ cache/product-$1.html [L]
+  RewriteCond %{DOCUMENT_ROOT}/cache/page-$1.html -f
+  RewriteRule ^p/([a-z0-9-]+)/?$ cache/page-$1.html [L]
 
   # Store pages rendered by the app
   # home page with the brand's facts prerendered for Google
@@ -43,7 +56,7 @@ DirectoryIndex index.html index.php
   <FilesMatch "\.(png|jpe?g|webp|svg|ico)$">
     Header set Cache-Control "public, max-age=604800"
   </FilesMatch>
-  <FilesMatch "\.html$">
+  <FilesMatch "\.(html|json)$">
     Header set Cache-Control "no-cache"
   </FilesMatch>
 </IfModule>

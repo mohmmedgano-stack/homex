@@ -3,6 +3,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/returns.php';
 require_once __DIR__ . '/visits.php';
 require_once __DIR__ . '/monitor.php';
+require_once __DIR__ . '/pagecache.php';
 require_once __DIR__ . '/registry.php';
 
 // Store timestamps in UTC (SQLite datetime('now')); show and group them in Egypt time.
@@ -40,7 +41,8 @@ function db(): PDO {
     $pdo = new PDO('sqlite:' . data_dir() . '/homex.sqlite');
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
-    $pdo->exec('PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL;');
+    // busy_timeout: when many visitors write at once (visits, metrics) they wait their turn instead of failing
+    $pdo->exec('PRAGMA busy_timeout = 5000; PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL;');
     migrate($pdo);
     return $pdo;
 }

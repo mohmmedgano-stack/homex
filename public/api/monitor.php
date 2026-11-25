@@ -23,7 +23,13 @@ function monitor_migrate(PDO $db): void {
     CREATE TABLE IF NOT EXISTS alerts (rule TEXT PRIMARY KEY, state TEXT NOT NULL DEFAULT 'ok', since INTEGER NOT NULL DEFAULT 0, value TEXT NOT NULL DEFAULT '', notified INTEGER NOT NULL DEFAULT 0);
     CREATE TABLE IF NOT EXISTS client_log_attempts (h TEXT NOT NULL, at INTEGER NOT NULL);
     ");
+    // w: how many requests one row stands for (fast, ordinary requests are sampled 1 in MON_SAMPLE)
+    $cols = array_column($db->query('PRAGMA table_info(req_log)')->fetchAll(), 'name');
+    if (!in_array('w', $cols, true)) $db->exec('ALTER TABLE req_log ADD COLUMN w INTEGER NOT NULL DEFAULT 1');
 }
+
+/** Under a rush every write waits its turn in the database, so routine fast successes are only sampled. */
+const MON_SAMPLE = 5;
 
 /* ---------------- 1. Metrics ---------------- */
 
@@ -47,8 +53,11 @@ function monitor_end(): void {
             $status = 500;
             app_log('critical', 'server', $e['message'], ['route' => $route, 'file' => basename((string)$e['file']) . ':' . $e['line']]);
         }
-        $db = db();
-        $db->prepare('INSERT INTO req_log (at, route, status, ms) VALUES (?, ?, ?, ?)')->execute([time(), $route, $status, $ms]);
+        // Errors, slow requests and the ones that matter (orders, logins, payments) are always kept
+        $always = $status >= 400 || $ms >= 500 || preg_match('/^POST (order|login|station\/login)$|paymob|kashier|fawry/', $route);
+        if ($always || random_int(1, MON_SAMPLE) === 1) {
+            db()->prepare('INSERT INTO req_log (at, route, status, ms, w) VALUES (?, ?, ?, ?, ?)')->execute([time(), $route, $status, $ms, $always ? 1 : MON_SAMPLE]);
+        }
         monitor_tick();
     } catch (Throwable $e) {
         error_log('[homex] monitor: ' . $e->getMessage());
@@ -82,10 +91,12 @@ function client_log(array $b): array {
     if (preg_match('/bot|crawl|spider|headless|lighthouse/i', $ua)) return [];
     $h = substr(hash('sha256', (string)($_SERVER['REMOTE_ADDR'] ?? '') . '|' . visit_salt()), 0, 24);
     $db = db();
-    $db->prepare('DELETE FROM client_log_attempts WHERE at < ?')->execute([time() - 3600]);
-    $st = $db->prepare('SELECT COUNT(*) FROM client_log_attempts WHERE h = ?');
-    $st->execute([$h]);
-    if ((int)$st->fetchColumn() >= 10) return [];
+    if (random_int(1, 20) === 1) $db->prepare('DELETE FROM client_log_attempts WHERE at < ?')->execute([time() - 3600]);
+    $st = $db->prepare('SELECT COUNT(*) FROM client_log_attempts WHERE h = ? AND at > ?');
+    $st->execute([$h, time() - 3600]);
+    $recent = (int)$st->fetchColumn();
+    $st->closeCursor();
+    if ($recent >= 10) return [];
     $db->prepare('INSERT INTO client_log_attempts (h, at) VALUES (?, ?)')->execute([$h, time()]);
     $msg = str($b['message'] ?? '', 500);
     if ($msg === '' || preg_match('/ResizeObserver loop|Script error\.?$|chrome-extension|moz-extension/i', $msg)) return [];
@@ -158,7 +169,7 @@ function mon_evaluate(): array {
     $q = function (string $sql, array $a) use ($db) { $s = $db->prepare($sql); $s->execute($a); return (int)$s->fetchColumn(); };
     $firing = [];
 
-    $n15 = $q('SELECT COUNT(*) FROM req_log WHERE at >= ?', [$now - 900]);
+    $n15 = $q('SELECT COALESCE(SUM(w), 0) FROM req_log WHERE at >= ?', [$now - 900]);
     $e15 = $q('SELECT COUNT(*) FROM req_log WHERE at >= ? AND status >= 500', [$now - 900]);
     if ($e15 >= 5 && $e15 >= 0.05 * $n15) $firing['AppErrors'] = "$e15 خطأ من $n15 طلب";
 
@@ -196,6 +207,10 @@ function monitor_tick(bool $force = false): void {
         if (function_exists('litespeed_finish_request')) litespeed_finish_request();
         elseif (function_exists('fastcgi_finish_request')) fastcgi_finish_request();
     }
+    // Ready-made page copies never live longer than 30 minutes; the daily backup still happens without PHP page hits
+    pagecache_clear(PAGECACHE_MAX_AGE);
+    try { daily_backup(); } catch (Throwable $e) { error_log('[homex] backup: ' . $e->getMessage()); }
+    try { visit_geo_flush(); } catch (Throwable $e) { error_log('[homex] geo: ' . $e->getMessage()); }
     // Retention
     $db->prepare('DELETE FROM req_log WHERE at < ?')->execute([$now - MON_KEEP_DAYS * 86400]);
     $db->prepare('DELETE FROM app_logs WHERE at < ?')->execute([$now - MON_KEEP_DAYS * 86400]);
@@ -270,8 +285,8 @@ function admin_health(array $q): array {
     $rows = function (string $sql, array $a = []) use ($db) { $s = $db->prepare($sql); $s->execute($a); return $s->fetchAll(); };
 
     monitor_tick(true);
-    $total = (int)$one('SELECT COUNT(*) FROM req_log WHERE at >= ?', [$since]);
-    $store = (int)$one('SELECT COUNT(*) FROM req_log WHERE at >= ? AND ' . MON_STORE_ONLY, [$since]);
+    $total = (int)$one('SELECT COALESCE(SUM(w), 0) FROM req_log WHERE at >= ?', [$since]);
+    $store = (int)$one('SELECT COALESCE(SUM(w), 0) FROM req_log WHERE at >= ? AND ' . MON_STORE_ONLY, [$since]);
     $e5 = (int)$one('SELECT COUNT(*) FROM req_log WHERE at >= ? AND status >= 500', [$since]);
     $e4 = (int)$one('SELECT COUNT(*) FROM req_log WHERE at >= ? AND status >= 400 AND status < 500', [$since]);
 
@@ -279,13 +294,13 @@ function admin_health(array $q): array {
     $step = $hours <= 6 ? 900 : 3600;
     $start = (int)(floor($since / $step) * $step);
     $byB = [];
-    foreach ($rows("SELECT (at / $step) * $step AS b, COUNT(*) AS n, SUM(status >= 500) AS e, CAST(AVG(ms) AS INTEGER) AS avg, SUM(CASE WHEN " . MON_STORE_ONLY . " THEN 1 ELSE 0 END) AS s FROM req_log WHERE at >= ? GROUP BY b", [$start]) as $r) $byB[(int)$r['b']] = $r;
+    foreach ($rows("SELECT (at / $step) * $step AS b, SUM(w) AS n, SUM(status >= 500) AS e, CAST(AVG(ms) AS INTEGER) AS avg, SUM(CASE WHEN " . MON_STORE_ONLY . " THEN w ELSE 0 END) AS s FROM req_log WHERE at >= ? GROUP BY b", [$start]) as $r) $byB[(int)$r['b']] = $r;
     $series = [];
     for ($b = $start; $b <= $now; $b += $step) $series[] = ['t' => $b, 's' => (int)($byB[$b]['s'] ?? 0), 'n' => (int)($byB[$b]['n'] ?? 0), 'e' => (int)($byB[$b]['e'] ?? 0), 'avg' => (int)($byB[$b]['avg'] ?? 0)];
 
     // Slowest routes by p95
     $routes = [];
-    foreach ($rows("SELECT route, COUNT(*) AS n, CAST(AVG(ms) AS INTEGER) AS avg, MAX(ms) AS max, SUM(status >= 500) AS e FROM req_log WHERE at >= ? GROUP BY route HAVING n >= 3 ORDER BY avg DESC LIMIT 8", [$since]) as $r) {
+    foreach ($rows("SELECT route, SUM(w) AS n, CAST(AVG(ms) AS INTEGER) AS avg, MAX(ms) AS max, SUM(status >= 500) AS e FROM req_log WHERE at >= ? GROUP BY route HAVING COUNT(*) >= 2 ORDER BY avg DESC LIMIT 8", [$since]) as $r) {
         $routes[] = ['route' => $r['route'], 'n' => (int)$r['n'], 'avg' => (int)$r['avg'], 'max' => (int)$r['max'], 'errors' => (int)$r['e']];
     }
 

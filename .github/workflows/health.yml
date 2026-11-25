@@ -12,6 +12,9 @@ jobs:
           for p in "/" "/admin/" "/p/returns" "/o/NOPE?t=x" "/robots.txt" "/sitemap.xml" "/og.png" "/logo.webp" "/fonts/eyen-ammon-bold.woff2" "/sounds/new-order.mp3" "/api/?r=settings" "/api/?r=catalog" "/api/lib.php" "/api/deploy.php?status=1" "/sitemap.xml" "/feeds/catalog.csv" "/product/1" "/r/X?t=y" "/api/?r=reviews&product=1" "/codes/" "/api/?r=station/me" "/api/returns.php" "/api/seed_pricelist.php" "/products/hx-b2200-sm.webp" "/llms.txt"; do
             curl -s -o /tmp/body -w "%{http_code}  %{time_total}s  %{size_download}B  $p\n" -H "Accept-Encoding: gzip" "$U$p"
           done
+          echo "--- ready-made copies (should be 200 after the first visit)"
+          curl -s -o /dev/null "$U/"; curl -s -o /dev/null "$U/api/?r=catalog"; curl -s -o /dev/null "$U/api/?r=settings"
+          for c in home.html catalog.json settings.json; do curl -s -o /dev/null -w "%{http_code}  /cache/$c\n" "$U/cache/$c"; done
           echo "--- redirects"
           curl -s -o /dev/null -w "http://      -> %{http_code} %{redirect_url}\n" http://home-x.online/
           curl -s -o /dev/null -w "www          -> %{http_code} %{redirect_url}\n" https://www.home-x.online/
