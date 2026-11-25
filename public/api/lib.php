@@ -2,6 +2,7 @@
 declare(strict_types=1);
 require_once __DIR__ . '/returns.php';
 require_once __DIR__ . '/visits.php';
+require_once __DIR__ . '/monitor.php';
 require_once __DIR__ . '/registry.php';
 
 // Store timestamps in UTC (SQLite datetime('now')); show and group them in Egypt time.
@@ -324,6 +325,7 @@ function migrate(PDO $db): void {
     returns_migrate($db);
     registry_migrate($db);
     visits_migrate($db);
+    monitor_migrate($db);
     // one-time import of the 2026 price list (does nothing once done)
     require_once __DIR__ . '/seed_pricelist.php';
     seed_pricelist_2026($db);
@@ -1756,7 +1758,8 @@ function orders_pulse(): array {
     $pending = (int)db()->query("SELECT COUNT(*) FROM orders WHERE status = 'pending'")->fetchColumn();
     $carts = (int)db()->query("SELECT COUNT(*) FROM carts WHERE status = 'open' AND updated_at < datetime('now', '-30 minutes')")->fetchColumn();
     $returns = (int)db()->query("SELECT COUNT(*) FROM return_requests WHERE status = 'pending'")->fetchColumn();
-    return ['count' => $count, 'pending' => $pending, 'carts' => $carts, 'returns' => $returns, 'last' => $last ? ['id' => (int)$last['id'], 'code' => $last['code'], 'name' => $last['customer_name'], 'total' => (float)$last['total'], 'city' => $last['city']] : null];
+    $health = (int)db()->query("SELECT COUNT(*) FROM alerts WHERE state = 'firing'")->fetchColumn();
+    return ['count' => $count, 'pending' => $pending, 'carts' => $carts, 'returns' => $returns, 'health' => $health, 'last' => $last ? ['id' => (int)$last['id'], 'code' => $last['code'], 'name' => $last['customer_name'], 'total' => (float)$last['total'], 'city' => $last['city']] : null];
 }
 
 /** CSV (opens in Excel with Arabic) of orders, filtered like the orders page. */

@@ -85,6 +85,7 @@ export function useOrderAlerts(onNew: (o: NewOrder | null, added: number) => voi
   const [pending, setPending] = useState(0);
   const [carts, setCarts] = useState(0);
   const [returns, setReturns] = useState(0);
+  const [health, setHealth] = useState(0);
   const [sound, setSoundState] = useState(() => {
     try { return localStorage.getItem(SOUND_KEY) !== '0'; } catch { return true; }
   });
@@ -113,6 +114,7 @@ export function useOrderAlerts(onNew: (o: NewOrder | null, added: number) => voi
         setPending(d.pending);
         setCarts(d.carts || 0);
         setReturns(d.returns || 0);
+        setHealth(d.health || 0);
         if (base.current !== null && d.count > base.current) {
           const added = d.count - base.current;
           if (soundRef.current) playChime();
@@ -154,5 +156,5 @@ export function useOrderAlerts(onNew: (o: NewOrder | null, added: number) => voi
     playChime();
   };
 
-  return { pending, carts, returns, sound, setSound, perm, askPermission };
+  return { pending, carts, returns, health, sound, setSound, perm, askPermission };
 }

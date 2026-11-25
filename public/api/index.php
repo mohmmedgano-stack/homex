@@ -8,6 +8,7 @@ require __DIR__ . '/lib.php';
 
 $r = $_GET['r'] ?? '';
 $m = $_SERVER['REQUEST_METHOD'];
+try { monitor_begin("$m $r"); } catch (Throwable $e) { error_log('[homex] monitor: ' . $e->getMessage()); }
 
 try {
     if ($m === 'GET' && in_array($r, ['catalog', 'settings', 'me'], true)) daily_backup();
@@ -38,6 +39,8 @@ try {
         case 'POST registry/update': ok(registry_update(body())); break;
         case 'POST return-request': ok(returns_submit()); break;
         case 'POST visit':         visit_record(body()); break;
+        case 'POST log-client':    ok(client_log(body())); break;
+        case 'GET ping':           ok(monitor_ping()); break;
 
         /* ---------- auth ---------- */
         case 'GET me':         ok(me()); break;
@@ -82,6 +85,7 @@ try {
         case 'POST admin/coupon-delete': need('owner'); ok(delete_coupon((int)(body()['id'] ?? 0))); break;
         case 'GET admin/carts':        need(); ok(carts_admin($_GET)); break;
         case 'GET admin/visitors':     need(); ok(admin_visitors($_GET)); break;
+        case 'GET admin/health':       need('owner'); ok(admin_health($_GET)); break;
         case 'POST admin/cart':        need(); ok(cart_update(body())); break;
         case 'GET admin/orders-pulse': need(); ok(orders_pulse()); break;
         case 'GET admin/returns':      need(); ok(admin_returns($_GET)); break;
@@ -151,8 +155,11 @@ try {
         default: fail('مسار غير معروف', 404);
     }
 } catch (ApiError $e) {
+    if (preg_match('/paymob|kashier|fawry/', $r)) app_log('warning', 'payment', $e->getMessage(), ['route' => "$m $r"]);
     fail($e->getMessage(), $e->getCode() ?: 400);
 } catch (Throwable $e) {
     error_log('[homex] ' . $e->getMessage() . ' @ ' . $e->getFile() . ':' . $e->getLine());
+    app_log(preg_match('/paymob|kashier|fawry/', $r) ? 'critical' : 'error', preg_match('/paymob|kashier|fawry/', $r) ? 'payment' : 'server',
+        $e->getMessage(), ['route' => "$m $r", 'file' => basename($e->getFile()) . ':' . $e->getLine()]);
     fail('حصل خطأ في السيرفر، جرّب تاني', 500);
 }

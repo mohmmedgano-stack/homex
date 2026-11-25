@@ -10,8 +10,9 @@ import { Reviews } from './pages/Reviews';
 import { Returns } from './pages/Returns';
 import { Registries } from './pages/Registries';
 import { Visitors } from './pages/Visitors';
+import { Health } from './pages/Health';
 import { StationAccess } from './pages/StationAccess';
-import { LayoutDashboard, Package, ShoppingBag, Calculator, Settings, Users, LogOut, Menu, X, ExternalLink, Store, Images, FileText, Bell, BellOff, History, ScanBarcode, DatabaseBackup, ShoppingCart, TicketPercent, Star, QrCode, RotateCcw, Gift, ChartNoAxesColumn } from 'lucide-react';
+import { LayoutDashboard, Package, ShoppingBag, Calculator, Settings, Users, LogOut, Menu, X, ExternalLink, Store, Images, FileText, Bell, BellOff, History, ScanBarcode, DatabaseBackup, ShoppingCart, TicketPercent, Star, QrCode, RotateCcw, Gift, ChartNoAxesColumn, Activity } from 'lucide-react';
 import { Overview } from './pages/Overview';
 import { Products } from './pages/Products';
 import { Orders } from './pages/Orders';
@@ -30,7 +31,7 @@ export interface Admin {
   role: 'owner' | 'staff';
 }
 
-type Page = 'overview' | 'visitors' | 'products' | 'orders' | 'returns' | 'registries' | 'carts' | 'coupons' | 'reviews' | 'inventory' | 'banners' | 'pages' | 'dealers' | 'accounting' | 'settings' | 'team';
+type Page = 'overview' | 'visitors' | 'health' | 'products' | 'orders' | 'returns' | 'registries' | 'carts' | 'coupons' | 'reviews' | 'inventory' | 'banners' | 'pages' | 'dealers' | 'accounting' | 'settings' | 'team';
 
 type SettingsTab = 'general' | 'pages' | 'team' | 'activity' | 'backups' | 'station';
 const SETTINGS_TABS: { id: SettingsTab; label: string; short: string; Icon: React.FC<any> }[] = [
@@ -43,7 +44,7 @@ const SETTINGS_TABS: { id: SettingsTab; label: string; short: string; Icon: Reac
 ];
 
 // Sidebar, grouped by what you're doing
-const NAV_GROUPS: { title: string; items: { id: Page; label: string; Icon: React.FC<any> }[] }[] = [
+const NAV_GROUPS: { title: string; items: { id: Page; label: string; Icon: React.FC<any>; owner?: boolean }[] }[] = [
   { title: '', items: [{ id: 'overview', label: 'الرئيسية', Icon: LayoutDashboard }] },
   { title: 'المبيعات', items: [
     { id: 'orders', label: 'الطلبات', Icon: ShoppingBag },
@@ -64,6 +65,7 @@ const NAV_GROUPS: { title: string; items: { id: Page; label: string; Icon: React
   ] },
   { title: 'الإدارة', items: [
     { id: 'accounting', label: 'الحسابات', Icon: Calculator },
+    { id: 'health', label: 'صحة الموقع', Icon: Activity, owner: true },
     { id: 'settings', label: 'إعدادات المتجر', Icon: Settings },
   ] },
 ];
@@ -213,7 +215,7 @@ const Shell: React.FC<{ admin: Admin; onLogout: () => void }> = ({ admin, onLogo
         <div key={g.title || 'home'} className={g.title ? 'mt-2 pt-2 border-t border-ink/10' : ''}>
           {g.title && <p className="ag-lbl px-3 pb-1 text-[11px] font-bold text-ink/45 whitespace-nowrap">{g.title}</p>}
           <div className="space-y-0.5">
-            {g.items.map(({ id, label, Icon }) => (
+            {g.items.filter((it: any) => !it.owner || isOwner).map(({ id, label, Icon }) => (
               <button
                 key={id}
                 onClick={() => setPage(id)}
@@ -227,6 +229,7 @@ const Shell: React.FC<{ admin: Admin; onLogout: () => void }> = ({ admin, onLogo
                 {id === 'orders' && alerts.pending > 0 && badge(alerts.pending, 'bg-sale')}
                 {id === 'returns' && alerts.returns > 0 && badge(alerts.returns, 'bg-sale')}
                 {id === 'carts' && alerts.carts > 0 && badge(alerts.carts, 'bg-gold-deep')}
+                {id === 'health' && alerts.health > 0 && badge(alerts.health, 'bg-sale')}
               </button>
             ))}
           </div>
@@ -300,6 +303,7 @@ const Shell: React.FC<{ admin: Admin; onLogout: () => void }> = ({ admin, onLogo
         {page === 'returns' && <Returns />}
         {page === 'registries' && <Registries />}
         {page === 'visitors' && <Visitors />}
+        {page === 'health' && isOwner && <Health />}
         {page === 'inventory' && <Inventory />}
         {page === 'banners' && <Banners />}
         {page === 'dealers' && <Dealers />}

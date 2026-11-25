@@ -25,6 +25,28 @@ const reloadForNewVersion = () => {
   location.reload();
   return true;
 };
+// Visitors' browser errors go to the dashboard's logs («صحة الموقع»), at most 3 per page view
+let reported = 0;
+const reportError = (message: string, src = '', stack = '') => {
+  if (reported >= 3 || !message) return;
+  reported++;
+  fetch('/api/?r=log-client', {
+    method: 'POST', keepalive: true, credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json', 'X-Homex': '1' },
+    body: JSON.stringify({ message: message.slice(0, 500), src: src.slice(0, 200), stack: stack.slice(0, 800), page: location.pathname }),
+  }).catch(() => {});
+};
+window.addEventListener('error', (e) => {
+  if (!e.message) return;  // a failed image or script tag, not a code error
+  reportError(e.message, e.filename ? `${e.filename}:${e.lineno}` : '', (e.error as Error | undefined)?.stack || '');
+});
+window.addEventListener('unhandledrejection', (e) => {
+  const err = e.reason as Error | undefined;
+  const msg = String(err?.message || e.reason || '');
+  if (/dynamically imported module|Importing a module script failed|Failed to fetch|NetworkError|Load failed|AbortError/i.test(msg)) return;
+  reportError(msg, '', err?.stack || '');
+});
+
 window.addEventListener('vite:preloadError', (e) => { if (reloadForNewVersion()) e.preventDefault(); });
 window.addEventListener('unhandledrejection', (e) => {
   const msg = String((e.reason && (e.reason as Error).message) || e.reason || '');
