@@ -1759,7 +1759,7 @@ function orders_pulse(): array {
     $carts = (int)db()->query("SELECT COUNT(*) FROM carts WHERE status = 'open' AND updated_at < datetime('now', '-30 minutes')")->fetchColumn();
     $returns = (int)db()->query("SELECT COUNT(*) FROM return_requests WHERE status = 'pending'")->fetchColumn();
     $me = current_admin();
-    $health = $me && mb_strtolower((string)$me['username']) === 'homex' ? (int)db()->query("SELECT COUNT(*) FROM alerts WHERE state = 'firing'")->fetchColumn() : 0;
+    $health = is_main_account($me ?: null) ? (int)db()->query("SELECT COUNT(*) FROM alerts WHERE state = 'firing'")->fetchColumn() : 0;
     return ['count' => $count, 'pending' => $pending, 'carts' => $carts, 'returns' => $returns, 'health' => $health, 'last' => $last ? ['id' => (int)$last['id'], 'code' => $last['code'], 'name' => $last['customer_name'], 'total' => (float)$last['total'], 'city' => $last['city']] : null];
 }
 
@@ -3426,9 +3426,15 @@ function station_status(): array {
 }
 
 /** The station's login is managed only from the main owner account «homex». */
+/** The store owner's own login: the station tab and «صحة الموقع» are for it only. */
+const MAIN_ACCOUNTS = ['homex', 'homex01'];
+function is_main_account(?array $a): bool {
+    return $a !== null && ($a['role'] ?? '') === 'owner' && in_array(mb_strtolower((string)$a['username']), MAIN_ACCOUNTS, true);
+}
+
 function need_station_admin(): array {
     $a = need('owner');
-    if (mb_strtolower((string)$a['username']) !== 'homex') throw new ApiError('الصلاحية دي لحساب homex بس', 403);
+    if (!is_main_account($a)) throw new ApiError('الصلاحية دي لحساب homex بس', 403);
     return $a;
 }
 

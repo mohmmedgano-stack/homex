@@ -176,7 +176,7 @@ const Shell: React.FC<{ admin: Admin; onLogout: () => void }> = ({ admin, onLogo
   const [activityUser, setActivityUser] = useState<number | null>(null);
   const isOwner = admin.role === 'owner';
   // The barcode-station tab belongs to the main account only
-  const isStationAdmin = isOwner && admin.username.toLowerCase() === 'homex';
+  const isStationAdmin = isOwner && ['homex', 'homex01'].includes(admin.username.toLowerCase());
   const toast = useToast();
   const alerts = useOrderAlerts((o, added) => {
     toast(o ? `🛒 طلب جديد ${o.code} من ${o.name} — ${Math.round(o.total).toLocaleString('en-US')} ج.م` : `🛒 وصلك ${added} طلب جديد`, 'ok', { silent: true });  // the order alert has its own sound
