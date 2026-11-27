@@ -28,6 +28,7 @@ interface ToastState {
 export interface HomeBanner { id: number; image: string; imageMobile: string; title: string; link: string }
 
 interface StoreContextType {
+  refreshStore: () => Promise<void>;
   // Products
   products: Product[];
   addProduct: (product: Omit<Product, 'id' | 'createdAt'>) => Product;
@@ -144,8 +145,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   // Load the live catalog + settings from the server.
   // If the API isn't reachable (local preview without PHP), show the demo catalog.
-  useEffect(() => {
-    api.get('catalog')
+  const loadStore = React.useCallback((first: boolean) => {
+    const cat = api.get('catalog')
       .then((d) => {
         setProducts(d.products);
         setCategoryList(d.categories);
@@ -153,14 +154,18 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       })
       .catch(() => {
         // Demo catalog only in local development — never show fake products on the live site
-        if (import.meta.env.DEV) {
+        if (first && import.meta.env.DEV) {
           setProducts(INITIAL_PRODUCTS);
           setCategoryList(CATEGORIES);
         }
       })
       .finally(() => setCatalogLoaded(true));
-    api.get('settings').then((st) => { setSettings(st); initTracking(st); }).catch(() => {});
+    const st = api.get('settings').then((st) => { setSettings(st); if (first) initTracking(st); }).catch(() => {});
+    return Promise.all([cat, st]).then(() => undefined);
   }, []);
+  useEffect(() => { loadStore(true); }, [loadStore]);
+  /** Pull-to-refresh: fetch products, prices, stock and settings again without reloading the page. */
+  const refreshStore = React.useCallback(() => loadStore(false), [loadStore]);
 
   // Price Drop Alerts Subscriptions
   const [priceAlerts, setPriceAlerts] = useState<PriceAlertSubscription[]>(() => {
@@ -685,6 +690,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   return (
     <StoreContext.Provider
       value={{
+        refreshStore,
         products,
         addProduct,
         updateProduct,

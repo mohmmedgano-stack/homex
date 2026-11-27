@@ -30,6 +30,7 @@ import { ProductCard } from './components/ProductCard';
 import { CartDrawer } from './components/CartDrawer';
 import { WishlistDrawer } from './components/WishlistDrawer';
 import { MobileBottomNav } from './components/MobileBottomNav';
+import { PullToRefresh } from './components/PullToRefresh';
 import { ToastContainer } from './components/Toast';
 import { SplitWords, PageIn } from './components/fx/Effects';
 import { initStoreMotion, revealIn } from './lib/fx';
@@ -94,6 +95,7 @@ const StoreContent: React.FC = () => {
     setSelectedProduct,
     catalogLoaded,
     showToast,
+    refreshStore,
   } = useStore();
 
   // Influencer links: home-x.online/?coupon=CODE → remembered and applied at checkout
@@ -447,6 +449,8 @@ const StoreContent: React.FC = () => {
       <ToastContainer />
       <PaymentReturn />
       <MobileBottomNav />
+      {/* phones only; not on pages with their own fixed action bar (product, checkout, gift list) */}
+      <PullToRefresh target={pageRef} enabled={currentView === 'store' && !selectedProduct && !registry && !reviewPage} onRefresh={refreshStore} />
 
       {/* pages with their own sticky action bar (product, checkout, gift list) don't need the floating button on top of it */}
       {STORE_INFO.whatsapp && currentView === 'store' && !selectedProduct && !registry && (
