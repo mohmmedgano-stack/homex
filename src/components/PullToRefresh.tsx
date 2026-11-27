@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 
 /**
- * Phone-only pull-to-refresh with a clay hand.
+ * Phone-only pull-to-refresh with a cartoon hand (dark sleeve, orange cuff: the site's colors).
  * Pull the page down from the very top: an arm reaches down into the gap with an open hand. Let go far enough and
  * the hand grabs the page's top edge (the page creases like cloth), yanks it back up, and the store's data is
  * fetched again. Let go early and the page just springs back.
@@ -25,59 +25,66 @@ const band = (dy: number) => MAX * (1 - Math.exp(-dy / (MAX * 1.15)));
 
 const ClayDefs = () => (
   <defs>
+    {/* sleeve in the header's dark, cuff in the brand orange, a soft round hand */}
     <linearGradient id="ptr-arm" x1="0" x2="1">
-      <stop offset="0" stopColor="#e9879c" />
-      <stop offset=".38" stopColor="#ffc3cf" />
-      <stop offset=".62" stopColor="#ffb2c1" />
-      <stop offset="1" stopColor="#de7790" />
+      <stop offset="0" stopColor="#14161a" />
+      <stop offset=".4" stopColor="#3a3f48" />
+      <stop offset=".62" stopColor="#2b2f36" />
+      <stop offset="1" stopColor="#121418" />
     </linearGradient>
-    <radialGradient id="ptr-skin" cx=".42" cy=".3" r=".85">
-      <stop offset="0" stopColor="#ffd6de" />
-      <stop offset=".55" stopColor="#ffb0c0" />
-      <stop offset="1" stopColor="#e3829a" />
+    <linearGradient id="ptr-cuff" x1="0" x2="1">
+      <stop offset="0" stopColor="#d9600c" />
+      <stop offset=".4" stopColor="#ffa15a" />
+      <stop offset=".65" stopColor="#f47b20" />
+      <stop offset="1" stopColor="#cf5a0a" />
+    </linearGradient>
+    <radialGradient id="ptr-skin" cx=".38" cy=".25" r=".95">
+      <stop offset="0" stopColor="#ffeee3" />
+      <stop offset=".5" stopColor="#ffd7bf" />
+      <stop offset="1" stopColor="#f0b28f" />
     </radialGradient>
-    <radialGradient id="ptr-pad" cx=".45" cy=".35" r=".8">
-      <stop offset="0" stopColor="#ffc9d4" />
-      <stop offset="1" stopColor="#ee96aa" />
+    <radialGradient id="ptr-pad" cx=".45" cy=".3" r=".8">
+      <stop offset="0" stopColor="#ffe6d8" />
+      <stop offset="1" stopColor="#f6c0a2" />
     </radialGradient>
-    <filter id="ptr-soft" x="-30%" y="-30%" width="160%" height="160%">
-      <feDropShadow dx="0" dy="6" stdDeviation="5" floodColor="#8a2c45" floodOpacity=".22" />
+    <filter id="ptr-soft" x="-40%" y="-40%" width="180%" height="180%">
+      <feDropShadow dx="0" dy="6" stdDeviation="5" floodColor="#7a3a10" floodOpacity=".22" />
     </filter>
   </defs>
 );
 
-/** Fingers pointing down, a little spread: reaching for the page. Wrist at y=0. */
+const Sleeve = () => (
+  <>
+    <rect x="-25" y="-700" width="50" height="696" rx="14" fill="url(#ptr-arm)" />
+    <rect x="-27" y="-10" width="54" height="14" rx="7" fill="url(#ptr-cuff)" />
+  </>
+);
+
+/** Chubby fingers pointing down, reaching for the page. Wrist at y=0. */
 const OpenHand = () => (
   <g filter="url(#ptr-soft)">
-    {/* thumb, growing out of the palm's side */}
-    <path d="M-25 14 C-36 18 -44 30 -46 42 C-47 50 -38 54 -33 47 C-29 40 -24 33 -18 30 Z" fill="url(#ptr-skin)" stroke="#df8aa0" strokeWidth=".8" />
-    <g stroke="#df8aa0" strokeWidth=".8" fill="url(#ptr-skin)">
-      <path d="M-27 40 C-29 52 -28 64 -22 68 C-16 71 -12 64 -12 56 L-12 40 Z" />
-      <path d="M-13 42 C-14 56 -12 72 -5 75 C1 77 3 70 3 60 L3 42 Z" />
-      <path d="M2 42 C2 56 4 72 11 74 C17 75 18 68 17 58 L16 42 Z" />
-      <path d="M15 40 C16 52 18 62 23 65 C28 67 30 60 28 50 L27 38 Z" />
-    </g>
-    <g fill="url(#ptr-pad)">
-      <ellipse cx="-19" cy="63" rx="4.5" ry="3.6" /><ellipse cx="-4" cy="70" rx="4.5" ry="3.6" />
-      <ellipse cx="10" cy="69" rx="4.5" ry="3.6" /><ellipse cx="23" cy="60" rx="4" ry="3.2" />
-    </g>
-    <path d="M-24 0 C-26 14 -30 30 -28 42 C-26 50 -14 52 0 52 C14 52 27 50 29 42 C31 30 26 14 24 0 Z" fill="url(#ptr-skin)" />
-    <ellipse cx="-7" cy="20" rx="10" ry="14" fill="#fff" opacity=".25" />
+    <ellipse cx="-27" cy="26" rx="8.5" ry="12" transform="rotate(28 -27 26)" fill="url(#ptr-skin)" />
+    <ellipse cx="-16" cy="46" rx="8" ry="11" fill="url(#ptr-skin)" />
+    <ellipse cx="-5" cy="50" rx="8" ry="12" fill="url(#ptr-skin)" />
+    <ellipse cx="6.5" cy="50" rx="8" ry="12" fill="url(#ptr-skin)" />
+    <ellipse cx="17" cy="45" rx="7.5" ry="10.5" fill="url(#ptr-skin)" />
+    <path d="M-21 2 C-25 12 -26 28 -22 38 C-18 46 -8 48 1 48 C11 48 20 45 23 37 C26 27 25 12 21 2 Z" fill="url(#ptr-skin)" />
+    <path d="M-10.5 40 L-10.5 50 M1 41 L1 53 M12 40 L12 50" stroke="#e8a785" strokeWidth="1.3" strokeLinecap="round" opacity=".7" />
+    <ellipse cx="-7" cy="16" rx="9" ry="11" fill="#fff" opacity=".35" />
   </g>
 );
 
 /** Closed hand holding the page edge. */
 const Fist = () => (
   <g filter="url(#ptr-soft)">
-    <path d="M-26 0 C-28 12 -32 26 -31 38 C-30 52 -17 60 0 60 C17 60 30 52 31 38 C32 26 28 12 26 0 Z" fill="url(#ptr-skin)" />
-    <g stroke="#df8aa0" strokeWidth=".8" fill="url(#ptr-skin)">
-      <rect x="-29" y="34" width="15.5" height="24" rx="7.5" />
-      <rect x="-14.5" y="36" width="15.5" height="25" rx="7.5" />
-      <rect x="0" y="36" width="15.5" height="25" rx="7.5" />
-      <rect x="14.5" y="34" width="15" height="23" rx="7.5" />
-    </g>
-    <path d="M-31 26 C-22 22 -6 24 7 31 C12 34 11 41 5 41 C-7 40 -21 39 -30 41 Z" fill="url(#ptr-pad)" stroke="#df8aa0" strokeWidth=".8" />
-    <ellipse cx="-9" cy="14" rx="11" ry="9" fill="#fff" opacity=".25" />
+    <path d="M-23 2 C-27 14 -28 30 -24 40 C-20 50 -9 53 1 53 C12 53 22 50 25 40 C28 30 27 14 23 2 Z" fill="url(#ptr-skin)" />
+    <ellipse cx="-15" cy="44" rx="8" ry="8.5" fill="url(#ptr-skin)" />
+    <ellipse cx="-4.5" cy="47" rx="8" ry="8.5" fill="url(#ptr-skin)" />
+    <ellipse cx="6.5" cy="47" rx="8" ry="8.5" fill="url(#ptr-skin)" />
+    <ellipse cx="16.5" cy="43" rx="7.5" ry="8" fill="url(#ptr-skin)" />
+    <path d="M-10 41 L-10 49 M1 42 L1 52 M12 41 L12 49" stroke="#e8a785" strokeWidth="1.3" strokeLinecap="round" opacity=".7" />
+    <rect x="-27" y="22" width="34" height="13" rx="6.5" transform="rotate(8 -10 28)" fill="url(#ptr-pad)" stroke="#e8a785" strokeWidth=".8" />
+    <ellipse cx="-8" cy="13" rx="9" ry="8" fill="#fff" opacity=".35" />
   </g>
 );
 
@@ -209,7 +216,7 @@ export const PullToRefresh: React.FC<{ target: React.RefObject<HTMLElement | nul
   return (
     <div className="fixed inset-x-0 top-0 z-[45] pointer-events-none lg:hidden" aria-hidden="true" style={{ height: Math.max(pull, 0) + 180 }}>
       {/* the gap above the page */}
-      <div className="absolute inset-x-0 top-0" style={{ height: pull, background: 'radial-gradient(120% 140% at 50% 0%, #f3eee9 0%, #e6dfd8 100%)', boxShadow: 'inset 0 -10px 18px -12px rgba(60,30,20,.35)' }} />
+      <div className="absolute inset-x-0 top-0" style={{ height: pull, background: 'radial-gradient(120% 140% at 50% 0%, #f6f1ec 0%, #ebe4dc 100%)', boxShadow: 'inset 0 -10px 18px -12px rgba(28,31,36,.35)' }} />
       {/* creases on the page while it's held */}
       {grabbing && (
         <div className="absolute left-1/2 -translate-x-1/2" style={{ top: pull - 2, opacity: phase === 'leave' ? 1 - armUp : Math.min(1, lift * 4) }}>
@@ -220,7 +227,7 @@ export const PullToRefresh: React.FC<{ target: React.RefObject<HTMLElement | nul
       <svg className="absolute left-1/2 -translate-x-1/2 overflow-visible" width="130" height="104" viewBox="-50 0 100 80"
         style={{ top: handY, transition: phase === 'pull' ? 'none' : undefined }}>
         <ClayDefs />
-        <rect x="-24" y="-700" width="48" height="706" rx="20" fill="url(#ptr-arm)" />
+        <Sleeve />
         <g style={{ transform: `scale(${ready || grabbing ? 1 : 0.92 + (pull / THRESHOLD) * 0.08})`, transformOrigin: '0 0', transition: 'transform .15s' }}>
           {grabbing ? <Fist /> : <OpenHand />}
         </g>
