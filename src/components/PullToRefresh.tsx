@@ -143,8 +143,10 @@ export const PullToRefresh: React.FC<{ target: React.RefObject<HTMLElement | nul
       const dy = e.touches[0].clientY - s.startY;
       const dx = e.touches[0].clientX - s.startX;
       if (!s.decided) {
-        if (Math.abs(dy) < 6 && Math.abs(dx) < 6) return;
-        // Only a downward, mostly vertical drag from the top is a pull; anything else is normal scrolling/swiping
+        // Decide on the very first move: Safari on iPhone commits to its own bounce on the first move it isn't
+        // stopped, and won't let the page stop it after that. Only a downward, mostly vertical drag from the top
+        // is a pull; anything else is normal scrolling/swiping.
+        if (dy === 0 && dx === 0) return;
         if (dy <= 0 || Math.abs(dx) > Math.abs(dy) || window.scrollY > 0) { s.active = false; return; }
         s.decided = true;
         setPhase('pull'); setLift(0); setArmUp(0);
