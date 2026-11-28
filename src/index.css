@@ -46,6 +46,9 @@ body {
   overflow-x: hidden;
   background: var(--color-page);
 }
+/* Store: when the phone bounces past the end of the page, show the footer's dark, not a white strip */
+html:has(body > #root > div > footer) { background: #1c1f24; }
+html:has(body > #root > div > footer) body { background: transparent; }
 
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
@@ -140,7 +143,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
 /* ================= Dashboard «glass» theme (admin only, scoped to .ag) ================= */
 .ag { min-height: 100vh; position: relative; isolation: isolate; color: #1c1f24; }
 /* warm blurred backdrop, like a photo out of focus behind frosted glass */
-.ag-bg { position: fixed; inset: 0; z-index: -1; overflow: hidden;
+.ag-bg { position: fixed; inset: 0; bottom: auto; height: max(100%, 100lvh); z-index: -1; overflow: hidden;
   background: radial-gradient(120% 90% at 85% 0%, #f3c9a8 0%, #e9a27a 30%, #b86a4b 62%, #6e3b2c 100%); }
 .ag-bg i { position: absolute; border-radius: 50%; filter: blur(80px); opacity: .7; }
 .ag-bg i:nth-child(1) { width: 46vw; height: 46vw; right: -8vw; top: -10vw; background: #ffd9bd; }
@@ -207,3 +210,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
 @media (max-width: 767px) {
   body.pp-phone .store-header, body.pp-phone .store-floatbar, body.pp-phone .mobile-bottom-nav { display: none !important; }
 }
+
+/* Admin: page background matches the backdrop's darkest corner, so nothing white shows at the edges */
+html:has(.ag) { background: #6e3b2c; }
+html:has(.ag) body { background: #6e3b2c; }

@@ -306,7 +306,7 @@ const StoreContent: React.FC = () => {
   const isFiltered = selectedCategory !== 'all' || selectedBrand !== 'all' || priceFilter !== 'all' || !!searchQuery;
 
   return (
-    <div ref={pageRef} className="min-h-screen flex flex-col bg-page text-ink pb-24 md:pb-0">
+    <div ref={pageRef} className="min-h-screen flex flex-col bg-page text-ink">
       <Navbar />
 
       {registry && currentView === 'store' ? (
@@ -465,7 +465,7 @@ const StoreContent: React.FC = () => {
         </a>
       )}
 
-      <footer className="bg-ink text-white/75 text-sm mt-12">
+      <footer className="bg-ink text-white/75 text-sm mt-12 pb-[calc(env(safe-area-inset-bottom)+92px)] md:pb-0">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-14">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8" data-reveal>
             <div className="col-span-2 md:col-span-1 space-y-4">
@@ -535,7 +535,7 @@ const StoreContent: React.FC = () => {
             </div>
           </div>
           <div className="border-t border-white/10 mt-10 pt-5 flex flex-wrap items-center justify-between gap-3 text-xs text-white/50">
-            <p>© {new Date().getFullYear()} {settings.store_name}. كل الحقوق محفوظة.</p>
+            <p dir="rtl">© {new Date().getFullYear()} <span dir="ltr">Gano Media</span>. كل الحقوق محفوظة.</p>
           </div>
         </div>
       </footer>

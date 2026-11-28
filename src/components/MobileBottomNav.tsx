@@ -52,7 +52,7 @@ export const MobileBottomNav: React.FC = () => {
 
   return (
     <nav aria-label="التنقل"
-      className="mobile-bottom-nav md:hidden fixed inset-x-4 z-40 h-16 rounded-full bg-ink px-2 flex items-center justify-between shadow-[0_14px_30px_rgba(28,31,36,0.35)]"
+      className="mobile-bottom-nav md:hidden fixed inset-x-4 z-40 h-16 rounded-full bg-ink px-2 flex items-center justify-between ring-1 ring-white/10 shadow-[0_14px_30px_rgba(28,31,36,0.35)]"
       style={{ bottom: 'calc(env(safe-area-inset-bottom) + 12px)' }}>
       {items.map(({ id, label, Icon, onClick, count }) => {
         const on = active === id;
