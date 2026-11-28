@@ -13,20 +13,30 @@ export const MobileBottomNav: React.FC = () => {
     setSelectedCategory, compareList, compareOpen, setCompareOpen, isAdminLoggedIn,
   } = useStore();
   const [atCatalog, setAtCatalog] = React.useState(false);
+  const lockUntil = React.useRef(0);
 
-  // «الأقسام» lights up while the product list is on screen
+  // «الأقسام» lights up while the product list fills the screen. Measured on every scroll (the list can appear
+  // after this bar does). Right after a tap the pill moves at once and ignores the smooth scroll on its way there.
   React.useEffect(() => {
-    const el = document.getElementById('appliances-catalog-section');
-    if (!el || !('IntersectionObserver' in window)) return;
-    const io = new IntersectionObserver(([e]) => setAtCatalog(e.isIntersecting && e.intersectionRatio > 0.25), { threshold: [0, 0.25, 0.5] });
-    io.observe(el);
-    return () => io.disconnect();
+    const check = () => {
+      if (Date.now() < lockUntil.current) return;
+      const el = document.getElementById('appliances-catalog-section');
+      if (!el) { setAtCatalog(false); return; }
+      const r = el.getBoundingClientRect();
+      setAtCatalog(r.top < innerHeight * 0.45 && r.bottom > innerHeight * 0.35);
+    };
+    check();
+    addEventListener('scroll', check, { passive: true });
+    addEventListener('scrollend', check);
+    return () => { removeEventListener('scroll', check); removeEventListener('scrollend', check); };
   }, [currentView]);
+  const tapped = (cats: boolean) => { lockUntil.current = Date.now() + 1200; setAtCatalog(cats); };
 
   const drawer = cartOpen ? 'cart' : wishlistOpen ? 'wish' : compareOpen ? 'compare' : '';
   const active = drawer || (currentView === 'admin' ? 'admin' : currentView === 'store' ? (atCatalog ? 'cats' : 'home') : '');
 
   const goHome = () => {
+    tapped(false);
     if (/^\/(p|o|r)\//.test(location.pathname)) { location.href = '/'; return; }
     closeProductPage();
     setCurrentView('store');
@@ -34,6 +44,7 @@ export const MobileBottomNav: React.FC = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
   const goCats = () => {
+    tapped(true);
     if (/^\/(p|o|r)\//.test(location.pathname)) { location.href = '/#catalog'; return; }
     closeProductPage();
     setCurrentView('store');
