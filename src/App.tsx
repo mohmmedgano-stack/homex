@@ -306,7 +306,7 @@ const StoreContent: React.FC = () => {
   const isFiltered = selectedCategory !== 'all' || selectedBrand !== 'all' || priceFilter !== 'all' || !!searchQuery;
 
   return (
-    <div ref={pageRef} className="min-h-screen flex flex-col bg-page text-ink pb-20 md:pb-0">
+    <div ref={pageRef} className="min-h-screen flex flex-col bg-page text-ink pb-24 md:pb-0">
       <Navbar />
 
       {registry && currentView === 'store' ? (
@@ -458,7 +458,7 @@ const StoreContent: React.FC = () => {
           href={`https://wa.me/${waNumber(STORE_INFO.whatsapp)}`}
           target="_blank"
           rel="noopener noreferrer"
-          className={`fixed ${selectedProduct && currentView === 'store' ? 'bottom-36' : 'bottom-20'} md:bottom-6 left-4 z-40 w-14 h-14 rounded-full bg-[#25D366] text-white shadow-xl shadow-black/20 flex items-center justify-center hover:scale-105 transition-transform`}
+          className={`fixed ${selectedProduct && currentView === 'store' ? 'bottom-36' : 'bottom-24'} md:bottom-6 left-4 z-40 w-14 h-14 rounded-full bg-[#25D366] text-white shadow-xl shadow-black/20 flex items-center justify-center hover:scale-105 transition-transform`}
           aria-label="كلمنا واتساب"
         >
           <FaWhatsapp className="w-8 h-8" />

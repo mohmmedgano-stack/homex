@@ -3,111 +3,74 @@ import { useStore } from '../context/StoreContext';
 import { closeProductPage } from '../lib/nav';
 import { Home, Layers, Heart, ShoppingBag, ShieldCheck, ArrowLeftRight } from 'lucide-react';
 
+/**
+ * Phones: a dark floating capsule (the header's colour). The section you're in grows into an orange pill with its
+ * name; the others are icons only, with a count badge where it matters.
+ */
 export const MobileBottomNav: React.FC = () => {
   const {
-    currentView,
-    setCurrentView,
-    cartCount,
-    setCartOpen,
-    wishlist,
-    setWishlistOpen,
-    setSelectedCategory,
-    compareList,
-    setCompareOpen,
-    isAdminLoggedIn
+    currentView, setCurrentView, cartCount, cartOpen, setCartOpen, wishlist, wishlistOpen, setWishlistOpen,
+    setSelectedCategory, compareList, compareOpen, setCompareOpen, isAdminLoggedIn,
   } = useStore();
+  const [atCatalog, setAtCatalog] = React.useState(false);
+
+  // «الأقسام» lights up while the product list is on screen
+  React.useEffect(() => {
+    const el = document.getElementById('appliances-catalog-section');
+    if (!el || !('IntersectionObserver' in window)) return;
+    const io = new IntersectionObserver(([e]) => setAtCatalog(e.isIntersecting && e.intersectionRatio > 0.25), { threshold: [0, 0.25, 0.5] });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [currentView]);
+
+  const drawer = cartOpen ? 'cart' : wishlistOpen ? 'wish' : compareOpen ? 'compare' : '';
+  const active = drawer || (currentView === 'admin' ? 'admin' : currentView === 'store' ? (atCatalog ? 'cats' : 'home') : '');
+
+  const goHome = () => {
+    if (/^\/(p|o|r)\//.test(location.pathname)) { location.href = '/'; return; }
+    closeProductPage();
+    setCurrentView('store');
+    setSelectedCategory('all');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+  const goCats = () => {
+    if (/^\/(p|o|r)\//.test(location.pathname)) { location.href = '/#catalog'; return; }
+    closeProductPage();
+    setCurrentView('store');
+    setTimeout(() => document.getElementById('appliances-catalog-section')?.scrollIntoView({ behavior: 'smooth' }), 60);
+  };
+
+  const items: { id: string; label: string; Icon: React.FC<any>; onClick: () => void; count?: number }[] = [
+    { id: 'home', label: 'الرئيسية', Icon: Home, onClick: goHome },
+    { id: 'cats', label: 'الأقسام', Icon: Layers, onClick: goCats },
+    { id: 'wish', label: 'المفضلة', Icon: Heart, onClick: () => setWishlistOpen(true), count: wishlist.length },
+    { id: 'cart', label: 'السلة', Icon: ShoppingBag, onClick: () => setCartOpen(true), count: cartCount },
+    isAdminLoggedIn
+      ? { id: 'admin', label: 'الأدمن', Icon: ShieldCheck, onClick: () => setCurrentView(currentView === 'admin' ? 'store' : 'admin') }
+      : { id: 'compare', label: 'المقارنة', Icon: ArrowLeftRight, onClick: () => setCompareOpen(true), count: compareList.length },
+  ];
 
   return (
-    <div className="mobile-bottom-nav md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-lg border-t border-slate-200/90 shadow-[0_-4px_20px_rgba(0,0,0,0.06)] px-3 py-2">
-      <div className="flex items-center justify-around">
-        
-        {/* Home */}
-        <button
-          onClick={() => {
-            if (/^\/(p|o|r)\//.test(location.pathname)) { location.href = '/'; return; }
-            closeProductPage();
-            setCurrentView('store');
-            setSelectedCategory('all');
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-          }}
-          className={`flex flex-col items-center gap-1 py-1 px-2.5 rounded-xl transition-colors ${
-            currentView === 'store' ? 'text-amber-600 font-bold' : 'text-slate-500 hover:text-slate-800'
-          }`}
-        >
-          <Home className="w-5 h-5" />
-          <span className="text-[10px]">الرئيسية</span>
-        </button>
-
-        {/* Categories */}
-        <button
-          onClick={() => {
-            if (/^\/(p|o|r)\//.test(location.pathname)) { location.href = '/#catalog'; return; }
-            closeProductPage();
-            setCurrentView('store');
-            setTimeout(() => document.getElementById('appliances-catalog-section')?.scrollIntoView({ behavior: 'smooth' }), 60);
-          }}
-          className="flex flex-col items-center gap-1 py-1 px-2.5 text-slate-500 hover:text-slate-800 transition-colors"
-        >
-          <Layers className="w-5 h-5" />
-          <span className="text-[10px]">الأقسام</span>
-        </button>
-
-        {/* Wishlist */}
-        <button
-          onClick={() => setWishlistOpen(true)}
-          className="flex flex-col items-center gap-1 py-1 px-2.5 text-slate-500 hover:text-slate-800 transition-colors relative"
-        >
-          <Heart className={`w-5 h-5 ${wishlist.length > 0 ? 'text-rose-500 fill-rose-500' : ''}`} />
-          {wishlist.length > 0 && (
-            <span className="absolute top-0 right-1.5 bg-rose-500 text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
-              {wishlist.length}
-            </span>
-          )}
-          <span className="text-[10px]">المفضلة</span>
-        </button>
-
-        {/* Cart */}
-        <button
-          onClick={() => setCartOpen(true)}
-          className="flex flex-col items-center gap-1 py-1 px-2.5 text-slate-500 hover:text-slate-800 transition-colors relative"
-        >
-          <div className="relative">
-            <ShoppingBag className="w-5 h-5 text-amber-600" />
-            {cartCount > 0 && (
-              <span className="absolute -top-1.5 -right-2 bg-amber-600 text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
-                {cartCount}
+    <nav aria-label="التنقل"
+      className="mobile-bottom-nav md:hidden fixed inset-x-4 z-40 h-16 rounded-full bg-ink px-2 flex items-center justify-between shadow-[0_14px_30px_rgba(28,31,36,0.35)]"
+      style={{ bottom: 'calc(env(safe-area-inset-bottom) + 12px)' }}>
+      {items.map(({ id, label, Icon, onClick, count }) => {
+        const on = active === id;
+        return (
+          <button key={id} type="button" onClick={onClick} aria-label={label} aria-current={on ? 'page' : undefined}
+            className={`relative h-12 rounded-full flex items-center justify-center gap-2 cursor-pointer transition-all duration-300 ease-[cubic-bezier(.2,.8,.2,1)] ${
+              on ? 'bg-gold text-white px-4 shadow-[0_6px_16px_rgba(244,123,32,0.45)]' : 'text-[#9aa1ad] px-3 active:text-white'
+            }`}>
+            <Icon className={`w-[22px] h-[22px] shrink-0 ${id === 'wish' && count ? 'fill-current' : ''}`} strokeWidth={on ? 2.4 : 2} />
+            <span className={`text-sm font-extrabold whitespace-nowrap overflow-hidden transition-all duration-300 ${on ? 'max-w-24 opacity-100' : 'max-w-0 opacity-0'}`}>{label}</span>
+            {!!count && !on && (
+              <span className="absolute top-0.5 right-0.5 min-w-[19px] h-[19px] px-1 rounded-full bg-sale text-white text-[11px] font-bold leading-[19px] text-center price ring-2 ring-ink">
+                {count > 99 ? '99+' : count}
               </span>
             )}
-          </div>
-          <span className="text-[10px]">السلة</span>
-        </button>
-
-        {/* 5th Button: Compare for Customer OR Admin if logged in */}
-        {isAdminLoggedIn ? (
-          <button
-            onClick={() => setCurrentView(currentView === 'admin' ? 'store' : 'admin')}
-            className={`flex flex-col items-center gap-1 py-1 px-2.5 rounded-xl transition-colors ${
-              currentView === 'admin' ? 'text-slate-900 font-bold' : 'text-slate-500 hover:text-slate-800'
-            }`}
-          >
-            <ShieldCheck className={`w-5 h-5 ${currentView === 'admin' ? 'text-amber-600' : 'text-slate-400'}`} />
-            <span className="text-[10px]">لوحة الأدمن</span>
           </button>
-        ) : (
-          <button
-            onClick={() => setCompareOpen(true)}
-            className="flex flex-col items-center gap-1 py-1 px-2.5 text-slate-500 hover:text-slate-800 transition-colors relative"
-          >
-            <ArrowLeftRight className="w-5 h-5 text-slate-600" />
-            {compareList.length > 0 && (
-              <span className="absolute top-0 right-1.5 bg-amber-500 text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
-                {compareList.length}
-              </span>
-            )}
-            <span className="text-[10px]">المقارنة</span>
-          </button>
-        )}
-      </div>
-    </div>
+        );
+      })}
+    </nav>
   );
 };

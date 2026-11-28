@@ -172,7 +172,7 @@ const Editor: React.FC<{ initial?: List; k?: string; onSaved?: (l: List) => void
         </section>
 
         {/* sticky save bar (phones first) */}
-        <div className="fixed bottom-16 md:bottom-0 inset-x-0 z-30 bg-white/95 backdrop-blur border-t border-line px-4 py-3">
+        <div className="fixed bottom-[88px] md:bottom-0 inset-x-3 md:inset-x-0 rounded-2xl md:rounded-none z-30 bg-white/95 backdrop-blur border border-line md:border-x-0 md:border-b-0 px-4 py-3 shadow-lg md:shadow-none">
           <div className="max-w-3xl mx-auto flex items-center gap-3">
             <span className="flex-1 min-w-0 text-sm">
               <b className="text-ink">{count} جهاز</b>
