@@ -225,6 +225,18 @@ const StoreContent: React.FC = () => {
   }, []);
 
   const [selectedBrand, setSelectedBrand] = useState<string>('all');
+  // Picking a category (or brand) hides the home sections above the product list, so the page gets much shorter.
+  // Without this the browser keeps the old scroll position, which now lands on the footer. Jump straight to the
+  // list's top, before the screen is painted, instead.
+  const firstCat = React.useRef(true);
+  React.useLayoutEffect(() => {
+    if (firstCat.current) { firstCat.current = false; return; }
+    if (selectedProduct) return;
+    const el = document.getElementById('appliances-catalog-section');
+    if (!el) return;
+    const top = el.getBoundingClientRect().top + window.scrollY - 96;
+    window.scrollTo({ top: Math.max(0, selectedCategory === 'all' && selectedBrand === 'all' ? window.scrollY : top), behavior: 'instant' as ScrollBehavior });
+  }, [selectedCategory, selectedBrand]);
   const [priceFilter, setPriceFilter] = useState<'all' | 'under2k' | '2k-6k' | '6k-15k' | 'above15k'>('all');
 
   // Extract unique brands
@@ -366,7 +378,7 @@ const StoreContent: React.FC = () => {
                       key={b}
                       onClick={() => {
                         setSelectedBrand(b);
-                        document.getElementById('appliances-catalog-section')?.scrollIntoView({ behavior: 'smooth' });
+                        requestAnimationFrame(() => document.getElementById('appliances-catalog-section')?.scrollIntoView({ behavior: 'smooth' }));
                       }}
                       className={`shrink-0 h-14 sm:h-16 px-5 sm:px-7 rounded-xl border-2 font-extrabold text-sm sm:text-base transition-colors ${
                         selectedBrand === b ? 'border-gold bg-amber-50 text-ink' : 'border-line text-ink hover:border-gold'
@@ -480,7 +492,7 @@ const StoreContent: React.FC = () => {
                     <button
                       onClick={() => {
                         setSelectedCategory(c.id);
-                        document.getElementById('appliances-catalog-section')?.scrollIntoView({ behavior: 'smooth' });
+                        requestAnimationFrame(() => document.getElementById('appliances-catalog-section')?.scrollIntoView({ behavior: 'smooth' }));
                       }}
                       className="hover:text-white"
                     >

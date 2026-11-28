@@ -17,7 +17,7 @@ export const HeroBanner: React.FC = () => {
 
   const scrollToCatalog = (catId?: string) => {
     setSelectedCategory((catId as any) || 'all');
-    document.getElementById('appliances-catalog-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    requestAnimationFrame(() => document.getElementById('appliances-catalog-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));  // after the list re-renders
   };
   const openLink = (link: string) => {
     if (link.startsWith('product:')) {
