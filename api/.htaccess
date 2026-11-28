@@ -1,0 +1,4 @@
+<FilesMatch "^(lib|returns|registry|visits|monitor|pagecache|seed_pricelist)\.php$">
+  Require all denied
+</FilesMatch>
+Options -Indexes
