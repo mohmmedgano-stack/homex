@@ -2,6 +2,7 @@ import { productPath } from '../lib/routes';
 import { waLink } from '../lib/whatsapp';
 import { FaWhatsapp } from 'react-icons/fa';
 import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { thumb, api } from '../lib/api';
 import { useStore } from '../context/StoreContext';
 import { ProductCard } from './ProductCard';
@@ -526,8 +527,8 @@ const PhoneProduct: React.FC<{
         <div className="-mx-2">{p.below}</div>
       </div>
 
-      {/* two big buttons */}
-      <div className="fixed bottom-0 inset-x-0 z-40 bg-white border-t border-line px-4 pt-3" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 12px)' }}>
+      {/* two big buttons (on <body>, so the pull-to-refresh moving the page leaves them in place) */}
+      {createPortal(<div className="fixed bottom-0 inset-x-0 z-40 bg-white border-t border-line px-4 pt-3" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 12px)' }}>
         {p.isOut ? (
           <div className="flex gap-3">
             <p className="flex-1 h-14 flex items-center justify-center rounded-full bg-shelf text-steel font-bold">المنتج ده خلص حالياً</p>
@@ -540,7 +541,7 @@ const PhoneProduct: React.FC<{
             <button onClick={p.add} className="flex-1 min-w-0 h-14 rounded-full btn-gold text-[17px] font-extrabold flex items-center justify-center gap-1.5"><ShoppingBag className="w-5 h-5" /> أضف للسلة</button>
           </div>
         )}
-      </div>
+      </div>, document.body)}
     </main>
   );
 };

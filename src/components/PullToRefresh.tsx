@@ -3,8 +3,7 @@ import React, { useEffect, useRef, useState } from 'react';
 /**
  * Phone-only pull-to-refresh with a cartoon hand (dark sleeve, orange cuff: the site's colors).
  * Pull the page down from the very top: an arm reaches down into the gap with an open hand. Let go far enough and
- * the hand grabs the page's top edge (the page creases like cloth), yanks it back up, and the store's data is
- * fetched again. Let go early and the page just springs back.
+ * the hand grabs the page's top edge (the page creases like cloth), yanks it back up, and the page reloads. Let go early and the page just springs back.
  *
  * The page is moved with the CSS `translate` property on the wrapper's in-flow children only, so fixed bars
  * (bottom nav, WhatsApp bubble, drawers) stay put.
@@ -133,7 +132,7 @@ export const PullToRefresh: React.FC<{ target: React.RefObject<HTMLElement | nul
 
     const onStart = (e: TouchEvent) => {
       const s = st.current;
-      if (s.busy || e.touches.length !== 1 || window.scrollY > 0 || blocked()) return;
+      if (s.busy || e.touches.length !== 1 || window.scrollY > 2 || blocked()) return;
       s.startY = e.touches[0].clientY; s.startX = e.touches[0].clientX;
       s.active = true; s.decided = false; s.d = 0; s.buzzed = false; s.els = [];
     };
@@ -147,7 +146,7 @@ export const PullToRefresh: React.FC<{ target: React.RefObject<HTMLElement | nul
         // stopped, and won't let the page stop it after that. Only a downward, mostly vertical drag from the top
         // is a pull; anything else is normal scrolling/swiping.
         if (dy === 0 && dx === 0) return;
-        if (dy <= 0 || Math.abs(dx) > Math.abs(dy) || window.scrollY > 0) { s.active = false; return; }
+        if (dy <= 0 || Math.abs(dx) > Math.abs(dy) || window.scrollY > 2) { s.active = false; return; }
         s.decided = true;
         setPhase('pull'); setLift(0); setArmUp(0);
       }
@@ -176,12 +175,12 @@ export const PullToRefresh: React.FC<{ target: React.RefObject<HTMLElement | nul
       if (from >= THRESHOLD) {
         // Grab, yank the page up, let go
         setPhase('grab');
-        const refreshed = Promise.resolve(onRefresh()).catch(() => {});
         await new Promise((r) => setTimeout(r, 110));
         await animate(GRAB_MS, (t) => { const y = from * (1 - ease(t)); setPull(y); setLift(t); movePage(y); });
         setPhase('leave');
         await animate(LEAVE_MS, (t) => setArmUp(ease(t)));
-        await refreshed;
+        // the hand is gone: now refresh (a full reload, like the browser's own pull-to-refresh)
+        await Promise.resolve(onRefresh()).catch(() => {});
       } else {
         // Not far enough: spring back, arm goes home
         setPhase('leave');

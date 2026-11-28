@@ -449,8 +449,8 @@ const StoreContent: React.FC = () => {
       <ToastContainer />
       <PaymentReturn />
       <MobileBottomNav />
-      {/* phones only; not on pages with their own fixed action bar (product, checkout, gift list) */}
-      <PullToRefresh target={pageRef} enabled={currentView === 'store' && !selectedProduct && !registry && !reviewPage} onRefresh={refreshStore} />
+      {/* phones only; store pages and product pages (not checkout or the gift list, where a reload would lose typing) */}
+      <PullToRefresh target={pageRef} enabled={currentView === 'store' && !registry && !reviewPage} onRefresh={() => { location.reload(); return new Promise(() => {}); }} />
 
       {/* pages with their own sticky action bar (product, checkout, gift list) don't need the floating button on top of it */}
       {STORE_INFO.whatsapp && currentView === 'store' && !selectedProduct && !registry && (
