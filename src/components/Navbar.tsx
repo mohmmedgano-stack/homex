@@ -95,7 +95,7 @@ export const Navbar: React.FC = () => {
 
   return (
     <>
-    <header ref={headerRef} className="relative z-40 bg-ink shadow-md">
+    <header ref={headerRef} className="store-header relative z-40 bg-ink shadow-md">
       {/* Top bar */}
       <div className="bg-ink-deep text-white/85 text-xs sm:text-[13px]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-9 flex items-center justify-between gap-4">
@@ -278,7 +278,7 @@ export const Navbar: React.FC = () => {
 
     {/* Floating glass bar: once the full header scrolls away, a compact frosted bar slides in */}
     <div
-      className={`fixed inset-x-0 top-0 z-40 px-3 sm:px-6 pt-2 sm:pt-3 pointer-events-none transition-all duration-500 ease-[cubic-bezier(.2,.8,.2,1)] ${
+      className={`store-floatbar fixed inset-x-0 top-0 z-40 px-3 sm:px-6 pt-2 sm:pt-3 pointer-events-none transition-all duration-500 ease-[cubic-bezier(.2,.8,.2,1)] ${
         floating ? 'translate-y-0 opacity-100' : '-translate-y-[130%] opacity-0'
       }`}
       aria-hidden={!floating}

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { api, money } from '../../lib/api';
+import { api, money, thumb } from '../../lib/api';
 import { Card, Spinner, Empty, Input, Textarea, Select, Field, Modal, Button, Toggle, useToast } from '../ui';
 import { Plus, Search, ImagePlus, Trash2, Star, X, Pencil, ChevronUp, ChevronDown, FolderCog, Link2 } from 'lucide-react';
 
@@ -347,6 +347,124 @@ const ListEditor: React.FC<{ label: string; items: string[]; onChange: (v: strin
 };
 
 /** Choices the customer picks on the product page: colors (swatches), sizes, capacity… each value can add to the price and show its own photo */
+
+/* ---------------- colors from the product's own photos ---------------- */
+
+/** Common product colors with their Arabic names: used to name a picked color and as one-tap presets. */
+const NAMED_COLORS: [string, string][] = [
+  ['أسود', '#1c1c1e'], ['أبيض', '#f7f7f5'], ['فضي', '#c4c7cc'], ['رمادي', '#7d8088'], ['أحمر', '#c62828'], ['نبيتي', '#7b1f2e'],
+  ['وردي', '#f2a0b8'], ['برتقالي', '#f47b20'], ['أصفر', '#f2c94c'], ['ذهبي', '#c9a24a'], ['بيج', '#d8c3a5'], ['بني', '#6d4c41'],
+  ['أخضر', '#2e7d32'], ['زيتي', '#6b6b2e'], ['تركواز', '#26a69a'], ['لبني', '#90caf9'], ['أزرق', '#1e63c4'], ['كحلي', '#1f2a44'], ['بنفسجي', '#7e57c2'],
+];
+const hexRgb = (h: string) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+const rgbHex = (r: number, g: number, b: number) => '#' + [r, g, b].map((x) => Math.round(x).toString(16).padStart(2, '0')).join('');
+const colorName = (hex: string) => {
+  const [r, g, b] = hexRgb(hex);
+  let best = NAMED_COLORS[0][0], d = Infinity;
+  for (const [n, h] of NAMED_COLORS) {
+    const [R, G, B] = hexRgb(h);
+    const dd = 2 * (r - R) ** 2 + 4 * (g - G) ** 2 + 3 * (b - B) ** 2;
+    if (dd < d) { d = dd; best = n; }
+  }
+  return best;
+};
+
+/** The product's main color in a photo: ignores the white/light studio background and averages the biggest color group. */
+function mainColor(src: string): Promise<string | null> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      try {
+        const n = 72, c = document.createElement('canvas');
+        c.width = n; c.height = n;
+        const x = c.getContext('2d', { willReadFrequently: true })!;
+        x.drawImage(img, 0, 0, n, n);
+        const d = x.getImageData(0, 0, n, n).data;
+        const buckets = new Map<number, { n: number; r: number; g: number; b: number }>();
+        for (let i = 0; i < d.length; i += 4) {
+          const [r, g, b, a] = [d[i], d[i + 1], d[i + 2], d[i + 3]];
+          if (a < 200) continue;
+          const max = Math.max(r, g, b), min = Math.min(r, g, b);
+          if (min > 228 || (max > 238 && max - min < 14)) continue;        // background
+          const k = ((r >> 5) << 6) | ((g >> 5) << 3) | (b >> 5);
+          const e = buckets.get(k) || { n: 0, r: 0, g: 0, b: 0 };
+          // colourful pixels count a bit more than greys/shadows, so a red kettle isn't called grey
+          const w = 1 + (max - min) / 90;
+          e.n += w; e.r += r * w; e.g += g * w; e.b += b * w;
+          buckets.set(k, e);
+        }
+        let top: { n: number; r: number; g: number; b: number } | null = null;
+        for (const e of buckets.values()) if (!top || e.n > top.n) top = e;
+        resolve(top ? rgbHex(top.r / top.n, top.g / top.n, top.b / top.n) : null);
+      } catch { resolve(null); }
+    };
+    img.onerror = () => resolve(null);
+    img.src = src;
+  });
+}
+
+const ColorTools: React.FC<{ gallery: string[]; values: any[]; add: (v: { label: string; hex: string; image?: string }) => void }> = ({ gallery, values, add }) => {
+  const [found, setFound] = useState<{ img: string; hex: string }[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const has = (hex: string, label: string) => values.some((v) => v.label === label || (v.hex || '').toLowerCase() === hex.toLowerCase());
+  const scan = async () => {
+    setBusy(true);
+    const out: { img: string; hex: string }[] = [];
+    for (const img of gallery.slice(0, 10)) { const hex = await mainColor(img); if (hex) out.push({ img, hex }); }
+    setFound(out); setBusy(false);
+  };
+  const dropper = typeof window !== 'undefined' && 'EyeDropper' in window;
+  const pickFromScreen = async () => {
+    try { const r = await new (window as any).EyeDropper().open(); if (r?.sRGBHex) add({ label: colorName(r.sRGBHex), hex: r.sRGBHex }); } catch { /* cancelled */ }
+  };
+  return (
+    <div className="rounded-lg bg-white/70 border border-line p-2.5 space-y-2.5">
+      <div className="flex flex-wrap items-center gap-2">
+        <Button type="button" variant="dark" onClick={scan} disabled={busy || !gallery.length}>{busy ? 'بدوّر على الألوان…' : '🎨 هات الألوان من صور المنتج'}</Button>
+        {dropper && <Button type="button" variant="ghost" onClick={pickFromScreen}>قطّارة: اختار لون من الشاشة</Button>}
+        {!gallery.length && <span className="text-xs text-steel">ارفع صور المنتج الأول</span>}
+      </div>
+      {found && (
+        found.length === 0 ? <p className="text-xs text-steel">ملقتش لون واضح في الصور. اختار من الألوان الجاهزة تحت.</p> : (
+          <div>
+            <p className="text-xs text-steel mb-1.5">دوس على أي لون يتضاف، ويتربط بصورته عشان لما العميل يختاره الصورة تتغير:</p>
+            <div className="flex flex-wrap gap-2">
+              {found.map(({ img, hex }) => {
+                const name = colorName(hex), on = has(hex, name);
+                return (
+                  <button key={img} type="button" disabled={on} onClick={() => add({ label: name, hex, image: img })}
+                    className={`flex items-center gap-2 pl-3 pr-1 h-12 rounded-full border bg-white cursor-pointer disabled:opacity-40 ${on ? 'border-line' : 'border-ink/15 hover:border-gold'}`}>
+                    <span className="relative w-10 h-10 rounded-full overflow-hidden border border-line bg-shelf shrink-0">
+                      <img src={thumb(img)} alt="" className="w-full h-full object-cover" />
+                      <span className="absolute bottom-0 left-0 w-4 h-4 rounded-full border-2 border-white" style={{ background: hex }} />
+                    </span>
+                    <span className="text-sm font-bold text-ink">{name}{on ? ' ✓' : ''}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )
+      )}
+      <div>
+        <p className="text-xs text-steel mb-1.5">أو ألوان جاهزة:</p>
+        <div className="flex flex-wrap gap-1.5">
+          {NAMED_COLORS.map(([name, hex]) => {
+            const on = has(hex, name);
+            return (
+              <button key={name} type="button" disabled={on} onClick={() => add({ label: name, hex })} title={name}
+                className="flex items-center gap-1.5 h-9 pl-3 pr-1.5 rounded-full border border-line bg-white text-xs font-bold text-ink cursor-pointer hover:border-gold disabled:opacity-35">
+                <span className="w-6 h-6 rounded-full border border-black/10" style={{ background: hex }} />{name}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const OptionsEditor: React.FC<{ groups: any[]; gallery: string[]; onChange: (v: any[]) => void }> = ({ groups, gallery, onChange }) => {
   const upd = (i: number, patch: any) => onChange(groups.map((g, j) => (j === i ? { ...g, ...patch } : g)));
   const updVal = (i: number, k: number, patch: any) => upd(i, { values: groups[i].values.map((v: any, j: number) => (j === k ? { ...v, ...patch } : v)) });
@@ -371,6 +489,12 @@ const OptionsEditor: React.FC<{ groups: any[]; gallery: string[]; onChange: (v: 
               </div>
               <button type="button" onClick={() => onChange(groups.filter((_, j) => j !== i))} className="w-10 h-10 shrink-0 text-steel hover:text-sale flex items-center justify-center" aria-label="شيل الاختيار"><Trash2 className="w-4 h-4" /></button>
             </div>
+            {g.type === 'color' && (
+              <ColorTools gallery={gallery} values={g.values} add={(nv) => {
+                const empty = g.values.findIndex((v: any) => !v.label);
+                upd(i, { values: empty >= 0 ? g.values.map((v: any, j: number) => (j === empty ? { ...v, ...nv, price: v.price || 0 } : v)) : [...g.values, { price: 0, ...nv }] });
+              }} />
+            )}
             {g.values.map((v: any, k: number) => (
               <div key={k} className="flex flex-wrap sm:flex-nowrap gap-2 items-center">
                 {g.type === 'color' && (
@@ -390,7 +514,7 @@ const OptionsEditor: React.FC<{ groups: any[]; gallery: string[]; onChange: (v: 
                 <button type="button" onClick={() => upd(i, { values: g.values.filter((_: any, j: number) => j !== k) })} className="w-10 h-10 shrink-0 text-steel hover:text-sale flex items-center justify-center" aria-label="شيل"><X className="w-4 h-4" /></button>
               </div>
             ))}
-            <button type="button" onClick={() => upd(i, { values: [...g.values, { label: '', price: 0, ...(g.type === 'color' ? { hex: '#ffffff' } : {}) }] })} className="text-sm font-bold text-gold-deep hover:underline">+ ضيف {g.type === 'color' ? 'لون' : 'اختيار'}</button>
+            <button type="button" onClick={() => upd(i, { values: [...g.values, { label: '', price: 0, ...(g.type === 'color' ? { hex: '#ffffff' } : {}) }] })} className="text-sm font-bold text-gold-deep hover:underline">+ ضيف {g.type === 'color' ? 'لون بنفسك' : 'اختيار'}</button>
           </div>
         ))}
       </div>

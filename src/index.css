@@ -202,3 +202,8 @@ button, a { -webkit-tap-highlight-color: transparent; }
   .ag-lens, .ag-side, .ag-side .ag-lbl, .ag-page, .ag-page > * > *, .ag-stagger > *, .ag-orb { animation: none !important; }
 }
 @keyframes ag-bar { from { transform: scaleY(0); } }
+
+/* Phone product page (ProductPage → PhoneProduct): full-screen like an app — no store header or bottom nav */
+@media (max-width: 767px) {
+  body.pp-phone .store-header, body.pp-phone .store-floatbar, body.pp-phone .mobile-bottom-nav { display: none !important; }
+}

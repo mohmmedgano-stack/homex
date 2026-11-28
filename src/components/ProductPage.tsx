@@ -7,8 +7,21 @@ import { useStore } from '../context/StoreContext';
 import { ProductCard } from './ProductCard';
 import type { Product } from '../types';
 import {
-  ShoppingBag, Heart, ArrowLeftRight, ShieldCheck, Truck, RotateCcw, Zap, Plus, Minus, Share2, CheckCircle2, ChevronRight, Star,
+  ShoppingBag, Heart, ArrowLeftRight, ShieldCheck, Truck, RotateCcw, Zap, Plus, Minus, Share2, CheckCircle2, ChevronRight, ChevronLeft, Star, ListChecks, ShoppingCart,
 } from 'lucide-react';
+
+/** Phones get their own layout (full-width photos, floating buttons, two big buttons at the bottom). */
+function useIsPhone() {
+  const q = '(max-width: 767px)';
+  const [m, setM] = useState(() => typeof window !== 'undefined' && window.matchMedia(q).matches);
+  useEffect(() => {
+    const mq = window.matchMedia(q);
+    const on = () => setM(mq.matches);
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  }, []);
+  return m;
+}
 
 
 type Review = { id: number; name: string; city: string; rating: number; comment: string; createdAt: string };
@@ -23,7 +36,8 @@ const Stars: React.FC<{ value: number; size?: string }> = ({ value, size = 'w-4 
 
 /** Full product page at /product/ID-slug — shareable, used as ad landing page, and indexed by Google. */
 export const ProductPage: React.FC<{ product: Product; onBack: () => void }> = ({ product, onBack }) => {
-  const { products, categories, addToCart, isWishlisted, toggleWishlist, isInCompare, toggleCompare, setCurrentView, showToast, setSelectedCategory, settings } = useStore();
+  const { products, categories, addToCart, isWishlisted, toggleWishlist, isInCompare, toggleCompare, setCurrentView, showToast, setSelectedCategory, settings, cartCount, setCartOpen } = useStore();
+  const phone = useIsPhone();
   const [quantity, setQuantity] = useState(1);
   const [active, setActive] = useState(0);
   const [reviews, setReviews] = useState<{ items: Review[]; avg: number; count: number } | null>(null);
@@ -95,7 +109,58 @@ export const ProductPage: React.FC<{ product: Product; onBack: () => void }> = (
     }, 50);
   };
 
+  const reviewsBlock = (
+    reviews && reviews.count > 0 && (
+        <section id="reviews" className="mt-6 sm:mt-10 bg-white rounded-2xl border border-line p-4 sm:p-6 scroll-mt-24">
+          <div className="flex flex-wrap items-center gap-3 mb-4">
+            <h2 className="text-lg sm:text-xl font-extrabold text-ink">آراء العملاء</h2>
+            <span className="flex items-center gap-2 text-sm text-steel"><Stars value={reviews.avg} /> <b className="price text-ink">{reviews.avg.toFixed(1)}</b> من 5 · {reviews.count} تقييم</span>
+          </div>
+          <ul className="grid sm:grid-cols-2 gap-3">
+            {reviews.items.map((r) => (
+              <li key={r.id} className="rounded-xl border border-line p-4">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-bold text-ink text-sm">{r.name}{r.city ? <span className="text-steel font-normal"> · {r.city}</span> : ''}</span>
+                  <Stars value={r.rating} size="w-3.5 h-3.5" />
+                </div>
+                {r.comment && <p className="text-sm text-steel mt-2 leading-relaxed">{r.comment}</p>}
+                <p className="text-[11px] text-save font-bold mt-2 flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5" /> اشترى المنتج فعلاً</p>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )
+  );
+  const relatedBlock = (
+    related.length + more.length > 0 && (
+        <section className="mt-6 sm:mt-10">
+          <h2 className="text-lg sm:text-xl font-extrabold text-ink mb-3">{related.length ? 'منتجات من نفس القسم' : 'ممكن يعجبك كمان'}</h2>
+          <div className="flex gap-2.5 sm:gap-4 overflow-x-auto no-scrollbar snap-x pb-1">
+            {[...related, ...more].map((p) => (
+              <div key={p.id} className="snap-start shrink-0 w-[44%] min-[480px]:w-[31%] md:w-[23%] lg:w-[18.5%]"><ProductCard product={p} compact /></div>
+            ))}
+          </div>
+        </section>
+      )
+  );
+
   const iconBtn = 'w-11 h-11 rounded-xl border border-line bg-white flex items-center justify-center text-steel hover:text-ink shrink-0';
+
+  useEffect(() => {
+    document.body.classList.toggle('pp-phone', phone);
+    return () => document.body.classList.remove('pp-phone');
+  }, [phone]);
+
+  if (phone) return (
+    <PhoneProduct
+      product={product} images={images} active={active} setActive={setActive} onBack={onBack} share={share}
+      cartCount={cartCount} openCart={() => setCartOpen(true)} isWished={isWished} toggleWish={() => toggleWishlist(product.id)}
+      inCompare={inCompare} toggleCompare={() => toggleCompare(product)} cat={cat?.name} price={price} before={before} hasDiscount={hasDiscount} pct={pct}
+      reviews={reviews} groups={groups} picked={picked} setPicked={setPicked} isOut={isOut} quantity={quantity} setQuantity={setQuantity}
+      add={add} buyNow={buyNow} waNum={waNum} orderOnWhatsApp={orderOnWhatsApp}
+      below={<>{reviewsBlock}{relatedBlock}</>}
+    />
+  );
 
   return (
     <main className="flex-1 w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-3 sm:py-6 pb-28 md:pb-10">
@@ -263,56 +328,9 @@ export const ProductPage: React.FC<{ product: Product; onBack: () => void }> = (
         </div>
       </div>
 
-      {/* Reviews */}
-      {reviews && reviews.count > 0 && (
-        <section id="reviews" className="mt-6 sm:mt-10 bg-white rounded-2xl border border-line p-4 sm:p-6 scroll-mt-24">
-          <div className="flex flex-wrap items-center gap-3 mb-4">
-            <h2 className="text-lg sm:text-xl font-extrabold text-ink">آراء العملاء</h2>
-            <span className="flex items-center gap-2 text-sm text-steel"><Stars value={reviews.avg} /> <b className="price text-ink">{reviews.avg.toFixed(1)}</b> من 5 · {reviews.count} تقييم</span>
-          </div>
-          <ul className="grid sm:grid-cols-2 gap-3">
-            {reviews.items.map((r) => (
-              <li key={r.id} className="rounded-xl border border-line p-4">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-bold text-ink text-sm">{r.name}{r.city ? <span className="text-steel font-normal"> · {r.city}</span> : ''}</span>
-                  <Stars value={r.rating} size="w-3.5 h-3.5" />
-                </div>
-                {r.comment && <p className="text-sm text-steel mt-2 leading-relaxed">{r.comment}</p>}
-                <p className="text-[11px] text-save font-bold mt-2 flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5" /> اشترى المنتج فعلاً</p>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
+      {reviewsBlock}
+      {relatedBlock}
 
-      {/* Related */}
-      {related.length + more.length > 0 && (
-        <section className="mt-6 sm:mt-10">
-          <h2 className="text-lg sm:text-xl font-extrabold text-ink mb-3">{related.length ? 'منتجات من نفس القسم' : 'ممكن يعجبك كمان'}</h2>
-          <div className="flex gap-2.5 sm:gap-4 overflow-x-auto no-scrollbar snap-x pb-1">
-            {[...related, ...more].map((p) => (
-              <div key={p.id} className="snap-start shrink-0 w-[44%] min-[480px]:w-[31%] md:w-[23%] lg:w-[18.5%]"><ProductCard product={p} compact /></div>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* Sticky buy bar (phones) */}
-      <div className="md:hidden fixed bottom-16 inset-x-0 z-30 bg-white border-t border-line px-3 py-2 shadow-[0_-6px_20px_rgba(0,0,0,0.06)]">
-        {isOut ? (
-          <div className="flex gap-2">
-            <p className="flex-1 h-11 flex items-center justify-center rounded-xl bg-shelf text-steel font-bold text-sm">المنتج ده خلص حالياً</p>
-            {waNum && <button onClick={orderOnWhatsApp} className="h-11 px-4 rounded-xl bg-[#25D366] text-white font-bold text-sm flex items-center gap-1.5"><FaWhatsapp className="w-5 h-5" /> اسأل عليه</button>}
-          </div>
-        ) : (
-          <div className="flex items-center gap-2">
-            <QtyBox q={quantity} max={product.stock} set={setQuantity} small />
-            {waNum && <button onClick={orderOnWhatsApp} className="w-11 h-11 shrink-0 rounded-xl bg-[#25D366] text-white flex items-center justify-center" aria-label="اطلب على الواتساب"><FaWhatsapp className="w-6 h-6" /></button>}
-            <button onClick={add} className="flex-1 min-w-0 h-11 rounded-xl border-2 border-ink text-ink font-extrabold text-sm flex items-center justify-center gap-1"><ShoppingBag className="w-4 h-4 shrink-0" /> <span className="truncate">للسلة</span></button>
-            <button onClick={buyNow} className="flex-[1.4] min-w-0 h-11 rounded-xl btn-gold font-extrabold text-sm"><span className="truncate">اطلب دلوقتي</span></button>
-          </div>
-        )}
-      </div>
     </main>
   );
 };
@@ -324,3 +342,205 @@ const QtyBox: React.FC<{ q: number; max: number; set: (f: (q: number) => number)
     <button onClick={() => set((x) => Math.max(1, x - 1))} disabled={q <= 1} className="w-9 h-full flex items-center justify-center disabled:opacity-30" aria-label="قلّل"><Minus className="w-4 h-4" /></button>
   </div>
 );
+
+type Opt = NonNullable<Product['options']>[number];
+
+/** The phone layout: full-width swipeable photos with floating buttons, then name, price, colors, quick facts,
+ *  tap-to-open rows, and two big buttons fixed at the bottom. */
+const PhoneProduct: React.FC<{
+  product: Product; images: string[]; active: number; setActive: (i: number) => void; onBack: () => void; share: () => void;
+  cartCount: number; openCart: () => void; isWished: boolean; toggleWish: () => void; inCompare: boolean; toggleCompare: () => void;
+  cat?: string; price: number; before?: number; hasDiscount: boolean; pct: number;
+  reviews: { avg: number; count: number } | null; groups: Opt[]; picked: Record<string, string>; setPicked: React.Dispatch<React.SetStateAction<Record<string, string>>>;
+  isOut: boolean; quantity: number; setQuantity: (f: (q: number) => number) => void;
+  add: () => void; buyNow: () => void; waNum: string; orderOnWhatsApp: () => void; below: React.ReactNode;
+}> = (p) => {
+  const { product, images } = p;
+  const strip = React.useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState<string | null>(null);
+
+  // swipe ↔ dot sync
+  const onScroll = () => {
+    const el = strip.current;
+    if (!el) return;
+    const i = Math.round(Math.abs(el.scrollLeft) / el.clientWidth);
+    if (i !== p.active) p.setActive(i);
+  };
+  useEffect(() => {
+    const el = strip.current;
+    if (el && Math.round(Math.abs(el.scrollLeft) / el.clientWidth) !== p.active) el.scrollTo({ left: -p.active * el.clientWidth, behavior: 'smooth' });
+  }, [p.active]);
+
+  const subtitle = [product.brand || 'HOMEX', product.code && `موديل ${product.code}`, p.cat].filter(Boolean).join(' · ');
+  const facts = [
+    [product.wattage, 'القدرة'],
+    [product.capacity, 'السعة / المقاس'],
+    [product.warranty ? product.warranty.replace(/^ضمان\s*/, '') : '', 'الضمان'],
+    [product.code, 'الموديل'],
+  ].filter(([v]) => v).slice(0, 4) as [string, string][];
+  const round = 'w-11 h-11 rounded-full bg-white/95 backdrop-blur shadow-[0_4px_14px_rgba(0,0,0,.12)] flex items-center justify-center text-ink active:scale-95 transition';
+  const hasDetails = !!(product.description || product.features?.length || product.specs?.length);
+
+  const Row: React.FC<{ id: string; icon: React.ReactNode; title: string; sub?: string; href?: string; children?: React.ReactNode }> = ({ id, icon, title, sub, href, children }) => {
+    const inner = (
+      <>
+        <span className="text-ink shrink-0">{icon}</span>
+        <span className="flex-1 min-w-0 text-right">
+          <span className="block text-[15px] text-ink">{title}</span>
+          {sub && <span className="block text-[13px] text-steel mt-0.5">{sub}</span>}
+        </span>
+        <ChevronLeft className={`w-5 h-5 text-steel shrink-0 transition-transform ${open === id ? '-rotate-90' : ''}`} />
+      </>
+    );
+    return (
+      <div className="border-t border-line">
+        {href ? <a href={href} className="flex items-center gap-3.5 py-4">{inner}</a>
+          : <button type="button" onClick={() => setOpen(open === id ? null : id)} aria-expanded={open === id} className="w-full flex items-center gap-3.5 py-4 cursor-pointer font-normal">{inner}</button>}
+        {children && open === id && <div className="pb-4 -mt-1">{children}</div>}
+      </div>
+    );
+  };
+
+  return (
+    <main className="flex-1 w-full bg-white pb-28">
+      {/* Photos */}
+      <div className="relative bg-shelf">
+        <div ref={strip} onScroll={onScroll} className="flex overflow-x-auto snap-x snap-mandatory no-scrollbar" style={{ scrollBehavior: 'smooth' }}>
+          {images.map((img, i) => (
+            <div key={img + i} className="w-full shrink-0 snap-center aspect-[1/1.02]">
+              <img src={img} alt={i === 0 ? product.name : ''} decoding="async" fetchPriority={i === 0 ? 'high' : 'low'} loading={i === 0 ? 'eager' : 'lazy'} className="w-full h-full object-cover" />
+            </div>
+          ))}
+        </div>
+        <div className="absolute inset-x-0 top-0 flex items-start justify-between px-4" style={{ paddingTop: 'calc(env(safe-area-inset-top) + 14px)' }}>
+          <button onClick={p.onBack} className={round} aria-label="رجوع"><ChevronRight className="w-6 h-6" /></button>
+          <div className="flex gap-2.5">
+            <button onClick={p.share} className={round} aria-label="مشاركة"><Share2 className="w-5 h-5" /></button>
+            <button onClick={p.openCart} className={`${round} relative`} aria-label="السلة">
+              <ShoppingCart className="w-5 h-5" />
+              {p.cartCount > 0 && <span className="absolute -top-1 -left-1 min-w-5 h-5 px-1 rounded-full bg-sale text-white text-[11px] font-bold flex items-center justify-center price">{p.cartCount}</span>}
+            </button>
+          </div>
+        </div>
+        <button onClick={p.toggleWish} className={`${round} absolute bottom-4 left-4 ${p.isWished ? '!text-sale' : ''}`} aria-label="المفضلة">
+          <Heart className={`w-5 h-5 ${p.isWished ? 'fill-current' : ''}`} />
+        </button>
+        {p.isOut && <span className="absolute bottom-4 right-4 bg-ink/85 text-white text-sm font-bold px-3 py-1.5 rounded-full">نفد من المخزن</span>}
+      </div>
+
+      <div className="px-5">
+        {/* which photo */}
+        {images.length > 1 && (
+          <div className="relative h-[3px] bg-line rounded-full mt-4 overflow-hidden" aria-hidden="true">
+            <span className="absolute top-0 h-full bg-ink rounded-full transition-all duration-300" style={{ width: `${100 / images.length}%`, right: `${(100 / images.length) * p.active}%` }} />
+          </div>
+        )}
+
+        <h1 className="text-[24px] leading-snug font-extrabold text-ink mt-5">{product.name}</h1>
+        <p className="text-[15px] text-steel mt-1">{subtitle}</p>
+
+        <div className="flex items-center flex-wrap gap-x-3 gap-y-1.5 mt-4">
+          <span className="price text-[32px] leading-none font-black text-ink">{p.price.toLocaleString('en-US')} <span className="text-lg font-bold">ج.م</span></span>
+          {p.hasDiscount && <span className="price text-lg text-steel line-through">{p.before!.toLocaleString('en-US')}</span>}
+          {p.hasDiscount && <span className="bg-sale text-white text-[13px] font-bold px-2 py-1 rounded-md">خصم {p.pct}%</span>}
+        </div>
+        {p.reviews && p.reviews.count > 0 && (
+          <a href="#reviews" className="mt-3 flex items-center gap-2 text-sm text-steel">
+            <span className="inline-flex" dir="ltr">{[1, 2, 3, 4, 5].map((i) => <Star key={i} className={`w-4 h-4 ${i <= Math.round(p.reviews!.avg) ? 'fill-ink text-ink' : 'text-line'}`} />)}</span>
+            <span className="price">{p.reviews.avg.toFixed(1)} ({p.reviews.count})</span>
+          </a>
+        )}
+
+        {/* options */}
+        {p.groups.map((g) => (
+          <fieldset key={g.name} className="mt-6">
+            <legend className="text-[15px] text-steel mb-3">{g.name}: <b className="text-ink">{p.picked[g.name]}</b></legend>
+            <div className="flex flex-wrap gap-3.5">
+              {g.values.map((v) => {
+                const on = p.picked[g.name] === v.label;
+                const choose = () => { p.setPicked((x) => ({ ...x, [g.name]: v.label })); if (v.image) p.setActive(0); };
+                return g.type === 'color' ? (
+                  <button key={v.label} type="button" onClick={choose} aria-pressed={on} aria-label={v.label} title={v.label}
+                    className={`w-12 h-12 rounded-full p-[3px] transition ${on ? 'ring-2 ring-ink' : ''}`}>
+                    <span className="block w-full h-full rounded-full border border-black/10" style={{ background: v.hex || '#d9dde3' }} />
+                  </button>
+                ) : (
+                  <button key={v.label} type="button" onClick={choose} aria-pressed={on}
+                    className={`min-h-11 px-4 rounded-full border text-sm font-bold transition ${on ? 'border-ink bg-ink text-white' : 'border-line text-ink'}`}>
+                    {v.label}{v.price ? <span className="price text-xs opacity-70"> {v.price > 0 ? '+' : '−'}{Math.abs(v.price).toLocaleString('en-US')}</span> : null}
+                  </button>
+                );
+              })}
+            </div>
+          </fieldset>
+        ))}
+
+        {/* quick facts */}
+        {facts.length > 0 && (
+          <section className="mt-7">
+            <div className="flex items-center justify-between">
+              <h2 className="text-[17px] font-extrabold text-ink">معلومات سريعة</h2>
+              <button onClick={p.toggleCompare} className={`flex items-center gap-1.5 text-[15px] font-bold ${p.inCompare ? 'text-gold-deep' : 'text-save'}`}>
+                <ArrowLeftRight className="w-4 h-4" /> {p.inCompare ? 'في المقارنة' : 'قارنه بغيره'}
+              </button>
+            </div>
+            <dl className="grid gap-3 mt-3" style={{ gridTemplateColumns: `repeat(${facts.length}, minmax(0, 1fr))` }}>
+              {facts.map(([v, k]) => (
+                <div key={k} className="min-w-0 text-right"><dd className="text-[17px] font-extrabold text-ink truncate" style={{ unicodeBidi: 'plaintext' }}>{v}</dd><dt className="text-[13px] text-steel mt-0.5">{k}</dt></div>
+              ))}
+            </dl>
+          </section>
+        )}
+
+        {!p.isOut && (
+          <div className="mt-6 flex items-center justify-between">
+            <span className="text-[15px] text-ink">الكمية{product.stock <= 5 && <span className="text-sale font-bold text-sm"> · باقي {product.stock} بس</span>}</span>
+            <QtyBox q={p.quantity} max={product.stock} set={p.setQuantity} small />
+          </div>
+        )}
+
+        <div className="mt-5">
+          <Row id="ship" icon={<Truck className="w-6 h-6" />} title="شحن لكل محافظات مصر" sub="والدفع عند الاستلام" href="/p/shipping" />
+          {product.warranty && <Row id="war" icon={<ShieldCheck className="w-6 h-6" />} title={`ضمان ${product.warranty.replace(/^ضمان\s*/, '')}`} sub="ومراكز صيانة معتمدة" />}
+          <Row id="ret" icon={<RotateCcw className="w-6 h-6" />} title="الاسترجاع والاستبدال" href="/p/returns" />
+          {hasDetails && (
+            <Row id="det" icon={<ListChecks className="w-6 h-6" />} title="التفاصيل والمواصفات">
+              <div className="space-y-4 text-sm">
+                {product.description && <p className="text-steel leading-relaxed whitespace-pre-line">{product.description}</p>}
+                {!!product.features?.length && (
+                  <ul className="space-y-1.5 text-ink">{product.features.map((f, i) => <li key={i} className="flex items-start gap-2"><CheckCircle2 className="w-4 h-4 text-save shrink-0 mt-0.5" /> <span>{f}</span></li>)}</ul>
+                )}
+                {!!product.specs?.length && (
+                  <dl className="rounded-xl border border-line overflow-hidden divide-y divide-line">
+                    {product.specs.map((sp, i) => (
+                      <div key={i} className="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-2 py-2 px-3 even:bg-shelf"><dt className="text-steel">{sp.label}</dt><dd className="font-bold text-ink break-words">{sp.value}</dd></div>
+                    ))}
+                  </dl>
+                )}
+              </div>
+            </Row>
+          )}
+          <div className="border-t border-line" />
+        </div>
+
+        <div className="-mx-2">{p.below}</div>
+      </div>
+
+      {/* two big buttons */}
+      <div className="fixed bottom-0 inset-x-0 z-40 bg-white border-t border-line px-4 pt-3" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 12px)' }}>
+        {p.isOut ? (
+          <div className="flex gap-3">
+            <p className="flex-1 h-14 flex items-center justify-center rounded-full bg-shelf text-steel font-bold">المنتج ده خلص حالياً</p>
+            {p.waNum && <button onClick={p.orderOnWhatsApp} className="h-14 px-5 rounded-full bg-[#25D366] text-white font-bold flex items-center gap-2"><FaWhatsapp className="w-5 h-5" /> اسأل عليه</button>}
+          </div>
+        ) : (
+          <div className="flex items-center gap-3">
+            {p.waNum && <button onClick={p.orderOnWhatsApp} className="w-14 h-14 shrink-0 rounded-full bg-[#25D366] text-white flex items-center justify-center" aria-label="اطلب على الواتساب"><FaWhatsapp className="w-7 h-7" /></button>}
+            <button onClick={p.buyNow} className="flex-1 min-w-0 h-14 rounded-full border-[1.5px] border-ink/25 text-ink text-[17px] font-bold">اشتري دلوقتي</button>
+            <button onClick={p.add} className="flex-1 min-w-0 h-14 rounded-full btn-gold text-[17px] font-extrabold flex items-center justify-center gap-1.5"><ShoppingBag className="w-5 h-5" /> أضف للسلة</button>
+          </div>
+        )}
+      </div>
+    </main>
+  );
+};
